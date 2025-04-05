@@ -1,0 +1,406 @@
+/* CSS for PdfxXBlock */
+
+.pdfx_block .count {
+    font-weight: bold;
+}
+
+.pdfx_block p {
+    cursor: pointer;
+}
+
+/* PDF Viewer XBlock Styles */
+
+.pdfx_block {
+    box-sizing: border-box;
+    margin: 0;
+    padding: 0;
+    font-family: Arial, sans-serif;
+    height: 800px;
+    background: #f0f0f0;
+    display: flex;
+    position: relative;
+}
+
+/* Left Sidebar */
+.pdfx_block .sidebar {
+    width: 60px;
+    height: 100%;
+    background: #f5f5f5;
+    border-right: 1px solid #ddd;
+    display: flex;
+    flex-direction: column;
+    overflow-y: auto;
+    z-index: 100;
+}
+
+.pdfx_block .tool-btn {
+    width: 100%;
+    height: 60px;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    border: none;
+    background: none;
+    color: #333;
+    font-size: 12px;
+    padding: 8px 0;
+    transition: all 0.2s;
+}
+
+.pdfx_block .tool-btn:hover {
+    background: #e0e0e0;
+}
+
+.pdfx_block .tool-btn.active {
+    background: #4CAF50;
+    color: white;
+}
+
+.pdfx_block .tool-btn i {
+    font-size: 20px;
+    margin-bottom: 5px;
+}
+
+.pdfx_block .tool-section {
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 8px;
+    margin-bottom: 8px;
+}
+
+.pdfx_block .horizontal-separator {
+    width: 80%;
+    height: 1px;
+    background: #ddd;
+    margin: 8px auto;
+}
+
+/* Shape Selection Menu */
+.pdfx_block .shape-menu {
+    position: absolute;
+    left: 65px;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    display: none;
+    z-index: 1000;
+    width: 200px;
+    padding: 10px;
+}
+
+.pdfx_block .shape-menu.visible {
+    display: block;
+}
+
+.pdfx_block .shape-option {
+    display: flex;
+    align-items: center;
+    padding: 8px 10px;
+    cursor: pointer;
+    border-radius: 4px;
+}
+
+.pdfx_block .shape-option:hover {
+    background: #f0f0f0;
+}
+
+.pdfx_block .shape-option i {
+    margin-right: 10px;
+    width: 20px;
+    text-align: center;
+}
+
+/* Main Content Area */
+.pdfx_block .content-area {
+    flex: 1;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Top Toolbar */
+.pdfx_block .top-toolbar {
+    height: 60px;
+    background: white;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    padding: 0 15px;
+    gap: 15px;
+}
+
+.pdfx_block .tool-group {
+    display: flex;
+    gap: 10px;
+    align-items: center;
+}
+
+.pdfx_block .separator {
+    width: 1px;
+    height: 30px;
+    background: #ddd;
+    margin: 0 10px;
+}
+
+/* Drawing Controls */
+.pdfx_block .drawing-controls {
+    display: flex;
+    gap: 15px;
+    align-items: center;
+}
+
+.pdfx_block input[type="color"] {
+    width: 30px;
+    height: 30px;
+    border: none;
+    border-radius: 4px;
+    padding: 0;
+    cursor: pointer;
+}
+
+.pdfx_block input[type="range"] {
+    width: 100px;
+}
+
+/* PDF Viewer */
+.pdfx_block .pdf-viewer {
+    flex: 1;
+    position: relative;
+    overflow: auto;
+    background: #f4f4f4;
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
+    padding: 20px;
+}
+
+.pdfx_block #pdf-container {
+    position: relative;
+    margin: 0 auto;
+    box-shadow: 0 0 10px rgba(0,0,0,0.2);
+    background: white;
+    filter: brightness(1) grayscale(0%) contrast(100%);
+    transition: filter 0.3s ease;
+}
+
+.pdfx_block #pdf-canvas {
+    display: block;
+}
+
+.pdfx_block #text-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 0.2;
+    line-height: 1.0;
+    user-select: text;
+    z-index: 5;
+    --scale-factor: 1;
+    pointer-events: none;
+}
+
+.pdfx_block #text-layer.active {
+    pointer-events: auto;
+    cursor: text;
+    opacity: 1;
+}
+
+.pdfx_block #text-layer > span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    background: none;
+    pointer-events: all;
+}
+
+.pdfx_block #text-layer.active > span {
+    color: rgba(0, 0, 0, 0.0);
+    background-color: rgba(255, 255, 255, 0.0);
+}
+
+.pdfx_block #text-layer.active > span::selection {
+    background: rgba(255, 255, 0, 0.3);
+}
+
+.pdfx_block #draw-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    z-index: 10;
+    pointer-events: none;
+}
+
+.pdfx_block #draw-container .canvas-container {
+    pointer-events: auto;
+}
+
+/* Bottom Toolbar */
+.pdfx_block .bottom-toolbar {
+    height: 50px;
+    background: white;
+    border-top: 1px solid #ddd;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 30px;
+}
+
+.pdfx_block .page-controls {
+    display: flex;
+    align-items: center;
+    gap: 15px;
+}
+
+.pdfx_block .page-btn {
+    background: none;
+    border: none;
+    font-size: 18px;
+    cursor: pointer;
+    color: #555;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    padding: 5px 8px;
+}
+
+.pdfx_block .page-btn:hover {
+    background-color: #f0f0f0;
+    border-radius: 4px;
+}
+
+.pdfx_block .page-btn span {
+    font-size: 10px;
+    margin-top: 2px;
+}
+
+.pdfx_block .page-info {
+    font-size: 14px;
+    color: #555;
+}
+
+/* Modal Styles */
+.pdfx_block .modal {
+    display: none;
+    position: fixed;
+    z-index: 1000;
+    left: 0;
+    top: 0;
+    width: 100%;
+    height: 100%;
+    overflow: auto;
+    background-color: rgba(0,0,0,0.7);
+}
+
+.pdfx_block .modal-content {
+    background-color: #fefefe;
+    margin: 5% auto;
+    padding: 0;
+    border: 1px solid #888;
+    width: 80%;
+    max-width: 1000px;
+    border-radius: 8px;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    max-height: 90vh;
+    display: flex;
+    flex-direction: column;
+}
+
+.pdfx_block .modal-header {
+    padding: 15px 20px;
+    background-color: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    border-radius: 8px 8px 0 0;
+}
+
+.pdfx_block .modal-header h2 {
+    margin: 0;
+    font-size: 18px;
+    color: #333;
+}
+
+.pdfx_block .close {
+    color: #aaa;
+    font-size: 28px;
+    font-weight: bold;
+    cursor: pointer;
+}
+
+.pdfx_block .close:hover,
+.pdfx_block .close:focus {
+    color: #555;
+    text-decoration: none;
+}
+
+.pdfx_block .modal-body {
+    padding: 20px;
+    overflow-y: auto;
+    flex: 1;
+}
+
+/* Debug Panel */
+.pdfx_block #debug-panel {
+    position: fixed;
+    bottom: 0;
+    right: 0;
+    width: 300px;
+    height: 200px;
+    background: rgba(0,0,0,0.8);
+    color: #fff;
+    font-family: monospace;
+    font-size: 12px;
+    padding: 10px;
+    overflow-y: auto;
+    z-index: 1000;
+    display: none;
+}
+
+.pdfx_block #debug-toggle {
+    position: fixed;
+    bottom: 10px;
+    right: 10px;
+    z-index: 1001;
+    background: #555;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    cursor: pointer;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .pdfx_block .sidebar {
+        width: 50px;
+    }
+
+    .pdfx_block .tool-btn {
+        height: 50px;
+        font-size: 10px;
+    }
+
+    .pdfx_block .tool-btn i {
+        font-size: 16px;
+    }
+
+    .pdfx_block .top-toolbar {
+        height: 50px;
+        padding: 0 10px;
+        gap: 10px;
+    }
+
+    .pdfx_block .bottom-toolbar {
+        height: 40px;
+        gap: 15px;
+    }
+}

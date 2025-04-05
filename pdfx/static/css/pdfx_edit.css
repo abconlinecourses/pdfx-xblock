@@ -1,0 +1,107 @@
+/* PDF Viewer XBlock - Studio Edit View Styles */
+
+.editor-with-buttons {
+    width: 100%;
+    max-width: 900px;
+    margin: 0 auto;
+    padding: 20px;
+}
+
+.wrapper-comp-settings {
+    padding: 20px;
+    background: #fff;
+    border-radius: 4px;
+    box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+}
+
+.list-input.settings-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.field.comp-setting-entry {
+    margin-bottom: 20px;
+}
+
+.wrapper-comp-setting {
+    margin-bottom: 10px;
+}
+
+.setting-label {
+    display: block;
+    font-weight: bold;
+    margin-bottom: 5px;
+    color: #333;
+}
+
+.setting-input {
+    width: 100%;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 14px;
+}
+
+.setting-input:focus {
+    outline: none;
+    border-color: #4CAF50;
+    box-shadow: 0 0 5px rgba(76,175,80,0.2);
+}
+
+select.setting-input {
+    height: 36px;
+    background: #fff;
+}
+
+.tip.setting-help {
+    display: block;
+    margin-top: 5px;
+    color: #666;
+    font-size: 12px;
+    font-style: italic;
+}
+
+.xblock-actions {
+    margin-top: 20px;
+    padding-top: 20px;
+    border-top: 1px solid #ddd;
+}
+
+.xblock-actions ul {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.button {
+    padding: 8px 16px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 500;
+    text-decoration: none;
+    transition: background-color 0.2s;
+}
+
+.button.action-primary {
+    background: #4CAF50;
+    color: white;
+}
+
+.button.action-primary:hover {
+    background: #45a049;
+}
+
+.button.cancel-button {
+    background: #f5f5f5;
+    color: #333;
+}
+
+.button.cancel-button:hover {
+    background: #e0e0e0;
+}

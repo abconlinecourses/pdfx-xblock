@@ -1,0 +1,54 @@
+<!-- PDF Viewer XBlock Studio Edit View -->
+<div class="editor-with-buttons">
+    <div class="wrapper-comp-settings is-active editor-with-buttons" id="settings-tab">
+        <ul class="list-input settings-list">
+            <li class="field comp-setting-entry is-set">
+                <div class="wrapper-comp-setting">
+                    <label class="label setting-label" for="display_name">Display Name</label>
+                    <input class="input setting-input" name="display_name" id="display_name" value="{self.display_name}" type="text">
+                </div>
+                <span class="tip setting-help">The name that appears in the course ribbon</span>
+            </li>
+
+            <li class="field comp-setting-entry is-set">
+                <div class="wrapper-comp-setting">
+                    <label class="label setting-label" for="pdf_url">PDF URL</label>
+                    <input class="input setting-input" name="pdf_url" id="pdf_url" value="{self.pdf_url}" type="text">
+                </div>
+                <span class="tip setting-help">URL or path to the PDF file to display</span>
+            </li>
+
+            <li class="field comp-setting-entry is-set">
+                <div class="wrapper-comp-setting">
+                    <label class="label setting-label" for="allow_download">Allow Download</label>
+                    <select class="input setting-input" name="allow_download" id="allow_download">
+                        <option value="true" {%if self.allow_download%}selected{%endif%}>Yes</option>
+                        <option value="false" {%if not self.allow_download%}selected{%endif%}>No</option>
+                    </select>
+                </div>
+                <span class="tip setting-help">Allow students to download the annotated PDF</span>
+            </li>
+
+            <li class="field comp-setting-entry is-set">
+                <div class="wrapper-comp-setting">
+                    <label class="label setting-label" for="allow_annotation">Allow Annotation</label>
+                    <select class="input setting-input" name="allow_annotation" id="allow_annotation">
+                        <option value="true" {%if self.allow_annotation%}selected{%endif%}>Yes</option>
+                        <option value="false" {%if not self.allow_annotation%}selected{%endif%}>No</option>
+                    </select>
+                </div>
+                <span class="tip setting-help">Allow students to annotate the PDF</span>
+            </li>
+        </ul>
+        <div class="xblock-actions">
+            <ul>
+                <li class="action-item">
+                    <a href="#" class="button action-primary save-button">Save</a>
+                </li>
+                <li class="action-item">
+                    <a href="#" class="button cancel-button">Cancel</a>
+                </li>
+            </ul>
+        </div>
+    </div>
+</div>
