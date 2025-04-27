@@ -1,54 +1,130 @@
 <!-- PDF Viewer XBlock Studio Edit View -->
-<div class="editor-with-buttons">
+
     <div class="wrapper-comp-settings is-active editor-with-buttons" id="settings-tab">
-        <ul class="list-input settings-list">
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="display_name">Display Name</label>
-                    <input class="input setting-input" name="display_name" id="display_name" value="{self.display_name}" type="text">
-                </div>
-                <span class="tip setting-help">The name that appears in the course ribbon</span>
-            </li>
-
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="pdf_url">PDF URL</label>
-                    <input class="input setting-input" name="pdf_url" id="pdf_url" value="{self.pdf_url}" type="text">
-                </div>
-                <span class="tip setting-help">URL or path to the PDF file to display</span>
-            </li>
-
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="allow_download">Allow Download</label>
-                    <select class="input setting-input" name="allow_download" id="allow_download">
-                        <option value="true" {%if self.allow_download%}selected{%endif%}>Yes</option>
-                        <option value="false" {%if not self.allow_download%}selected{%endif%}>No</option>
-                    </select>
-                </div>
-                <span class="tip setting-help">Allow students to download the annotated PDF</span>
-            </li>
-
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="allow_annotation">Allow Annotation</label>
-                    <select class="input setting-input" name="allow_annotation" id="allow_annotation">
-                        <option value="true" {%if self.allow_annotation%}selected{%endif%}>Yes</option>
-                        <option value="false" {%if not self.allow_annotation%}selected{%endif%}>No</option>
-                    </select>
-                </div>
-                <span class="tip setting-help">Allow students to annotate the PDF</span>
-            </li>
-        </ul>
-        <div class="xblock-actions">
-            <ul>
-                <li class="action-item">
-                    <a href="#" class="button action-primary save-button">Save</a>
+        <form id="pdf-form">
+            <ul class="list-input settings-list">
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label" for="pdf-display-name">Display Name</label>
+                        <input class="input setting-input" name="display_name" id="pdf-display-name" value="${block.display_name}" type="text" />
+                    </div>
+                    <span class="tip setting-help">The name that appears in the course ribbon</span>
                 </li>
-                <li class="action-item">
-                    <a href="#" class="button cancel-button">Cancel</a>
+
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label">PDF Source</label>
+                        <div class="pdf-source-tabs">
+                            <button type="button" class="button action-primary active" data-tab="upload">Upload PDF</button>
+                            <button type="button" class="button" data-tab="url">External URL</button>
+                        </div>
+
+                        <div class="tab-content" id="upload-tab">
+                            <div class="file-upload-wrapper" id="drop-zone">
+                                <input type="file" id="pdf-file" accept="application/pdf" style="display: none;">
+                                <button type="button" class="button action-primary" id="upload-trigger">Choose PDF File</button>
+                                <div class="file-info" id="file-info">
+                                    % if block.pdf_file_name:
+                                        <span class="filename">${block.pdf_file_name}</span>
+                                    % else:
+                                        <span class="placeholder">No file chosen</span>
+                                    % endif
+                                </div>
+                                <div class="drag-text">or drag and drop a PDF file here</div>
+                            </div>
+                        </div>
+
+                        <div class="tab-content" id="url-tab" style="display: none;">
+                            <input class="input setting-input" name="pdf_url" id="pdf-url" value="${block.pdf_url}" type="text" placeholder="Enter PDF URL" />
+                        </div>
+                    </div>
+                    <span class="tip setting-help">Upload a PDF file or provide a URL to an external PDF</span>
+                </li>
+
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label" for="pdf-allow-download">Allow Download</label>
+                        <select class="input setting-input" name="allow_download" id="pdf-allow-download">
+                            % if block.allow_download:
+                                <option value="true" selected>True</option>
+                                <option value="false">False</option>
+                            % else:
+                                <option value="true">True</option>
+                                <option value="false" selected>False</option>
+                            % endif
+                        </select>
+                    </div>
+                    <span class="tip setting-help">Allow students to download the annotated PDF</span>
+                </li>
+
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label" for="pdf-allow-annotation">Allow Annotation</label>
+                        <select class="input setting-input" name="allow_annotation" id="pdf-allow-annotation">
+                            % if block.allow_annotation:
+                                <option value="true" selected>True</option>
+                                <option value="false">False</option>
+                            % else:
+                                <option value="true">True</option>
+                                <option value="false" selected>False</option>
+                            % endif
+                        </select>
+                    </div>
+                    <span class="tip setting-help">Allow students to annotate the PDF</span>
                 </li>
             </ul>
-        </div>
+            <div class="xblock-actions">
+                <ul>
+                    <li class="action-item">
+                        <input id="pdf-submit-options" type="submit" class="button action-primary save-button" value="Save" />
+                    </li>
+                    <li class="action-item">
+                        <a href="#" class="button cancel-button">Cancel</a>
+                    </li>
+                </ul>
+            </div>
+        </form>
     </div>
-</div>
+
+<style>
+    /* Additional styles for file upload */
+    .file-upload-wrapper {
+        border: 2px dashed #ccc;
+        padding: 20px;
+        text-align: center;
+        margin-bottom: 15px;
+        border-radius: 4px;
+        background: #f9f9f9;
+        transition: all 0.3s;
+    }
+
+    .file-upload-wrapper:hover, .file-upload-wrapper.highlight {
+        border-color: #0075b4;
+        background: #f0f7fa;
+    }
+
+    .file-info {
+        margin: 10px 0;
+    }
+
+    .drag-text {
+        margin-top: 15px;
+        color: #666;
+        font-style: italic;
+    }
+
+    .pdf-source-tabs {
+        display: flex;
+        gap: 10px;
+        margin-bottom: 15px;
+    }
+
+    .pdf-source-tabs .button {
+        flex: 1;
+    }
+
+    .pdf-source-tabs .button.active {
+        background-color: #0075b4;
+        color: white;
+    }
+</style>

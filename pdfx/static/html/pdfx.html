@@ -1,217 +1,282 @@
 <!-- PDF Viewer XBlock -->
 <div class="pdfx_block">
-    <!-- Left Sidebar -->
-    <div class="sidebar">
-        <div class="tool-section">
-            <button class="tool-btn active" id="pen-tool" title="Marker (⌥/Alt + M)">
-                <i class="fas fa-pen"></i>
-                <span>Marker</span>
-            </button>
-            <button class="tool-btn" id="highlighter-tool" title="Highlighter (⌥/Alt + H)">
-                <i class="fas fa-highlighter"></i>
-                <span>Highlight</span>
-            </button>
-            <button class="tool-btn" id="text-tool" title="Text (⌥/Alt + T)">
-                <i class="fas fa-font"></i>
-                <span>Text</span>
-            </button>
-        </div>
-        <div class="tool-section">
-            <button class="tool-btn" id="shape-tool" title="Shape (⌥/Alt + S)">
-                <i class="fas fa-shapes"></i>
-                <span>Shape</span>
-            </button>
-            <button class="tool-btn" id="sticky-note-tool" title="Note (⌥/Alt + N)">
-                <i class="fas fa-sticky-note"></i>
-                <span>Note</span>
-            </button>
-            <button class="tool-btn" id="comment-tool" title="Comment (⌥/Alt + C)">
-                <i class="fas fa-comment"></i>
-                <span>Comment</span>
-            </button>
-        </div>
-        <div class="tool-section">
-            <button class="tool-btn" id="select-tool" title="Select Tool">
-                <i class="fas fa-mouse-pointer"></i>
-                <span>Select</span>
-            </button>
-            <button class="tool-btn" id="eraser-tool" title="Eraser (⌥/Alt + E)">
-                <i class="fas fa-eraser"></i>
-                <span>Eraser</span>
-            </button>
-        </div>
-        <div class="separator horizontal-separator"></div>
-        <button class="tool-btn" id="undo-btn" title="Undo (⌘/Ctrl + Z)">
-            <i class="fas fa-undo"></i>
-            <span>Undo</span>
-        </button>
-        <button class="tool-btn" id="redo-btn" title="Redo (⌘/Ctrl + Shift + Z)">
-            <i class="fas fa-redo"></i>
-            <span>Redo</span>
-        </button>
-    </div>
+    <h2 class="pdf-title">${block.display_name}</h2>
 
-    <!-- Shape Selection Menu -->
-    <div class="shape-menu" id="shape-menu">
-        <div class="shape-option" data-shape="rect">
-            <i class="fas fa-square"></i>
-            <span>Rectangle</span>
-        </div>
-        <div class="shape-option" data-shape="circle">
-            <i class="fas fa-circle"></i>
-            <span>Circle</span>
-        </div>
-        <div class="shape-option" data-shape="line">
-            <i class="fas fa-minus"></i>
-            <span>Line</span>
-        </div>
-        <div class="shape-option" data-shape="arrow">
-            <i class="fas fa-long-arrow-alt-right"></i>
-            <span>Arrow</span>
-        </div>
-    </div>
-
-    <!-- Main Content Area -->
-    <div class="content-area">
-        <!-- Top Toolbar -->
-        <div class="top-toolbar">
-            <div class="tool-group">
-                <div class="drawing-controls">
-                    <input type="color" id="color-input" value="#FF0000" title="Color">
-                    <input type="range" id="width-input" min="1" max="20" value="5" title="Line Width">
-                    <span id="width-value">5px</span>
+    <!-- PDF Viewer and Tools -->
+    <div class="pdf-viewer-container">
+        <!-- Main Content Area -->
+        <div class="content-area">
+            <!-- PDF Viewer -->
+            <div class="pdf-viewer">
+                <div id="pdf-container" class="pdf-container">
+                    <canvas id="pdf-canvas"></canvas>
+                    <div id="draw-container"></div>
+                </div>
+                <!-- Loading indicator -->
+                <div class="loading-indicator">Loading PDF...</div>
+                <!-- Error message container -->
+                <div class="pdf-error" style="display: none;">
+                    <div class="error-title">Error loading PDF</div>
+                    <div class="error-message"></div>
+                    <div class="error-help">Try refreshing the page or contact your course administrator if the problem persists.</div>
                 </div>
             </div>
-            <div class="separator"></div>
-            <div class="tool-group">
-                <button class="tool-btn" id="clear-tool" title="Clear All">
-                    <i class="fas fa-trash"></i>
-                    <span>Clear</span>
-                </button>
-            </div>
-            <div class="separator"></div>
-            <div class="tool-group playback-controls">
-                <button class="tool-btn" id="play-drawing" title="Play Drawing">
-                    <i class="fas fa-play"></i>
-                    <span>Play</span>
-                </button>
-                <button class="tool-btn" id="pause-drawing" title="Pause" style="display: none;">
-                    <i class="fas fa-pause"></i>
-                    <span>Pause</span>
-                </button>
-                <button class="tool-btn" id="reset-drawing" title="Reset">
-                    <i class="fas fa-undo"></i>
-                    <span>Reset</span>
-                </button>
-                <div class="playback-speed">
-                    <span>Speed:</span>
-                    <select id="playback-speed">
-                        <option value="0.5">0.5x</option>
-                        <option value="1" selected>1x</option>
-                        <option value="2">2x</option>
-                        <option value="4">4x</option>
-                    </select>
+
+            <!-- Bottom Toolbar -->
+            <div class="bottom-toolbar">
+                <div class="page-controls">
+                    <button class="page-btn" id="prev-page" title="Previous Page">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="page-info">Page <span id="page-num">1</span> / <span id="page-count">1</span></span>
+                    <button class="page-btn" id="next-page" title="Next Page">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                </div>
+                <div class="separator"></div>
+                <div class="zoom-controls">
+                    <button class="page-btn" id="zoom-out" title="Zoom Out">
+                        <i class="fas fa-search-minus"></i>
+                        <span>Zoom Out</span>
+                    </button>
+                    <span id="zoom-level">100%</span>
+                    <button class="page-btn" id="zoom-in" title="Zoom In">
+                        <i class="fas fa-search-plus"></i>
+                        <span>Zoom In</span>
+                    </button>
+                </div>
+                <div class="separator"></div>
+                <div class="view-controls">
+                    <button class="page-btn" id="fit-to-width" title="Fit to Width">
+                        <i class="fas fa-arrows-alt-h"></i>
+                        <span>Fit Width</span>
+                    </button>
+                    <button class="page-btn" id="fit-to-page" title="Fit to Page">
+                        <i class="fas fa-compress-arrows-alt"></i>
+                        <span>Fit Page</span>
+                    </button>
+                    <button class="page-btn" id="fullscreen-btn" title="Toggle Fullscreen">
+                        <i class="fas fa-expand"></i>
+                        <span>Fullscreen</span>
+                    </button>
                 </div>
             </div>
-            <div class="separator"></div>
-            <div class="brightness-controls">
-                <button class="tool-btn" id="brightness-down" title="Decrease Brightness">
-                    <i class="fas fa-sun"></i>
-                    <i class="fas fa-minus"></i>
-                    <span>Darker</span>
-                </button>
-                <span id="brightness-level">100%</span>
-                <button class="tool-btn" id="brightness-up" title="Increase Brightness">
-                    <i class="fas fa-sun"></i>
-                    <i class="fas fa-plus"></i>
-                    <span>Brighter</span>
-                </button>
-            </div>
-            <div class="separator"></div>
-            <div class="filter-controls">
-                <button class="tool-btn" id="grayscale-toggle" title="Toggle Grayscale">
-                    <i class="fas fa-adjust"></i>
-                    <span>Grayscale</span>
-                </button>
-                <button class="tool-btn" id="ink-mode-toggle" title="E-ink Mode">
-                    <i class="fas fa-moon"></i>
-                    <span>E-ink</span>
-                </button>
-            </div>
-            <div style="margin-left: auto;">
-                <button class="tool-btn" id="download-tool" title="Download">
-                    <i class="fas fa-download"></i>
-                    <span>Download</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- PDF Viewer -->
-        <div class="pdf-viewer">
-            <div id="pdf-container">
-                <canvas id="pdf-canvas"></canvas>
-                <div id="text-layer"></div>
-                <div id="draw-container"></div>
-            </div>
-        </div>
-
-        <!-- Bottom Toolbar -->
-        <div class="bottom-toolbar">
-            <div class="page-controls">
-                <button class="page-btn" id="prev-page" title="Previous Page (←)">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                <span class="page-info">Page <span id="current-page">1</span> / <span id="page-count">1</span></span>
-                <button class="page-btn" id="next-page" title="Next Page (→)">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-            </div>
-            <div class="separator"></div>
-            <div class="zoom-controls">
-                <button class="page-btn" id="zoom-out" title="Zoom Out (⌘/Ctrl + -)">
-                    <i class="fas fa-search-minus"></i>
-                    <span>Zoom Out</span>
-                </button>
-                <span id="zoom-level">100%</span>
-                <button class="page-btn" id="zoom-in" title="Zoom In (⌘/Ctrl + +)">
-                    <i class="fas fa-search-plus"></i>
-                    <span>Zoom In</span>
-                </button>
-            </div>
-            <div class="separator"></div>
-            <div class="view-controls">
-                <button class="page-btn" id="fullscreen-btn" title="Fullscreen (F11)">
-                    <i class="fas fa-expand"></i>
-                    <span>Fullscreen</span>
-                </button>
-                <button class="page-btn" id="page-fit-btn" title="Fit Page (⌘/Ctrl + F)">
-                    <i class="fas fa-compress"></i>
-                    <span>Fit Page</span>
-                </button>
-                <button class="page-btn" id="page-list-btn" title="Page List">
-                    <i class="fas fa-th"></i>
-                    <span>Page List</span>
-                </button>
-            </div>
         </div>
     </div>
 
-    <!-- Page List Modal -->
-    <div id="page-list-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Page List</h2>
-                <span class="close">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div id="page-thumbnails" class="thumbnails-container"></div>
-            </div>
+    <!-- Debug Information (hidden by default) -->
+    <div class="pdf-debug" style="display: none;">
+        <h4>Debug Information</h4>
+        <div>PDF Config URL: <span style="font-family: monospace;">${block.pdf_url or ""}</span></div>
+        <div>PDF Asset Key: <span style="font-family: monospace;">${block.pdf_file_asset_key or "Not set"}</span></div>
+        <div>PDF Filename: <span style="font-family: monospace;">${block.pdf_file_name or "Not set"}</span></div>
+        <div>Actual URL used: <span class="pdf-url-debug" style="font-family: monospace;"></span></div>
+        <div>Page Orientation: <span id="page-orientation">Not detected</span></div>
+        <div class="debug-logs-container" style="max-height: 200px; overflow-y: auto; margin-top: 10px; font-family: monospace; font-size: 11px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9;"></div>
+        <div>
+            <button id="toggle-cors-proxy" class="debug-btn">Try with CORS Proxy</button>
+            <button id="force-reload" class="debug-btn">Force Reload PDF</button>
+            <button id="toggle-debug" class="debug-btn">Hide Debug Info</button>
+            <button id="direct-download" class="debug-btn">Download PDF</button>
+            <button id="check-canvas" class="debug-btn">Check Canvas</button>
         </div>
-    </div>
-
-    <!-- Debug Panel (Hidden by Default) -->
-    <button id="debug-toggle">Show Debug</button>
-    <div id="debug-panel">
-        <div id="debug-content"></div>
     </div>
 </div>
+
+<style>
+    /* Basic styles */
+    .pdfx_block {
+        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+        margin: 1em 0;
+        padding: 0;
+    }
+
+    .pdf-title {
+        margin-bottom: 10px;
+    }
+
+    .pdf-viewer-container {
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        overflow: hidden;
+    }
+
+    .content-area {
+        display: flex;
+        flex-direction: column;
+        height: 100%;
+    }
+
+    .pdf-viewer {
+        position: relative;
+        flex: 1;
+        background-color: #f0f0f0;
+        overflow: hidden;
+    }
+
+    .pdf-container {
+        position: relative;
+        width: 100%;
+        height: 100%;
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        padding: 10px;
+        overflow: auto;
+        box-sizing: border-box;
+    }
+
+    /* Canvas needs to be adaptable */
+    #pdf-canvas {
+        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
+        background-color: white;
+        max-width: 100%;
+        max-height: 100%;
+    }
+
+    /* Drawing container for annotations */
+    #draw-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        pointer-events: none;
+    }
+
+    #draw-container.active {
+        pointer-events: auto;
+    }
+
+    .loading-indicator {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 20px;
+        background: rgba(255, 255, 255, 0.9);
+        border-radius: 5px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        z-index: 100;
+    }
+
+    .pdf-error {
+        position: absolute;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        padding: 20px;
+        background: white;
+        border-radius: 5px;
+        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+        text-align: center;
+        z-index: 100;
+        max-width: 80%;
+    }
+
+    .error-title {
+        font-weight: bold;
+        color: #c00;
+        margin-bottom: 10px;
+    }
+
+    .error-message {
+        margin-bottom: 10px;
+        word-break: break-word;
+    }
+
+    .bottom-toolbar {
+        display: flex;
+        align-items: center;
+        padding: 8px;
+        background-color: #f5f5f5;
+        border-top: 1px solid #ddd;
+        flex-wrap: wrap;
+        gap: 5px;
+    }
+
+    .page-controls, .zoom-controls, .view-controls {
+        display: flex;
+        align-items: center;
+    }
+
+    .page-btn {
+        background: none;
+        border: 1px solid #ccc;
+        border-radius: 4px;
+        padding: 5px 10px;
+        margin: 0 5px;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 5px;
+    }
+
+    .page-btn:hover {
+        background-color: #e0e0e0;
+    }
+
+    .separator {
+        width: 1px;
+        height: 24px;
+        background-color: #ddd;
+        margin: 0 10px;
+    }
+
+    .pdf-debug {
+        margin-top: 10px;
+        padding: 10px;
+        background-color: #f0f0f0;
+        border: 1px solid #ddd;
+        border-radius: 4px;
+        font-size: 12px;
+    }
+
+    .debug-btn {
+        background: #0075b4;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        padding: 5px 10px;
+        margin: 5px 5px 0 0;
+        cursor: pointer;
+        font-size: 12px;
+    }
+
+    .debug-btn:hover {
+        background: #00588a;
+    }
+
+    /* Responsive styles */
+    @media (max-width: 768px) {
+        .pdf-viewer-container {
+            height: 450px;
+        }
+
+        .page-btn span {
+            display: none;
+        }
+
+        .bottom-toolbar {
+            justify-content: center;
+        }
+
+        .separator {
+            height: 20px;
+            margin: 0 5px;
+        }
+    }
+
+    /* Orientation specific */
+    @media (orientation: landscape) {
+        .pdf-container.landscape {
+            align-items: center;
+        }
+    }
+
+    @media (orientation: portrait) {
+        .pdf-container.portrait {
+            align-items: center;
+        }
+    }
+</style>

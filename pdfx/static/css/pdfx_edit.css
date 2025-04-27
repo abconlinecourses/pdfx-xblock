@@ -2,9 +2,9 @@
 
 .editor-with-buttons {
     width: 100%;
-    max-width: 900px;
     margin: 0 auto;
     padding: 20px;
+    max-width: 1280px;
 }
 
 .wrapper-comp-settings {
@@ -62,6 +62,83 @@ select.setting-input {
     font-style: italic;
 }
 
+/* PDF Source Tabs */
+.pdf-source-tabs {
+    display: flex;
+    gap: 10px;
+    margin-bottom: 15px;
+    border-bottom: 1px solid #ddd;
+    padding-bottom: 10px;
+}
+
+.tab-btn {
+    padding: 8px 16px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #f5f5f5;
+    cursor: pointer;
+    font-size: 14px;
+    color: #666;
+    transition: all 0.2s;
+}
+
+.tab-btn:hover {
+    background: #e0e0e0;
+}
+
+.tab-btn.active {
+    background: #4CAF50;
+    color: white;
+    border-color: #4CAF50;
+}
+
+/* File Upload */
+.file-upload-wrapper {
+    border: 2px dashed #ddd;
+    padding: 20px;
+    text-align: center;
+    border-radius: 4px;
+    background: #f9f9f9;
+    transition: all 0.2s;
+}
+
+.file-upload-wrapper:hover {
+    border-color: #4CAF50;
+    background: #f0f7f0;
+}
+
+.upload-btn {
+    background: #4CAF50;
+    color: white;
+    padding: 10px 20px;
+    border: none;
+    border-radius: 4px;
+    cursor: pointer;
+    font-size: 14px;
+    margin-bottom: 10px;
+    transition: background-color 0.2s;
+}
+
+.upload-btn:hover {
+    background: #45a049;
+}
+
+.file-info {
+    margin-top: 10px;
+    font-size: 14px;
+}
+
+.file-info .placeholder {
+    color: #999;
+    font-style: italic;
+}
+
+.file-info .filename {
+    color: #333;
+    font-weight: 500;
+}
+
+/* Action Buttons */
 .xblock-actions {
     margin-top: 20px;
     padding-top: 20px;
@@ -104,4 +181,31 @@ select.setting-input {
 
 .button.cancel-button:hover {
     background: #e0e0e0;
+}
+
+/* Loading State */
+.loading {
+    opacity: 0.7;
+    pointer-events: none;
+}
+
+.loading::after {
+    content: '';
+    display: inline-block;
+    width: 16px;
+    height: 16px;
+    border: 2px solid #fff;
+    border-radius: 50%;
+    border-top-color: transparent;
+    animation: spin 1s linear infinite;
+    margin-left: 8px;
+    vertical-align: middle;
+}
+
+
+
+@keyframes spin {
+    to {
+        transform: rotate(360deg);
+    }
 }
