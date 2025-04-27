@@ -1,5 +1,6 @@
 <!-- PDF Viewer XBlock -->
-<div class="pdfx_block">
+<link rel="stylesheet" type="text/css" href="../css/pdfx.css"/>
+<div class="pdfx_block" id="pdfx-block-${block.block_id}">
     <h2 class="pdf-title">${block.display_name}</h2>
 
     <!-- PDF Viewer and Tools -->
@@ -8,9 +9,9 @@
         <div class="content-area">
             <!-- PDF Viewer -->
             <div class="pdf-viewer">
-                <div id="pdf-container" class="pdf-container">
-                    <canvas id="pdf-canvas"></canvas>
-                    <div id="draw-container"></div>
+                <div id="pdf-container-${block.block_id}" class="pdf-container">
+                    <canvas id="pdf-canvas-${block.block_id}"></canvas>
+                    <div id="draw-container-${block.block_id}" class="draw-container"></div>
                 </div>
                 <!-- Loading indicator -->
                 <div class="loading-indicator">Loading PDF...</div>
@@ -25,39 +26,43 @@
             <!-- Bottom Toolbar -->
             <div class="bottom-toolbar">
                 <div class="page-controls">
-                    <button class="page-btn" id="prev-page" title="Previous Page">
+                    <button class="page-btn prev-page" id="prev-page-${block.block_id}" title="Previous Page">
                         <i class="fas fa-chevron-left"></i>
                     </button>
-                    <span class="page-info">Page <span id="page-num">1</span> / <span id="page-count">1</span></span>
-                    <button class="page-btn" id="next-page" title="Next Page">
+                    <span class="page-info">Page <span id="page-num-${block.block_id}" class="page-num">1</span> / <span id="page-count-${block.block_id}" class="page-count">1</span></span>
+                    <button class="page-btn next-page" id="next-page-${block.block_id}" title="Next Page">
                         <i class="fas fa-chevron-right"></i>
                     </button>
                 </div>
                 <div class="separator"></div>
                 <div class="zoom-controls">
-                    <button class="page-btn" id="zoom-out" title="Zoom Out">
+                    <button class="page-btn zoom-out" id="zoom-out-${block.block_id}" title="Zoom Out">
                         <i class="fas fa-search-minus"></i>
                         <span>Zoom Out</span>
                     </button>
-                    <span id="zoom-level">100%</span>
-                    <button class="page-btn" id="zoom-in" title="Zoom In">
+                    <span id="zoom-level-${block.block_id}" class="zoom-level">100%</span>
+                    <button class="page-btn zoom-in" id="zoom-in-${block.block_id}" title="Zoom In">
                         <i class="fas fa-search-plus"></i>
                         <span>Zoom In</span>
                     </button>
                 </div>
                 <div class="separator"></div>
                 <div class="view-controls">
-                    <button class="page-btn" id="fit-to-width" title="Fit to Width">
+                    <button class="page-btn fit-to-width" id="fit-to-width-${block.block_id}" title="Fit to Width">
                         <i class="fas fa-arrows-alt-h"></i>
                         <span>Fit Width</span>
                     </button>
-                    <button class="page-btn" id="fit-to-page" title="Fit to Page">
+                    <button class="page-btn fit-to-page" id="fit-to-page-${block.block_id}" title="Fit to Page">
                         <i class="fas fa-compress-arrows-alt"></i>
                         <span>Fit Page</span>
                     </button>
-                    <button class="page-btn" id="fullscreen-btn" title="Toggle Fullscreen">
+                    <button class="page-btn fullscreen-btn" id="fullscreen-btn-${block.block_id}" title="Toggle Fullscreen">
                         <i class="fas fa-expand"></i>
                         <span>Fullscreen</span>
+                    </button>
+                    <button class="page-btn grayscale-toggle" id="grayscale-toggle-${block.block_id}" title="Toggle Grayscale">
+                        <i class="fas fa-adjust"></i>
+                        <span>Grayscale</span>
                     </button>
                 </div>
             </div>
@@ -65,218 +70,20 @@
     </div>
 
     <!-- Debug Information (hidden by default) -->
-    <div class="pdf-debug" style="display: none;">
+    <div class="pdf-debug" id="pdf-debug-${block.block_id}" style="display: none;">
         <h4>Debug Information</h4>
         <div>PDF Config URL: <span style="font-family: monospace;">${block.pdf_url or ""}</span></div>
         <div>PDF Asset Key: <span style="font-family: monospace;">${block.pdf_file_asset_key or "Not set"}</span></div>
         <div>PDF Filename: <span style="font-family: monospace;">${block.pdf_file_name or "Not set"}</span></div>
         <div>Actual URL used: <span class="pdf-url-debug" style="font-family: monospace;"></span></div>
-        <div>Page Orientation: <span id="page-orientation">Not detected</span></div>
-        <div class="debug-logs-container" style="max-height: 200px; overflow-y: auto; margin-top: 10px; font-family: monospace; font-size: 11px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9;"></div>
+        <div>Page Orientation: <span id="page-orientation-${block.block_id}" class="page-orientation">Not detected</span></div>
+        <div class="debug-logs-container" id="debug-logs-${block.block_id}" style="max-height: 200px; overflow-y: auto; margin-top: 10px; font-family: monospace; font-size: 11px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9;"></div>
         <div>
-            <button id="toggle-cors-proxy" class="debug-btn">Try with CORS Proxy</button>
-            <button id="force-reload" class="debug-btn">Force Reload PDF</button>
-            <button id="toggle-debug" class="debug-btn">Hide Debug Info</button>
-            <button id="direct-download" class="debug-btn">Download PDF</button>
-            <button id="check-canvas" class="debug-btn">Check Canvas</button>
+            <button id="toggle-cors-proxy-${block.block_id}" class="debug-btn toggle-cors-proxy">Try with CORS Proxy</button>
+            <button id="force-reload-${block.block_id}" class="debug-btn force-reload">Force Reload PDF</button>
+            <button id="toggle-debug-${block.block_id}" class="debug-btn toggle-debug">Hide Debug Info</button>
+            <button id="direct-download-${block.block_id}" class="debug-btn direct-download">Download PDF</button>
+            <button id="check-canvas-${block.block_id}" class="debug-btn check-canvas">Check Canvas</button>
         </div>
     </div>
 </div>
-
-<style>
-    /* Basic styles */
-    .pdfx_block {
-        font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-        margin: 1em 0;
-        padding: 0;
-    }
-
-    .pdf-title {
-        margin-bottom: 10px;
-    }
-
-    .pdf-viewer-container {
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        overflow: hidden;
-    }
-
-    .content-area {
-        display: flex;
-        flex-direction: column;
-        height: 100%;
-    }
-
-    .pdf-viewer {
-        position: relative;
-        flex: 1;
-        background-color: #f0f0f0;
-        overflow: hidden;
-    }
-
-    .pdf-container {
-        position: relative;
-        width: 100%;
-        height: 100%;
-        display: flex;
-        justify-content: center;
-        align-items: center;
-        padding: 10px;
-        overflow: auto;
-        box-sizing: border-box;
-    }
-
-    /* Canvas needs to be adaptable */
-    #pdf-canvas {
-        box-shadow: 0 2px 10px rgba(0, 0, 0, 0.2);
-        background-color: white;
-        max-width: 100%;
-        max-height: 100%;
-    }
-
-    /* Drawing container for annotations */
-    #draw-container {
-        position: absolute;
-        top: 0;
-        left: 0;
-        width: 100%;
-        height: 100%;
-        pointer-events: none;
-    }
-
-    #draw-container.active {
-        pointer-events: auto;
-    }
-
-    .loading-indicator {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        padding: 20px;
-        background: rgba(255, 255, 255, 0.9);
-        border-radius: 5px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        z-index: 100;
-    }
-
-    .pdf-error {
-        position: absolute;
-        top: 50%;
-        left: 50%;
-        transform: translate(-50%, -50%);
-        padding: 20px;
-        background: white;
-        border-radius: 5px;
-        box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
-        text-align: center;
-        z-index: 100;
-        max-width: 80%;
-    }
-
-    .error-title {
-        font-weight: bold;
-        color: #c00;
-        margin-bottom: 10px;
-    }
-
-    .error-message {
-        margin-bottom: 10px;
-        word-break: break-word;
-    }
-
-    .bottom-toolbar {
-        display: flex;
-        align-items: center;
-        padding: 8px;
-        background-color: #f5f5f5;
-        border-top: 1px solid #ddd;
-        flex-wrap: wrap;
-        gap: 5px;
-    }
-
-    .page-controls, .zoom-controls, .view-controls {
-        display: flex;
-        align-items: center;
-    }
-
-    .page-btn {
-        background: none;
-        border: 1px solid #ccc;
-        border-radius: 4px;
-        padding: 5px 10px;
-        margin: 0 5px;
-        cursor: pointer;
-        display: flex;
-        align-items: center;
-        gap: 5px;
-    }
-
-    .page-btn:hover {
-        background-color: #e0e0e0;
-    }
-
-    .separator {
-        width: 1px;
-        height: 24px;
-        background-color: #ddd;
-        margin: 0 10px;
-    }
-
-    .pdf-debug {
-        margin-top: 10px;
-        padding: 10px;
-        background-color: #f0f0f0;
-        border: 1px solid #ddd;
-        border-radius: 4px;
-        font-size: 12px;
-    }
-
-    .debug-btn {
-        background: #0075b4;
-        color: white;
-        border: none;
-        border-radius: 4px;
-        padding: 5px 10px;
-        margin: 5px 5px 0 0;
-        cursor: pointer;
-        font-size: 12px;
-    }
-
-    .debug-btn:hover {
-        background: #00588a;
-    }
-
-    /* Responsive styles */
-    @media (max-width: 768px) {
-        .pdf-viewer-container {
-            height: 450px;
-        }
-
-        .page-btn span {
-            display: none;
-        }
-
-        .bottom-toolbar {
-            justify-content: center;
-        }
-
-        .separator {
-            height: 20px;
-            margin: 0 5px;
-        }
-    }
-
-    /* Orientation specific */
-    @media (orientation: landscape) {
-        .pdf-container.landscape {
-            align-items: center;
-        }
-    }
-
-    @media (orientation: portrait) {
-        .pdf-container.portrait {
-            align-items: center;
-        }
-    }
-</style>

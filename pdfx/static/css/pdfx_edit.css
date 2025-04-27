@@ -202,10 +202,38 @@ select.setting-input {
     vertical-align: middle;
 }
 
-
-
 @keyframes spin {
     to {
         transform: rotate(360deg);
     }
+}
+
+/* CSS from pdfx_edit.html inline styles - Updated to avoid duplicates */
+/* Additional highlight state for file upload */
+.file-upload-wrapper.highlight {
+    border-color: #0075b4;
+    background: #f0f7fa;
+}
+
+/* Override file upload wrapper hover color to match the highlight */
+.file-upload-wrapper:hover {
+    border-color: #0075b4;
+    background: #f0f7fa;
+}
+
+/* Only need to add the drag-text style as it wasn't defined previously */
+.drag-text {
+    margin-top: 15px;
+    color: #666;
+    font-style: italic;
+}
+
+/* Override button styles for pdf source tabs to match the original design */
+.pdf-source-tabs .button {
+    flex: 1;
+}
+
+.pdf-source-tabs .button.active {
+    background-color: #0075b4;
+    color: white;
 }

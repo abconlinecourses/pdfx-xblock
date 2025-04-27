@@ -10,14 +10,20 @@ function PdfxHighlight(element, options) {
     var _options = options || {};
     var _highlights = [];
     var _currentPage = 1;
+    var _blockId = _options.blockId || 'default';
 
     // Callback functions
     var _debugCallback = _options.debugCallback || function() {};
     var _saveCallback = _options.saveCallback || function() {};
 
+    // Get block-specific element ID
+    function getBlockElementId(baseId) {
+        return `${baseId}-${_blockId}`;
+    }
+
     // Enable text selection and highlighting
     function enableTextHighlighting() {
-        var textLayer = $(element).find('#text-layer')[0];
+        var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
         if (!textLayer) {
             _debugCallback('Text layer not found');
             return;
@@ -44,7 +50,7 @@ function PdfxHighlight(element, options) {
 
     // Disable text selection and highlighting
     function disableTextHighlighting() {
-        var textLayer = $(element).find('#text-layer')[0];
+        var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
         if (!textLayer) {
             _debugCallback('Text layer not found');
             return;
@@ -74,7 +80,7 @@ function PdfxHighlight(element, options) {
             var range = selection.getRangeAt(0);
             var color = _options.getHighlightColor ? _options.getHighlightColor() : '#FFFF0080';
 
-            // Get all selected spans
+            // Get all selected spans within this block's text layer
             var selectedSpans = getSelectedSpans(range);
             _debugCallback(`Selected ${selectedSpans.length} text spans`);
 
@@ -83,7 +89,7 @@ function PdfxHighlight(element, options) {
                 var rects = [];
                 selectedSpans.forEach(function(span) {
                     var spanRect = span.getBoundingClientRect();
-                    var containerRect = $(element).find('#pdf-container')[0].getBoundingClientRect();
+                    var containerRect = $(element).find(`#pdf-container-${_blockId}`)[0].getBoundingClientRect();
                     rects.push({
                         left: spanRect.left - containerRect.left,
                         top: spanRect.top - containerRect.top,
@@ -109,7 +115,7 @@ function PdfxHighlight(element, options) {
     // Get all text spans within the selection range
     function getSelectedSpans(range) {
         var spans = [];
-        var textLayer = $(element).find('#text-layer')[0];
+        var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
 
         // Get all spans in the text layer
         var allSpans = textLayer.querySelectorAll('span');
@@ -126,13 +132,13 @@ function PdfxHighlight(element, options) {
 
     // Create highlight elements
     function createHighlightElements(rects, color) {
-        var textLayer = $(element).find('#text-layer')[0];
+        var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
         var pageHighlights = [];
 
         for (var i = 0; i < rects.length; i++) {
             var rect = rects[i];
             var highlightEl = document.createElement('div');
-            highlightEl.className = 'highlight';
+            highlightEl.className = `highlight-${_blockId}`;
             highlightEl.style.left = `${rect.left}px`;
             highlightEl.style.top = `${rect.top}px`;
             highlightEl.style.width = `${rect.width}px`;
@@ -169,10 +175,10 @@ function PdfxHighlight(element, options) {
             return h.page === _currentPage;
         });
 
-        // Store in localStorage or other state management
+        // Store in localStorage with block-specific key
         try {
-            localStorage.setItem(`pdf_highlights_page_${_currentPage}`, JSON.stringify(pageHighlights));
-            _debugCallback(`Saved ${pageHighlights.length} highlights for page ${_currentPage}`);
+            localStorage.setItem(`pdf_highlights_${_blockId}_page_${_currentPage}`, JSON.stringify(pageHighlights));
+            _debugCallback(`Saved ${pageHighlights.length} highlights for block ${_blockId} page ${_currentPage}`);
         } catch (e) {
             _debugCallback(`Error saving highlights: ${e.message}`);
         }
@@ -181,17 +187,17 @@ function PdfxHighlight(element, options) {
     // Restore highlights from storage
     function restoreHighlights() {
         try {
-            // Get saved highlights for current page
-            var savedHighlights = localStorage.getItem(`pdf_highlights_page_${_currentPage}`);
+            // Get saved highlights for current page and block
+            var savedHighlights = localStorage.getItem(`pdf_highlights_${_blockId}_page_${_currentPage}`);
 
             if (savedHighlights) {
                 var pageHighlights = JSON.parse(savedHighlights);
-                var textLayer = $(element).find('#text-layer')[0];
+                var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
 
                 for (var i = 0; i < pageHighlights.length; i++) {
                     var highlight = pageHighlights[i];
                     var highlightEl = document.createElement('div');
-                    highlightEl.className = 'highlight';
+                    highlightEl.className = `highlight-${_blockId}`;
                     highlightEl.style.left = `${highlight.rect.left}px`;
                     highlightEl.style.top = `${highlight.rect.top}px`;
                     highlightEl.style.width = `${highlight.rect.width}px`;
@@ -204,7 +210,7 @@ function PdfxHighlight(element, options) {
                     textLayer.appendChild(highlightEl);
                 }
 
-                _debugCallback(`Restored ${pageHighlights.length} highlights for page ${_currentPage}`);
+                _debugCallback(`Restored ${pageHighlights.length} highlights for block ${_blockId} page ${_currentPage}`);
             }
         } catch (error) {
             _debugCallback(`Error restoring highlights: ${error.message}`);
@@ -230,11 +236,11 @@ function PdfxHighlight(element, options) {
 
     // Clear all highlights on current page
     function clearHighlights() {
-        var textLayer = $(element).find('#text-layer')[0];
+        var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
         if (!textLayer) return;
 
         // Remove highlight elements
-        var highlightElements = textLayer.querySelectorAll('.highlight');
+        var highlightElements = textLayer.querySelectorAll(`.highlight-${_blockId}`);
         highlightElements.forEach(function(el) {
             el.remove();
         });
@@ -252,7 +258,7 @@ function PdfxHighlight(element, options) {
             _saveCallback(_highlights);
         }
 
-        _debugCallback(`Cleared highlights for page ${_currentPage}`);
+        _debugCallback(`Cleared highlights for block ${_blockId} page ${_currentPage}`);
     }
 
     // Public API

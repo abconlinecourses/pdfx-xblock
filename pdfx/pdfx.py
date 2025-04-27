@@ -70,6 +70,14 @@ class PdfxXBlock(XBlock):
         default="PDF Viewer"
     )
 
+    # Unique block ID - generated on creation
+    block_id = String(
+        display_name="Block ID",
+        help="Unique identifier for this block instance",
+        scope=Scope.settings,
+        default=None
+    )
+
     pdf_url = String(
         display_name="PDF URL",
         help="URL or path to the PDF file to display",
@@ -133,6 +141,29 @@ class PdfxXBlock(XBlock):
         default={}
     )
 
+    # Store brightness setting
+    brightness = Integer(
+        help="PDF brightness setting (50-150)",
+        scope=Scope.user_state,
+        default=100
+    )
+
+    # Store grayscale state
+    is_grayscale = Boolean(
+        help="Whether grayscale mode is enabled",
+        scope=Scope.user_state,
+        default=False
+    )
+
+    def __init__(self, *args, **kwargs):
+        """Initialize the block with a unique ID if none exists."""
+        super(PdfxXBlock, self).__init__(*args, **kwargs)
+
+        # Generate a unique block ID if not already set
+        if not self.block_id:
+            self.block_id = f"pdfx_{uuid.uuid4().hex[:8]}"
+            log.info(f"Generated new block_id: {self.block_id}")
+
     def resource_string(self, path):
         """Handy helper for getting resources from our kit."""
         try:
@@ -179,479 +210,65 @@ class PdfxXBlock(XBlock):
         """
         frag.add_resource(pdf_embed, mimetype='text/html')
 
-        # Load JavaScript libraries in the correct order with proper loading checks
-        # First add jQuery if not already available (it should be in Open edX, but just to be safe)
+        # Load required JavaScript libraries in proper order
         frag.add_javascript("""
-            if (typeof jQuery === 'undefined') {
-                console.log('jQuery not found, loading it');
-                var script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js';
-                document.head.appendChild(script);
+            // Function to load script and return a promise
+            function loadScript(url) {
+                return new Promise((resolve, reject) => {
+                    var script = document.createElement('script');
+                    script.src = url;
+                    script.onload = resolve;
+                    script.onerror = reject;
+                    document.head.appendChild(script);
+                });
             }
-        """)
 
-        # Add PDF.js library with a loading check
-        frag.add_javascript("""
-            // Check if PDF.js is already loaded
-            if (typeof pdfjsLib === 'undefined') {
-                console.log('Loading PDF.js from CDN');
-                var script = document.createElement('script');
-                script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js';
-                script.onload = function() {
-                    console.log('PDF.js loaded successfully');
-                    // Configure worker
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-
-                    // Initialize our viewer after library is loaded
-                    if (typeof PdfxXBlockInitializer !== 'undefined') {
-                        console.log('Initializing PDF viewer after PDF.js loaded');
-                        PdfxXBlockInitializer.init();
-                    }
-                };
-                document.head.appendChild(script);
-            } else {
-                console.log('PDF.js already loaded');
-                // Configure worker
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-            }
-        """)
-
-        # Add Fabric.js for annotations
-        frag.add_javascript_url('https://cdnjs.cloudflare.com/ajax/libs/fabric.js/4.5.0/fabric.min.js')
-
-        # Only add essential JS files to reduce complexity
-        try:
-            # Main XBlock JavaScript file
-            frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
-            log.info("Successfully loaded pdfx_view.js")
-        except Exception as e:
-            log.error(f"Error loading JavaScript: {str(e)}")
-
-        # Safely get the annotations - handle potential type errors
-        try:
-            annotations = self.annotations
-            if not isinstance(annotations, dict):
-                log.warning(f"Annotations has incorrect type: {type(annotations)}, using empty dict")
-                annotations = {}
-        except Exception as e:
-            log.error(f"Error accessing annotations: {str(e)}")
-            annotations = {}
-
-        # Safely get current page
-        try:
-            current_page = self.current_page
-            if not isinstance(current_page, int):
-                log.warning(f"Current page has incorrect type: {type(current_page)}, using default 1")
-                current_page = 1
-        except Exception as e:
-            log.error(f"Error accessing current_page: {str(e)}")
-            current_page = 1
-
-        # Safely get drawing strokes
-        try:
-            drawing_strokes = self.drawing_strokes
-            if not isinstance(drawing_strokes, dict):
-                log.warning(f"Drawing strokes has incorrect type: {type(drawing_strokes)}, using empty dict")
-                drawing_strokes = {}
-        except Exception as e:
-            log.error(f"Error accessing drawing_strokes: {str(e)}")
-            drawing_strokes = {}
-
-        # Safely get highlights
-        try:
-            highlights = self.highlights
-            if not isinstance(highlights, dict):
-                log.warning(f"Highlights has incorrect type: {type(highlights)}, using empty dict")
-                highlights = {}
-        except Exception as e:
-            log.error(f"Error accessing highlights: {str(e)}")
-            highlights = {}
-
-        # Add the initialization code to the fragment with improved loading logic
-        frag.add_javascript("""
-            // Initializer object to ensure we only initialize once PDF.js is loaded
-            var PdfxXBlockInitializer = {
-                runtime: null,
-                element: null,
-                config: null,
-
-                // Setup function to store parameters
-                setup: function(runtime, element, config) {
-                    this.runtime = runtime;
-                    this.element = element;
-                    this.config = config;
-
-                    console.log('PDF XBlock setup complete, waiting for libraries to load');
-
-                    // Check if PDF.js is already loaded and initialize if it is
-                    if (typeof pdfjsLib !== 'undefined') {
-                        console.log('PDF.js already loaded during setup, initializing immediately');
-                        this.init();
-                    } else {
-                        console.log('PDF.js not loaded yet, will initialize when ready');
-                        // Show fallback after 5 seconds if PDF.js doesn't load
-                        setTimeout(function() {
-                            if (typeof pdfjsLib === 'undefined') {
-                                console.log('PDF.js failed to load after timeout, showing fallback');
-                                $('.pdf-fallback', element).show();
-                            }
-                        }, 5000);
-                    }
-                },
-
-                // Initialization function called when PDF.js is ready
-                init: function() {
-                    if (!this.runtime || !this.element || !this.config) {
-                        console.error('Cannot initialize, setup not complete');
-                        return;
-                    }
-
-                    var runtime = this.runtime;
-                    var element = this.element;
-                    var config = this.config;
-
-                    console.log('PDF XBlock: Initializing PDF viewer');
-
-                    var pdfUrl = config.pdfUrl;
-                    if (!pdfUrl) {
-                        console.error('PDF XBlock: No PDF URL provided');
-                        $('.pdf-fallback', element).show();
-                        return;
-                    }
-
-                    console.log('PDF XBlock: Loading PDF from URL: ' + pdfUrl);
-
-                    // Configure PDF.js worker
-                    if (typeof pdfjsLib !== 'undefined') {
-                        console.log('Setting PDF.js worker source in initializer');
-                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-                    }
-
-                    // Initialize PDF viewer
-                    var viewer = new PdfViewer(runtime, element, config);
-                    viewer.load();
-                }
-            };
-
-            // PDF Viewer implementation
-            function PdfViewer(runtime, element, config) {
-                this.runtime = runtime;
-                this.element = element;
-                this.config = config;
-                this.pdfDoc = null;
-                this.currentPage = config.currentPage || 1;
-                this.zoom = 1.0;
-                this.originalViewport = null;
-                this.fitMode = 'auto'; // 'auto', 'width', 'page'
-                this.resizeTimer = null;
-
-                this.load = function() {
-                    var self = this;
-                    var canvas = $('#pdf-canvas', element)[0];
-
-                    if (!canvas) {
-                        console.error('PDF XBlock: Canvas element not found');
-                        $('.pdf-fallback', element).show();
-                        return;
-                    }
-
+            // Function to initialize PDF.js
+            async function initPDFJS() {
+                if (typeof pdfjsLib === 'undefined') {
+                    console.log('PDF XBlock: Loading PDF.js library');
                     try {
-                        var loadingTask = pdfjsLib.getDocument({
-                            url: config.pdfUrl,
-                            cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.10.377/cmaps/',
-                            cMapPacked: true
-                        });
-
-                        loadingTask.onProgress = function(progress) {
-                            var percent = Math.round(progress.loaded / Math.max(progress.total, 1) * 100);
-                            $('.loading-indicator', element).text('Loading PDF... ' + percent + '%');
-                        };
-
-                        loadingTask.promise.then(function(pdf) {
-                            self.pdfDoc = pdf;
-                            console.log('PDF XBlock: PDF loaded with ' + pdf.numPages + ' pages');
-                            $('#page-count', element).text(pdf.numPages);
-
-                            // Render the first page
-                            self.renderPage(self.currentPage);
-
-                            // Set up navigation controls
-                            self.setupControls();
-
-                        }).catch(function(error) {
-                            console.error('PDF XBlock: Error loading PDF: ' + error);
-                            $('.loading-indicator', element).hide();
-                            $('.pdf-error', element).show().find('.error-message').text('Failed to load PDF: ' + error.message);
-
-                            // Show fallback
-                            $('.pdf-fallback', element).show();
-                        });
+                        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js');
+                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+                        console.log('PDF XBlock: Successfully loaded PDF.js');
                     } catch (error) {
-                        console.error('PDF XBlock: Error initializing PDF: ' + error);
-                        $('.loading-indicator', element).hide();
-                        $('.pdf-error', element).show().find('.error-message').text('Error initializing PDF: ' + error.message);
-
-                        // Show fallback
-                        $('.pdf-fallback', element).show();
+                        console.error('PDF XBlock: Failed to load PDF.js:', error);
+                        document.querySelector('.pdf-fallback').style.display = 'block';
                     }
-                };
-
-                this.renderPage = function(pageNum) {
-                    var self = this;
-                    if (!this.pdfDoc) return;
-
-                    // Ensure valid page number
-                    pageNum = Math.max(1, Math.min(pageNum, this.pdfDoc.numPages));
-                    this.currentPage = pageNum;
-
-                    // Update UI
-                    $('#page-num', element).text(pageNum);
-
-                    // Get page
-                    this.pdfDoc.getPage(pageNum).then(function(page) {
-                        var canvas = $('#pdf-canvas', element)[0];
-                        var ctx = canvas.getContext('2d');
-                        var container = $(canvas).parent();
-
-                        // Get the original viewport dimensions to determine orientation
-                        var originalViewport = page.getViewport({ scale: 1.0 });
-                        self.originalViewport = originalViewport; // Store for later use
-
-                        var isLandscape = originalViewport.width > originalViewport.height;
-
-                        // Update debug info if available
-                        $('#page-orientation', element).text(isLandscape ? 'Landscape' : 'Portrait');
-
-                        // Calculate container dimensions
-                        var containerWidth = container.width();
-                        var containerHeight = container.height();
-
-                        // Calculate scale based on fit mode
-                        var scale;
-                        if (self.fitMode === 'width') {
-                            scale = containerWidth / originalViewport.width;
-                        } else if (self.fitMode === 'page') {
-                            scale = Math.min(
-                                containerWidth / originalViewport.width,
-                                containerHeight / originalViewport.height
-                            );
-                        } else { // auto
-                            var scaleX = containerWidth / originalViewport.width;
-                            var scaleY = containerHeight / originalViewport.height;
-                            scale = Math.min(scaleX, scaleY);
-                        }
-
-                        // Apply zoom factor
-                        scale *= self.zoom;
-
-                        // Create viewport with calculated scale
-                        var viewport = page.getViewport({ scale: scale });
-
-                        // Set canvas dimensions
-                        canvas.width = viewport.width;
-                        canvas.height = viewport.height;
-
-                        // If we have an annotation canvas, update it as well
-                        if (typeof fabric !== 'undefined' && $('#drawing-canvas', element).length) {
-                            self.updateDrawingCanvas(viewport.width, viewport.height);
-                        }
-
-                        // Add orientation class to container for CSS adjustments
-                        container.removeClass('landscape portrait').addClass(isLandscape ? 'landscape' : 'portrait');
-
-                        // Update zoom display
-                        $('#zoom-level', element).text(Math.round(scale * 100) + '%');
-
-                        // Render PDF page
-                        var renderContext = {
-                            canvasContext: ctx,
-                            viewport: viewport
-                        };
-
-                        page.render(renderContext).promise.then(function() {
-                            console.log('PDF XBlock: Page ' + pageNum + ' rendered with orientation: ' + (isLandscape ? 'landscape' : 'portrait'));
-                            $('.loading-indicator', element).hide();
-                        }).catch(function(error) {
-                            console.error('PDF XBlock: Error rendering page: ' + error);
-                        });
-                    });
-                };
-
-                this.updateDrawingCanvas = function(width, height) {
-                    // If Fabric.js is loaded and we have a drawing canvas
-                    if (typeof fabric !== 'undefined' && $('#drawing-canvas', element).length) {
-                        var drawingCanvas = $('#drawing-canvas', element)[0];
-                        if (drawingCanvas && drawingCanvas.fabric) {
-                            drawingCanvas.fabric.setDimensions({
-                                width: width,
-                                height: height
-                            });
-                        }
-                    }
-                };
-
-                this.setupControls = function() {
-                    var self = this;
-
-                    // Page navigation
-                    $('#prev-page', element).click(function() {
-                        if (self.currentPage > 1) {
-                            self.renderPage(self.currentPage - 1);
-                        }
-                    });
-
-                    $('#next-page', element).click(function() {
-                        if (self.currentPage < self.pdfDoc.numPages) {
-                            self.renderPage(self.currentPage + 1);
-                        }
-                    });
-
-                    // Zoom controls
-                    $('#zoom-in', element).click(function() {
-                        self.zoom += 0.1;
-                        self.renderPage(self.currentPage);
-                    });
-
-                    $('#zoom-out', element).click(function() {
-                        self.zoom = Math.max(0.1, self.zoom - 0.1);
-                        self.renderPage(self.currentPage);
-                    });
-
-                    // Fit controls
-                    $('#fit-to-width', element).click(function() {
-                        self.fitMode = 'width';
-                        self.zoom = 1.0; // Reset zoom
-                        self.renderPage(self.currentPage);
-                    });
-
-                    $('#fit-to-page', element).click(function() {
-                        self.fitMode = 'page';
-                        self.zoom = 1.0; // Reset zoom
-                        self.renderPage(self.currentPage);
-                    });
-
-                    // Fullscreen control
-                    $('#fullscreen-btn', element).click(function() {
-                        self.toggleFullScreen();
-                    });
-
-                    // Add window resize handler for responsiveness
-                    $(window).on('resize', function() {
-                        // Debounce the resize event to prevent excessive rendering
-                        clearTimeout(self.resizeTimer);
-                        self.resizeTimer = setTimeout(function() {
-                            self.renderPage(self.currentPage);
-                        }, 250);
-                    });
-
-                    // Keyboard navigation
-                    $(element).on('keydown', function(e) {
-                        if (e.keyCode === 37) { // Left arrow
-                            if (self.currentPage > 1) {
-                                self.renderPage(self.currentPage - 1);
-                            }
-                        } else if (e.keyCode === 39) { // Right arrow
-                            if (self.currentPage < self.pdfDoc.numPages) {
-                                self.renderPage(self.currentPage + 1);
-                            }
-                        } else if (e.keyCode === 27 && $('.pdfx_block', element).hasClass('fullscreen')) { // ESC key exits fullscreen
-                            self.toggleFullScreen();
-                        }
-                    });
-
-                    // Handle fullscreen change events
-                    $(document).on('fullscreenchange webkitfullscreenchange mozfullscreenchange MSFullscreenChange', function() {
-                        if (!document.fullscreenElement &&
-                            !document.webkitFullscreenElement &&
-                            !document.mozFullScreenElement &&
-                            !document.msFullscreenElement) {
-                            // Exit fullscreen detected
-                            if ($('.pdfx_block', element).hasClass('fullscreen')) {
-                                $('.pdfx_block', element).removeClass('fullscreen');
-                                $('#fullscreen-btn', element).removeClass('active');
-                                // Re-render to adjust to new size
-                                self.renderPage(self.currentPage);
-                            }
-                        }
-                    });
-                };
-
-                // Toggle fullscreen mode
-                this.toggleFullScreen = function() {
-                    var pdfBlock = $('.pdfx_block', element);
-                    var fullscreenBtn = $('#fullscreen-btn', element);
-
-                    if (pdfBlock.hasClass('fullscreen')) {
-                        // Exit fullscreen
-                        pdfBlock.removeClass('fullscreen');
-                        fullscreenBtn.removeClass('active');
-
-                        // Exit browser fullscreen if active
-                        if (document.exitFullscreen) {
-                            document.exitFullscreen();
-                        } else if (document.webkitExitFullscreen) {
-                            document.webkitExitFullscreen();
-                        } else if (document.mozCancelFullScreen) {
-                            document.mozCancelFullScreen();
-                        } else if (document.msExitFullscreen) {
-                            document.msExitFullscreen();
-                        }
-                    } else {
-                        // Enter fullscreen
-                        pdfBlock.addClass('fullscreen');
-                        fullscreenBtn.addClass('active');
-
-                        // Try to request browser fullscreen on the containing element or iframe
-                        var container = window.frameElement || pdfBlock[0];
-
-                        try {
-                            // Try to use the browser's fullscreen API
-                            if (container.requestFullscreen) {
-                                container.requestFullscreen();
-                            } else if (container.mozRequestFullScreen) {
-                                container.mozRequestFullScreen();
-                            } else if (container.webkitRequestFullscreen) {
-                                container.webkitRequestFullscreen();
-                            } else if (container.msRequestFullscreen) {
-                                container.msRequestFullscreen();
-                            } else {
-                                // If browser fullscreen API fails, use our CSS-based fullscreen as fallback
-                                console.log('Browser fullscreen API not supported, using CSS fullscreen fallback');
-                            }
-                        } catch (e) {
-                            console.log('Error requesting fullscreen:', e);
-                            // Continue with CSS-based fullscreen as fallback
-                        }
-                    }
-
-                    // Re-render to adjust to new size after a short delay
-                    var self = this;
-                    setTimeout(function() {
-                        self.renderPage(self.currentPage);
-                    }, 100);
-                };
+                }
             }
 
-            // XBlock initialization function
-            function PdfxXBlock(runtime, element, initArgs) {
-                // Setup the initializer with our parameters
-                PdfxXBlockInitializer.setup(runtime, element, initArgs);
+            // Initialize libraries
+            (async function() {
+                // Load jQuery if needed
+                if (typeof jQuery === 'undefined') {
+                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js');
+                }
 
-                // Return empty object as required by XBlock pattern
-                return {};
-            }
+                // Load PDF.js
+                await initPDFJS();
+            })();
         """)
 
-        # Initialize with only the function name and arguments (proper XBlock pattern)
-        # Using safely retrieved values from above
+        # Add drawing-related scripts
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_init.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_drawing.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_navigation.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_highlight.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
+
+        # Initialize the PDF viewer with parameters
         frag.initialize_js('PdfxXBlock', {
             'pdfUrl': pdf_url,
             'allowDownload': self.allow_download,
-            'allowAnnotation': False,  # Temporarily disable annotations
-            'savedAnnotations': annotations,
-            'currentPage': current_page,
-            'drawingStrokes': drawing_strokes,
-            'highlights': highlights
+            'allowAnnotation': self.allow_annotation,
+            'savedAnnotations': self.annotations,
+            'drawingStrokes': self.drawing_strokes,
+            'highlights': self.highlights,
+            'currentPage': self.current_page,
+            'blockId': self.block_id,
+            'brightness': self.brightness,
+            'isGrayscale': self.is_grayscale
         })
 
         return frag
@@ -891,6 +508,15 @@ class PdfxXBlock(XBlock):
                         self.annotations = data['annotations'].__dict__
                     else:
                         self.annotations = {}
+
+            # Update brightness setting
+            if 'brightness' in data and isinstance(data['brightness'], (int, float)):
+                # Ensure brightness is within valid range (50-150)
+                self.brightness = max(50, min(150, int(data['brightness'])))
+
+            # Update grayscale setting
+            if 'isGrayscale' in data:
+                self.is_grayscale = bool(data['isGrayscale'])
 
             return {'result': 'success'}
         except Exception as e:

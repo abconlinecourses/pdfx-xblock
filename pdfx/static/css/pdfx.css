@@ -15,20 +15,24 @@
     padding: 0;
 }
 
+/* Main block container */
 .pdfx_block {
-    font-family: 'Open Sans', Arial, sans-serif;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
     width: 100%;
     max-width: 100%;
-    margin: 0 auto;
-    padding: 20px;
+    margin: 1em 0;
+    padding: 0;
     box-sizing: border-box;
     overflow: hidden;
-    height: 800px;
+    height: 800px !important; /* Use !important to override inline styles */
     position: relative;
+    display: flex;
+    flex-direction: column;
+    contain: content; /* CSS containment to improve isolation and performance */
 }
 
 .pdf-title {
-    margin: 0 0 20px 0;
+    margin-bottom: 10px;
     font-size: 24px;
     font-weight: 600;
     color: #333;
@@ -38,12 +42,14 @@
 /* Main Layout */
 .pdf-viewer-container {
     display: flex;
+    flex: 1;
     height: calc(100% - 60px); /* Subtract title height */
     width: 100%;
     background: #f0f0f0;
     border: 1px solid #ddd;
     border-radius: 4px;
     overflow: hidden;
+    position: relative;
 }
 
 /* Left Sidebar */
@@ -251,6 +257,7 @@
     flex-direction: column;
     overflow: hidden;
     position: relative;
+    justify-content: center;
 }
 
 /* Top Toolbar */
@@ -297,34 +304,34 @@ input[type="range"] {
     width: 100px;
 }
 
-/* PDF Viewer */
+/* PDF Viewer - core styling */
 .pdf-viewer {
+    display: flex;
+    align-items: flex-start;
+    justify-content: center;
     flex: 1;
-    position: relative;
-    overflow: auto;
-    background: #f4f4f4;
-    display: flex;
-    align-items: flex-start;
-    justify-content: center;
     padding: 20px;
-}
-
-#pdf-container {
     position: relative;
+    background: #f4f4f4;
     overflow: auto;
-    width: 100%;
-    height: 100%;
-    display: flex;
-    justify-content: center;
-    align-items: flex-start;
-    background: #888;
 }
 
-#pdf-canvas {
+/* PDF Container - core positioning */
+.pdf-container, #pdf-container, [id^="pdf-container-"] {
+    position: relative;
+    margin: 0 auto;
     background: white;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
-    max-width: 100%;
-    max-height: 100%;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+/* Canvas styling */
+.pdf-canvas, #pdf-canvas, [id^="pdf-canvas-"] {
+    display: block;
+    width: 100%;
+    height: 100%;
 }
 
 #text-layer {
@@ -367,7 +374,7 @@ input[type="range"] {
     background: rgba(255, 255, 0, 0.3);
 }
 
-#draw-container {
+.draw-container, #draw-container, [id^="draw-container-"] {
     position: absolute;
     top: 0;
     left: 0;
@@ -377,11 +384,11 @@ input[type="range"] {
     z-index: 10;
 }
 
-#draw-container.active {
+.draw-container.active, #draw-container.active, [id^="draw-container-"].active {
     pointer-events: auto;
 }
 
-#draw-container .canvas-container {
+.draw-container .canvas-container {
     margin: 0 auto;
 }
 
@@ -404,6 +411,8 @@ input[type="range"] {
     align-items: center;
     justify-content: center;
     gap: 30px;
+    padding: 8px;
+    flex-wrap: wrap;
 }
 
 .page-controls {
@@ -414,19 +423,20 @@ input[type="range"] {
 
 .page-btn {
     background: none;
-    border: none;
-    font-size: 18px;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    padding: 5px 10px;
+    margin: 0 5px;
     cursor: pointer;
+    font-size: 18px;
     color: #555;
     display: flex;
     flex-direction: column;
     align-items: center;
-    padding: 5px 8px;
 }
 
 .page-btn:hover {
-    background-color: #f0f0f0;
-    border-radius: 4px;
+    background-color: #e0e0e0;
 }
 
 .page-btn span {
@@ -451,181 +461,56 @@ input[type="range"] {
     gap: 20px;
 }
 
-/* Debug Panel */
-#debug-panel {
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    width: 300px;
-    height: 200px;
-    background: rgba(0,0,0,0.8);
-    color: #fff;
-    font-family: monospace;
-    font-size: 12px;
-    padding: 10px;
-    overflow-y: auto;
-    z-index: 1000;
-}
-
-#debug-toggle {
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    z-index: 1001;
-    background: #555;
-    color: white;
-    border: none;
-    border-radius: 4px;
-    padding: 5px 10px;
-    cursor: pointer;
-}
-
-/* Modal Styles */
-.modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.7);
-}
-
-.modal-content {
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 0;
-    border: 1px solid #888;
-    width: 80%;
-    max-width: 1000px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    max-height: 90vh;
-    display: flex;
-    flex-direction: column;
-}
-
-.modal-header {
-    padding: 15px 20px;
-    background-color: #f8f8f8;
-    border-bottom: 1px solid #ddd;
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    border-radius: 8px 8px 0 0;
-}
-
-.modal-header h2 {
-    margin: 0;
-    font-size: 18px;
-    color: #333;
-}
-
-.close {
-    color: #aaa;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
-}
-
-.close:hover,
-.close:focus {
-    color: #555;
-    text-decoration: none;
-}
-
-.modal-body {
-    padding: 20px;
-    overflow-y: auto;
-    flex: 1;
-}
-
-.thumbnails-container {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-    gap: 15px;
-    justify-content: center;
-}
-
-.thumbnail-item {
-    position: relative;
-    cursor: pointer;
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    transition: transform 0.2s;
-    border: 2px solid transparent;
-}
-
-.thumbnail-item:hover {
-    transform: scale(1.05);
-}
-
-.thumbnail-item.active {
-    border: 2px solid #4CAF50;
-    border-radius: 5px;
-}
-
-.thumbnail-canvas {
-    box-shadow: 0 2px 5px rgba(0,0,0,0.1);
-    margin-bottom: 5px;
-    max-width: 100%;
-    height: auto;
-}
-
-.thumbnail-label {
-    font-size: 12px;
-    color: #555;
-    margin-top: 5px;
-    text-align: center;
-}
-
-/* Add to CSS */
-.top-toolbar .tool-btn {
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    gap: 2px;
-    padding: 5px 8px;
-}
-
-.top-toolbar .tool-btn span {
-    font-size: 10px;
-    margin-top: 2px;
-}
-
 /* Error Messages */
 .pdf-error {
-    color: red;
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     padding: 20px;
+    background: white;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     text-align: center;
-    margin: 20px 0;
-    border: 1px solid #ffcdd2;
-    background-color: #ffebee;
-    border-radius: 4px;
+    z-index: 100;
+    max-width: 80%;
+    color: red;
 }
 
 .error-title {
     font-weight: bold;
+    color: #c00;
     margin-bottom: 10px;
 }
 
-.error-help {
-    margin-top: 10px;
-    font-size: 13px;
+.error-message {
+    margin-bottom: 10px;
+    word-break: break-word;
 }
 
 /* Debug Info */
 .pdf-debug {
-    font-size: 12px;
-    color: #666;
-    padding: 15px;
-    border: 1px solid #e0e0e0;
-    margin-top: 20px;
+    margin-top: 10px;
+    padding: 10px;
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
     border-radius: 4px;
-    background-color: #f9f9f9;
+    font-size: 12px;
+}
+
+.debug-btn {
+    background: #0075b4;
+    color: white;
+    border: none;
+    border-radius: 4px;
+    padding: 5px 10px;
+    margin: 5px 5px 0 0;
+    cursor: pointer;
+    font-size: 12px;
+}
+
+.debug-btn:hover {
+    background: #00588a;
 }
 
 .loading-indicator {
@@ -634,91 +519,69 @@ input[type="range"] {
     left: 50%;
     transform: translate(-50%, -50%);
     padding: 20px;
-    background-color: rgba(255, 255, 255, 0.8);
-    border-radius: 4px;
-    font-weight: bold;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
     z-index: 100;
 }
 
-/* Responsive adjustments for smaller screens */
-@media (max-width: 768px) {
-    .pdfx_block {
-        padding: 10px;
-        height: 600px;
-    }
-
-    .sidebar {
-        width: 45px;
-    }
-
-    .tool-btn {
-        height: 45px;
-        font-size: 10px;
-    }
-
-    .tool-btn i {
-        font-size: 16px;
-    }
-
-    .top-toolbar {
-        height: 40px;
-        padding: 0 5px;
-    }
-
-    .separator {
-        margin: 0 5px;
-    }
-
-    .bottom-toolbar {
-        height: 40px;
-    }
-
-    .page-btn span {
-        display: none;
-    }
-
-    .modal-content {
-        width: 95%;
-    }
-
-    /* Adjust canvas container for small screens */
-    #pdf-container {
-        align-items: center;
-    }
-
-    /* Optimize space on small screens */
-    .pdf-viewer {
-        padding: 5px;
-    }
+/* Button state when fullscreen is active */
+.fullscreen-btn.active i:before, #fullscreen-btn.active i:before, [id^="fullscreen-btn-"].active i:before {
+    content: "\f066"; /* FA icon for compress */
 }
 
-/* Orientation-specific media queries */
-@media (max-width: 768px) and (orientation: landscape) {
-    /* Additional styles for small screens in landscape mode */
-    .pdfx_block {
-        height: 500px;
-    }
-
-    /* Ensure PDF fits horizontally in landscape */
-    #pdf-container.landscape {
-        padding: 5px;
-    }
-
-    /* Reduce some UI elements to maximize view area */
-    .top-toolbar, .bottom-toolbar {
-        height: 35px;
-    }
+.grayscale-toggle.active, #grayscale-toggle.active, [id^="grayscale-toggle-"].active {
+    background: #4CAF50;
+    color: white;
 }
 
-@media (max-width: 768px) and (orientation: portrait) {
-    /* Additional styles for small screens in portrait mode */
-    .pdfx_block {
-        height: 700px;
+/* Full screen styles */
+.pdfx_block.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh !important; /* Use !important to override the default */
+    z-index: 9999;
+    margin: 0;
+    padding: 10px;
+    background: #f4f4f4;
+}
+
+.pdfx_block.fullscreen .pdf-viewer-container {
+    height: calc(100vh - 100px);
+    width: 100%;
+    border: none;
+}
+
+.pdfx_block.fullscreen .pdf-viewer {
+    display: flex;
+    align-items: center; /* Center vertically in fullscreen mode */
+    justify-content: center;
+    padding: 0;
+}
+
+.pdfx_block.fullscreen .pdf-container {
+    max-width: 95vw;
+    max-height: calc(100vh - 150px);
+}
+
+/* Ensure content remains centered in fullscreen in all browsers */
+@supports (-moz-appearance:none) or (-webkit-appearance:none) or (-ms-ime-align:auto) {
+    .pdfx_block.fullscreen .pdf-viewer {
+        display: flex;
+        align-items: center; /* Override the flex-start from the general rule */
+        justify-content: center;
     }
 
-    /* Ensure PDF fits vertically in portrait */
-    #pdf-container.portrait {
-        padding: 5px;
+    .pdfx_block.fullscreen .pdf-container,
+    .pdfx_block.fullscreen #pdf-container,
+    .pdfx_block.fullscreen [id^="pdf-container-"] {
+        display: flex;
+        align-items: center; /* Override the flex-start from the general rule */
+        justify-content: center;
     }
 }
 
@@ -749,104 +612,75 @@ input[type="range"] {
          url('../vendor/webfonts/fa-regular-400.svg#fontawesome') format('svg');
 }
 
-/* Studio Edit View Styles */
-.file-upload-wrapper {
-    border: 2px dashed #ccc;
-    padding: 20px;
-    text-align: center;
-    margin-bottom: 15px;
-    border-radius: 4px;
-    background: #f9f9f9;
-    transition: all 0.3s;
+/* Make sure PDF display adapts to left panel state */
+@media (min-width: 769px) {
+    .pdf-viewer-container {
+        transition: width 0.3s ease;
+        flex: 1;
+    }
 }
 
-.file-upload-wrapper:hover,
-.file-upload-wrapper.highlight {
-    border-color: #0075b4;
-    background: #f0f7fa;
+/* Fix for Firefox, Safari, and Edge */
+@supports (-moz-appearance:none) or (-webkit-appearance:none) or (-ms-ime-align:auto) {
+    .pdf-viewer {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    .pdf-container, #pdf-container, [id^="pdf-container-"] {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+    }
 }
 
-.file-info {
-    margin: 10px 0;
-}
-
-.file-info .filename {
-    font-weight: bold;
-    color: #0075b4;
-}
-
-.file-info .placeholder {
-    color: #666;
-    font-style: italic;
-}
-
-.drag-text {
-    margin-top: 15px;
-    color: #666;
-    font-style: italic;
-}
-
-.pdf-source-tabs {
-    display: flex;
-    gap: 10px;
-    margin-bottom: 15px;
-}
-
-.pdf-source-tabs .button {
-    flex: 1;
-}
-
-.pdf-source-tabs .button.active {
-    background-color: #0075b4;
-    color: white;
-}
-
-/* Upload status */
-.upload-status {
-    display: block;
-    margin: 10px 0;
-    color: #0075b4;
-    font-weight: bold;
-}
-
-/* Add orientation specific styles */
-.pdf-viewer.landscape {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-.pdf-viewer.portrait {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-}
-
-/* Full screen styles */
-.pdfx_block.fullscreen {
-    position: fixed;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    width: 100%;
-    height: 100vh;
-    z-index: 9999;
-    margin: 0;
-    padding: 10px;
-    background: white;
-}
-
-.pdfx_block.fullscreen .pdf-viewer-container {
-    height: calc(100vh - 80px);
-}
-
-/* Button state when fullscreen is active */
-#fullscreen-btn.active i:before {
-    content: "\f066"; /* fa-compress icon */
-}
-
+/* Additional responsive styles */
 @media (max-width: 768px) {
+    .pdfx_block {
+        padding: 10px;
+        height: 600px;
+    }
+
+    .pdf-viewer-container {
+        height: 450px;
+    }
+
+    .sidebar {
+        width: 45px;
+    }
+
+    .tool-btn {
+        height: 45px;
+        font-size: 10px;
+    }
+
+    .tool-btn i {
+        font-size: 16px;
+    }
+
+    .top-toolbar {
+        height: 40px;
+        padding: 0 5px;
+    }
+
+    .separator {
+        margin: 0 5px;
+    }
+
+    .bottom-toolbar {
+        height: 40px;
+        justify-content: center;
+    }
+
+    .page-btn span {
+        display: none;
+    }
+
+    .modal-content {
+        width: 95%;
+    }
+
     .pdfx_block.fullscreen {
         padding: 5px;
     }
@@ -854,4 +688,51 @@ input[type="range"] {
     .pdfx_block.fullscreen .pdf-viewer-container {
         height: calc(100vh - 60px);
     }
+
+    /* Optimize space on small screens */
+    .pdf-viewer {
+        padding: 5px;
+    }
+}
+
+/* Orientation-specific media queries */
+@media (max-width: 768px) and (orientation: landscape) {
+    /* Additional styles for small screens in landscape mode */
+    .pdfx_block {
+        height: 500px;
+    }
+
+    /* Ensure PDF fits horizontally in landscape */
+    .pdf-container.landscape, #pdf-container.landscape, [id^="pdf-container-"].landscape {
+        padding: 5px;
+    }
+
+    /* Reduce some UI elements to maximize view area */
+    .top-toolbar, .bottom-toolbar {
+        height: 35px;
+    }
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+    /* Additional styles for small screens in portrait mode */
+    .pdfx_block {
+        height: 700px;
+    }
+
+    /* Ensure PDF fits vertically in portrait */
+    .pdf-container.portrait, #pdf-container.portrait, [id^="pdf-container-"].portrait {
+        padding: 5px;
+    }
+}
+
+/* Adding active state for fit buttons */
+.fit-to-width.active, #fit-to-width.active, [id^="fit-to-width-"].active,
+.fit-to-page.active, #fit-to-page.active, [id^="fit-to-page-"].active {
+    background: #4CAF50;
+    color: white;
+}
+
+.fit-to-width.active span, #fit-to-width.active span, [id^="fit-to-width-"].active span,
+.fit-to-page.active span, #fit-to-page.active span, [id^="fit-to-page-"].active span {
+    color: white;
 }

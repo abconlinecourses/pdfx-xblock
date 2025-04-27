@@ -1,7 +1,11 @@
 <!-- PDF Viewer XBlock Studio Edit View -->
+<link rel="stylesheet" type="text/css" href="../css/pdfx_edit.css"/>
 
     <div class="wrapper-comp-settings is-active editor-with-buttons" id="settings-tab">
         <form id="pdf-form">
+            <!-- Hidden Block ID field -->
+            <input type="hidden" name="block_id" id="pdf-block-id" value="${block.block_id}" />
+
             <ul class="list-input settings-list">
                 <li class="field comp-setting-entry is-set">
                     <div class="wrapper-comp-setting">
@@ -85,46 +89,3 @@
             </div>
         </form>
     </div>
-
-<style>
-    /* Additional styles for file upload */
-    .file-upload-wrapper {
-        border: 2px dashed #ccc;
-        padding: 20px;
-        text-align: center;
-        margin-bottom: 15px;
-        border-radius: 4px;
-        background: #f9f9f9;
-        transition: all 0.3s;
-    }
-
-    .file-upload-wrapper:hover, .file-upload-wrapper.highlight {
-        border-color: #0075b4;
-        background: #f0f7fa;
-    }
-
-    .file-info {
-        margin: 10px 0;
-    }
-
-    .drag-text {
-        margin-top: 15px;
-        color: #666;
-        font-style: italic;
-    }
-
-    .pdf-source-tabs {
-        display: flex;
-        gap: 10px;
-        margin-bottom: 15px;
-    }
-
-    .pdf-source-tabs .button {
-        flex: 1;
-    }
-
-    .pdf-source-tabs .button.active {
-        background-color: #0075b4;
-        color: white;
-    }
-</style>

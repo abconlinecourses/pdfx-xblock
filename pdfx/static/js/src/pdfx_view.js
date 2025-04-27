@@ -10,6 +10,44 @@ function PdfxXBlock(runtime, element, initArgs) {
     var currentPage = initArgs.currentPage || 1;
     var drawingStrokes = initArgs.drawingStrokes || {};
     var highlights = initArgs.highlights || {};
+    var blockId = initArgs.blockId; // Get the unique block ID
+
+    // Display settings
+    var currentBrightness = 100;
+    var isGrayscale = false; // Track grayscale state
+
+    // IMPORTANT: Don't override jQuery's $ function. Use a different name instead.
+    // Custom selector function for this instance
+    function findElement(selector) {
+        // Only process string selectors
+        if (typeof selector !== 'string') {
+            console.error('Invalid selector type:', typeof selector);
+            return null;
+        }
+
+        // If the selector starts with #, assume it's looking for an ID and needs the block ID appended
+        if (selector.charAt(0) === '#' && selector.indexOf(blockId) === -1) {
+            // Extract the ID without the # prefix
+            var id = selector.substring(1);
+            // Return the element with the instance-specific ID
+            return document.getElementById(id + '-' + blockId);
+        }
+        // Otherwise, scope the selector to the current element
+        return element.querySelector(selector);
+    }
+
+    // Function to query multiple elements within this block
+    function findElements(selector) {
+        if (typeof selector !== 'string') {
+            return [];
+        }
+        return element.querySelectorAll(selector);
+    }
+
+    // Use jQuery with proper scoping for backward compatibility
+    function jq(selector) {
+        return jQuery(element).find(selector);
+    }
 
     // PDF Variables
     var pdfDoc = null;
@@ -17,31 +55,44 @@ function PdfxXBlock(runtime, element, initArgs) {
     var pdfOriginalWidth = 0;
     var pdfOriginalHeight = 0;
     var currentZoom = 1.0;
+    var currentZoomBeforeFullscreen = 1.0; // Store zoom level before entering fullscreen
 
     // Check if we're in Studio
     var isStudio = (window.location.href.indexOf('studio') !== -1) ||
-                   (window.location.href.indexOf('/cms/') !== -1);
+                  (window.location.href.indexOf('/cms/') !== -1);
 
     // Debug helper
     function debug(message) {
         if (window.console && console.log) {
-            console.log('PDF XBlock: ' + message);
+            console.log('PDF XBlock (' + blockId + '): ' + message);
 
-            // Also add to debug logs container if available
-            var $logsContainer = $('.debug-logs-container', element);
-            if ($logsContainer.length) {
+            // Add to debug logs container if available and not disabled
+            var logsContainer = findElement('.debug-logs-container');
+            if (logsContainer) {
                 var timestamp = new Date().toLocaleTimeString();
-                $logsContainer.append('<div>[' + timestamp + '] ' + message + '</div>');
+                logsContainer.innerHTML += '<div>[' + timestamp + '] ' + message + '</div>';
                 // Auto-scroll to bottom
-                $logsContainer.scrollTop($logsContainer[0].scrollHeight);
+                logsContainer.scrollTop = logsContainer.scrollHeight;
             }
         }
     }
 
     // Show error message
     function showError(message) {
-        $('.pdf-error', element).show().find('.error-message').text(message);
-        $('.loading-indicator', element).hide();
+        var errorElement = findElement('.pdf-error');
+        if (errorElement) {
+            errorElement.style.display = 'block';
+            var errorMessage = errorElement.querySelector('.error-message');
+            if (errorMessage) {
+                errorMessage.textContent = message;
+            }
+        }
+
+        var loadingIndicator = findElement('.loading-indicator');
+        if (loadingIndicator) {
+            loadingIndicator.style.display = 'none';
+        }
+
         debug('Error: ' + message);
     }
 
@@ -63,9 +114,9 @@ function PdfxXBlock(runtime, element, initArgs) {
             debug('Detected Open edX asset URL');
 
             // Check if it's already absolute
-            if (!(url.startsWith('http://') || url.startsWith('https://'))) {
+            if (!(url.indexOf('http://') === 0 || url.indexOf('https://') === 0)) {
                 // If it's a relative URL starting with a slash, we need to get the base URL
-                if (url.startsWith('/')) {
+                if (url.charAt(0) === '/') {
                     // Try to get the base URL from window.location
                     const baseUrl = window.location.protocol + '//' + window.location.host;
                     url = baseUrl + url;
@@ -74,13 +125,13 @@ function PdfxXBlock(runtime, element, initArgs) {
             }
 
             return url;
-        } else if (url.startsWith('/')) {
+        } else if (url.charAt(0) === '/') {
             // Relative URL - convert to absolute
             const baseUrl = window.location.protocol + '//' + window.location.host;
             url = baseUrl + url;
             debug('Converted relative URL to absolute: ' + url);
             return url;
-        } else if (url.startsWith('http://') || url.startsWith('https://')) {
+        } else if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
             // Already an absolute URL
             debug('URL is already absolute');
             return url;
@@ -122,19 +173,25 @@ function PdfxXBlock(runtime, element, initArgs) {
 
             // Test for potential CORS issues
             debug('Checking if URL might have CORS issues...');
-            const pdfOrigin = new URL(url).origin;
-            const pageOrigin = window.location.origin;
-            const corsIssuesPossible = pdfOrigin !== pageOrigin;
-            debug('PDF origin: ' + pdfOrigin + ', Page origin: ' + pageOrigin);
-            debug('Cross-origin request: ' + (corsIssuesPossible ? 'Yes (CORS needed)' : 'No (same origin)'));
+            try {
+                const pdfOrigin = new URL(url).origin;
+                const pageOrigin = window.location.origin;
+                const corsIssuesPossible = pdfOrigin !== pageOrigin;
+                debug('PDF origin: ' + pdfOrigin + ', Page origin: ' + pageOrigin);
+                debug('Cross-origin request: ' + (corsIssuesPossible ? 'Yes (CORS needed)' : 'No (same origin)'));
 
-            if (corsIssuesPossible) {
-                debug('⚠️ Warning: PDF is loaded from a different origin, CORS headers must be present on the server.');
+                if (corsIssuesPossible) {
+                    debug('⚠️ Warning: PDF is loaded from a different origin, CORS headers must be present on the server.');
+                }
+            } catch (e) {
+                debug('Error checking CORS: ' + e.message);
             }
 
-            // Show some debug info in the UI
-            $('.pdf-debug', element).show();
-            $('.pdf-url-debug', element).text(url);
+            // Store debug info but don't show the panel
+            var debugElement = jq('.pdf-debug');
+            if (debugElement.length) {
+                jq('.pdf-url-debug').text(url);
+            }
 
             // Create a loading task with more detailed options
             debug('Creating PDF.js loading task');
@@ -155,13 +212,13 @@ function PdfxXBlock(runtime, element, initArgs) {
 
                 if (progress.total > 0) {
                     const percent = Math.round(progress.loaded / progress.total * 100);
-                    $('.loading-indicator', element).text(`Loading PDF... ${percent}%`);
+                    jq('.loading-indicator').text('Loading PDF... ' + percent + '%');
                 }
             };
 
             // Send a HEAD request to check if the PDF exists and is accessible
             debug('Sending HEAD request to verify PDF accessibility');
-            $.ajax({
+            jQuery.ajax({
                 type: "HEAD",
                 url: url,
                 success: function(data, textStatus, xhr) {
@@ -204,14 +261,30 @@ function PdfxXBlock(runtime, element, initArgs) {
             pdfDoc = pdf;
 
             // Update page counter
-            $('#page-count', element).text(pdf.numPages);
+            jq('#page-count-' + blockId).text(pdf.numPages);
 
-            // Render the first page
+            // Set initial zoom to 'auto' so it will be calculated properly
+            currentZoom = 'auto';
+
+            // First render with default settings
             debug('Proceeding to render page ' + currentPage);
             renderPage(currentPage);
 
             // Hide loading indicator
-            $('.loading-indicator', element).hide();
+            jq('.loading-indicator').hide();
+
+            // Apply fit-to-page after initial render with a slight delay to ensure
+            // all elements are properly initialized and measurements are accurate
+            setTimeout(function() {
+                debug('Applying fit-to-page by default');
+                fitToPage();
+
+                // Activate the fit-to-page button
+                var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
+                if (fitToPageBtn) {
+                    fitToPageBtn.classList.add('active');
+                }
+            }, 300);
         }).catch(function(error) {
             debug('Error loading PDF: ' + error.message);
             showError('Failed to load PDF: ' + error.message);
@@ -236,120 +309,142 @@ function PdfxXBlock(runtime, element, initArgs) {
     // Render a specific page
     function renderPage(pageNum) {
         if (!pdfDoc) {
-            debug('Cannot render page: PDF document not loaded');
+            debug('No PDF document loaded');
             return;
         }
 
-        // Ensure page number is valid
-        pageNum = Math.max(1, Math.min(pageNum, pdfDoc.numPages));
-        currentPage = pageNum;
-
-        debug('Rendering page ' + pageNum + ' of ' + pdfDoc.numPages);
-
-        // Update UI
-        $('#page-num', element).text(pageNum);
-
-        try {
-            // Get the page
-            debug('Getting page ' + pageNum + ' from PDF document');
-            pdfDoc.getPage(pageNum).then(function(page) {
-                debug('Retrieved page ' + pageNum + ' successfully');
-
-                // Create viewport at current zoom level
-                var viewport = page.getViewport({ scale: currentZoom });
-                debug('Created viewport with dimensions: ' + viewport.width + 'x' + viewport.height + ' (zoom: ' + currentZoom + ')');
-
-                // Get canvas and context
-                pdfCanvas = $('#pdf-canvas', element)[0];
-                if (!pdfCanvas) {
-                    debug('ERROR: Canvas element not found in the DOM');
-                    showError('Canvas element not found. Please refresh the page.');
-                    return;
-                }
-
-                debug('Canvas element found: ' + pdfCanvas.id);
-                var ctx = pdfCanvas.getContext('2d');
-                if (!ctx) {
-                    debug('ERROR: Could not get 2D context from canvas');
-                    showError('Canvas context could not be initialized');
-                    return;
-                }
-
-                // Set canvas dimensions
-                debug('Setting canvas dimensions to ' + viewport.width + 'x' + viewport.height);
-                pdfCanvas.width = viewport.width;
-                pdfCanvas.height = viewport.height;
-
-                // Store original dimensions
-                pdfOriginalWidth = viewport.width / currentZoom;
-                pdfOriginalHeight = viewport.height / currentZoom;
-
-                // Add canvas state info to debug
-                debug('Canvas dimensions after setting: ' + pdfCanvas.width + 'x' + pdfCanvas.height);
-                debug('Canvas visible in DOM: ' + (pdfCanvas.offsetParent !== null));
-
-                // Log container dimensions
-                var container = $('#pdf-container', element);
-                debug('PDF container dimensions: ' + container.width() + 'x' + container.height());
-
-                // Render PDF page to canvas
-                debug('Starting to render PDF page to canvas...');
-                var renderContext = {
-                    canvasContext: ctx,
-                    viewport: viewport
-                };
-
-                var renderTask = page.render(renderContext);
-
-                renderTask.promise.then(
-                    function() {
-                        debug('Page ' + pageNum + ' rendered successfully to canvas');
-
-                        // Check if canvas has content by examining a sample of pixels
-                        try {
-                            var imageData = ctx.getImageData(0, 0, Math.min(100, pdfCanvas.width), Math.min(100, pdfCanvas.height));
-                            var hasContent = false;
-
-                            // Check if any pixel is non-white (not 255,255,255)
-                            for (var i = 0; i < imageData.data.length; i += 4) {
-                                if (imageData.data[i] < 255 || imageData.data[i+1] < 255 || imageData.data[i+2] < 255) {
-                                    hasContent = true;
-                                    break;
-                                }
-                            }
-
-                            debug('Canvas has content: ' + hasContent);
-
-                            if (!hasContent) {
-                                debug('WARNING: Canvas appears to be empty after rendering');
-                            }
-                        } catch (e) {
-                            debug('Error checking canvas content: ' + e.message);
-                        }
-
-                        // If we have annotations, we would restore them here
-                        if (allowAnnotation) {
-                            restoreAnnotations(pageNum);
-                        }
-
-                        // Save current page to server (if not in studio)
-                        if (!isStudio) {
-                            saveToServer();
-                        }
-                    },
-                    function(error) {
-                        debug('Error during page rendering: ' + error);
-                        showError('Failed to render PDF page: ' + error);
-                    }
-                );
-            }).catch(function(error) {
-                debug('Error getting page ' + pageNum + ': ' + error);
-                showError('Error getting page ' + pageNum + ': ' + error);
-            });
-        } catch (error) {
-            debug('Exception in renderPage: ' + error.message);
-            showError('Error rendering page: ' + error.message);
+        if (pageNum < 1 || pageNum > pdfDoc.numPages) {
+            debug('Page number out of range: ' + pageNum);
+            return;
         }
+
+        // Update current page
+        currentPage = pageNum;
+        jq('#page-num-' + blockId).text(pageNum);
+
+        // First reset scroll position of pdf-viewer to ensure proper rendering position
+        var pdfViewer = element.querySelector('.pdf-viewer');
+        if (pdfViewer) {
+            pdfViewer.scrollTop = 0;
+        }
+
+        // Get the page
+        pdfDoc.getPage(pageNum).then(function(page) {
+            debug('Rendering page ' + pageNum);
+
+            // Get viewport with initial scale
+            var viewport = page.getViewport({ scale: 1.0 });
+
+            // Get canvas and drawing container
+            pdfCanvas = document.getElementById('pdf-canvas-' + blockId);
+            var drawContainer = document.getElementById('draw-container-' + blockId);
+            var pdfContainer = document.getElementById('pdf-container-' + blockId);
+            var pdfViewer = element.querySelector('.pdf-viewer');
+
+            if (!pdfCanvas || !pdfContainer || !pdfViewer) {
+                debug('Required elements not found');
+                return;
+            }
+
+            var context = pdfCanvas.getContext('2d');
+
+            // Save original dimensions if this is the first time
+            if (pageNum === 1 || !pdfOriginalWidth) {
+                pdfOriginalWidth = viewport.width;
+                pdfOriginalHeight = viewport.height;
+                debug('Original PDF dimensions: ' + pdfOriginalWidth + 'x' + pdfOriginalHeight);
+
+                // Detect orientation
+                if (pdfOriginalWidth > pdfOriginalHeight) {
+                    jq('#page-orientation-' + blockId).text('Landscape');
+                    jq('#pdf-container-' + blockId).addClass('landscape').removeClass('portrait');
+                } else {
+                    jq('#page-orientation-' + blockId).text('Portrait');
+                    jq('#pdf-container-' + blockId).addClass('portrait').removeClass('landscape');
+                }
+            }
+
+            // Calculate appropriate scale
+            var viewerWidth = pdfViewer.clientWidth - 40; // Account for padding
+            var viewerHeight = pdfViewer.clientHeight - 40;
+
+            var containerWidth, containerHeight;
+
+            // Apply zoom level
+            if (currentZoom === 'auto' || !currentZoom) {
+                // Auto-scale to fit width
+                currentZoom = viewerWidth / viewport.width;
+                debug('Auto-scaled to width: ' + currentZoom.toFixed(2));
+                jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
+            }
+
+            // Create new viewport with the applied scale
+            viewport = page.getViewport({ scale: currentZoom });
+
+            // Set dimensions for container and canvas
+            containerWidth = viewport.width;
+            containerHeight = viewport.height;
+
+            // Set canvas dimensions
+            pdfCanvas.width = containerWidth;
+            pdfCanvas.height = containerHeight;
+
+            // Set container dimensions
+            pdfContainer.style.width = containerWidth + 'px';
+            pdfContainer.style.height = containerHeight + 'px';
+
+            // Set drawing area dimensions
+            if (drawContainer) {
+                drawContainer.style.width = containerWidth + 'px';
+                drawContainer.style.height = containerHeight + 'px';
+            }
+
+            // Apply current filter settings (brightness/grayscale)
+            if (pdfContainer) {
+                // Only apply filter to the canvas itself, not the entire container
+                // This prevents the filter from affecting text rendering
+                var filterValue = `brightness(${currentBrightness / 100})`;
+                if (isGrayscale) {
+                    filterValue += ' grayscale(100%)';
+                }
+                pdfCanvas.style.filter = filterValue;
+                // Remove filter from the container if previously applied
+                pdfContainer.style.filter = '';
+            }
+
+            // Hide the loading indicator
+            jq('.loading-indicator').hide();
+
+            // Render PDF page into canvas context
+            var renderContext = {
+                canvasContext: context,
+                viewport: viewport
+            };
+
+            var renderTask = page.render(renderContext);
+            renderTask.promise.then(function() {
+                debug('Page ' + pageNum + ' rendered successfully');
+
+                // Ensure that the scroll position is at the top after rendering is complete
+                if (pdfViewer) {
+                    pdfViewer.scrollTop = 0;
+                    // Also try to scroll any parent containers that might be scrollable
+                    var viewerContainer = element.querySelector('.pdf-viewer-container');
+                    var contentArea = element.querySelector('.content-area');
+                    if (viewerContainer) viewerContainer.scrollTop = 0;
+                    if (contentArea) contentArea.scrollTop = 0;
+                }
+
+                // Restore any annotations for this page
+                restoreAnnotations(pageNum);
+            }).catch(function(error) {
+                debug('Error rendering page ' + pageNum + ': ' + error);
+                showError('Failed to render page ' + pageNum + ': ' + error.message);
+            });
+        }).catch(function(error) {
+            debug('Error getting page ' + pageNum + ': ' + error);
+            showError('Failed to get page ' + pageNum + ': ' + error.message);
+        });
     }
 
     // Navigate to previous/next page
@@ -373,10 +468,12 @@ function PdfxXBlock(runtime, element, initArgs) {
             currentPage: currentPage,
             annotations: savedAnnotations,
             drawings: drawingStrokes,
-            highlights: highlights
+            highlights: highlights,
+            brightness: currentBrightness,
+            isGrayscale: isGrayscale // Add grayscale state to saved data
         };
 
-        $.ajax({
+        jQuery.ajax({
             type: "POST",
             url: runtime.handlerUrl(element, 'save_annotations'),
             data: JSON.stringify(data),
@@ -389,43 +486,417 @@ function PdfxXBlock(runtime, element, initArgs) {
         });
     }
 
-    // Initialize event handlers
+    // Fit functions
+    function fitToWidth() {
+        try {
+            debug('Fit to width requested');
+
+            if (!pdfDoc || !pdfOriginalWidth) {
+                debug('Cannot fit to width: PDF document or width not available');
+                return;
+            }
+
+            // Get the container width
+            var pdfViewer = element.querySelector('.pdf-viewer');
+            if (!pdfViewer) {
+                debug('Cannot fit to width: PDF viewer element not found');
+                return;
+            }
+
+            // Update active button states
+            var fitToWidthBtn = document.getElementById('fit-to-width-' + blockId);
+            var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
+            if (fitToWidthBtn) fitToWidthBtn.classList.add('active');
+            if (fitToPageBtn) fitToPageBtn.classList.remove('active');
+
+            // Get container width with margin
+            var viewerWidth = pdfViewer.clientWidth - 40;
+
+            debug('Viewer width for fit-to-width: ' + viewerWidth);
+            debug('PDF width for fit-to-width: ' + pdfOriginalWidth);
+
+            // Calculate scale based on container width and page width
+            currentZoom = viewerWidth / pdfOriginalWidth;
+            debug('Fit to width scale: ' + currentZoom.toFixed(2));
+
+            // Update zoom display
+            jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
+
+            // Reset scroll position first
+            pdfViewer.scrollTop = 0;
+            var viewerContainer = element.querySelector('.pdf-viewer-container');
+            var contentArea = element.querySelector('.content-area');
+            if (viewerContainer) viewerContainer.scrollTop = 0;
+            if (contentArea) contentArea.scrollTop = 0;
+
+            // Re-render the page with new zoom
+            renderPage(currentPage);
+
+            // Apply scroll reset again after rendering with a longer timeout to ensure it takes effect
+            setTimeout(function() {
+                pdfViewer.scrollTop = 0;
+                debug('Scroll position reset after fit to width');
+                // Also try to scroll any parent containers that might be scrollable
+                var viewerContainer = element.querySelector('.pdf-viewer-container');
+                var contentArea = element.querySelector('.content-area');
+                if (viewerContainer) viewerContainer.scrollTop = 0;
+                if (contentArea) contentArea.scrollTop = 0;
+            }, 200);
+        } catch (error) {
+            debug('Error in fitToWidth: ' + error.message);
+            // If fit to width fails, at least make sure the PDF is rendered with default zoom
+            if (!pdfDoc) {
+                debug('No PDF document available for rendering after fitToWidth error');
+                return;
+            }
+            renderPage(currentPage);
+        }
+    }
+
+    function fitToPage() {
+        try {
+            debug('Fit to page requested');
+
+            if (!pdfDoc || !pdfOriginalWidth || !pdfOriginalHeight) {
+                debug('Cannot fit to page: PDF document or dimensions not available');
+                return;
+            }
+
+            // Get the container dimensions
+            var pdfViewer = element.querySelector('.pdf-viewer');
+            if (!pdfViewer) {
+                debug('Cannot fit to page: PDF viewer element not found');
+                return;
+            }
+
+            // Update active button states
+            var fitToWidthBtn = document.getElementById('fit-to-width-' + blockId);
+            var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
+            if (fitToWidthBtn) fitToWidthBtn.classList.remove('active');
+            if (fitToPageBtn) fitToPageBtn.classList.add('active');
+
+            // Get container dimensions with margin
+            var viewerWidth = pdfViewer.clientWidth - 40;
+            var viewerHeight = pdfViewer.clientHeight - 40;
+
+            debug('Viewer dimensions for fit-to-page: ' + viewerWidth + 'x' + viewerHeight);
+            debug('PDF dimensions for fit-to-page: ' + pdfOriginalWidth + 'x' + pdfOriginalHeight);
+
+            // Calculate scale based on both width and height to fit the page
+            var scaleX = viewerWidth / pdfOriginalWidth;
+            var scaleY = viewerHeight / pdfOriginalHeight;
+
+            // Use the smaller scale to ensure the entire page fits
+            currentZoom = Math.min(scaleX, scaleY);
+            debug('Fit to page scale: ' + currentZoom.toFixed(2));
+
+            // Update zoom display
+            jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
+
+            // Reset scroll position first
+            pdfViewer.scrollTop = 0;
+            var viewerContainer = element.querySelector('.pdf-viewer-container');
+            var contentArea = element.querySelector('.content-area');
+            if (viewerContainer) viewerContainer.scrollTop = 0;
+            if (contentArea) contentArea.scrollTop = 0;
+
+            // Re-render the page with new zoom
+            renderPage(currentPage);
+
+            // Apply scroll reset again after rendering with a longer timeout to ensure it takes effect
+            setTimeout(function() {
+                pdfViewer.scrollTop = 0;
+                debug('Scroll position reset after fit to page');
+                // Also try to scroll any parent containers that might be scrollable
+                var viewerContainer = element.querySelector('.pdf-viewer-container');
+                var contentArea = element.querySelector('.content-area');
+                if (viewerContainer) viewerContainer.scrollTop = 0;
+                if (contentArea) contentArea.scrollTop = 0;
+            }, 200);
+        } catch (error) {
+            debug('Error in fitToPage: ' + error.message);
+            // If fit to page fails, at least make sure the PDF is rendered with default zoom
+            if (!pdfDoc) {
+                debug('No PDF document available for rendering after fitToPage error');
+                return;
+            }
+            renderPage(currentPage);
+        }
+    }
+
+    function toggleFullscreen() {
+        debug('Toggle fullscreen requested');
+
+        // Get the container element - the specific block container, not all blocks
+        var container = document.querySelector('.pdfx_block#pdfx-block-' + blockId);
+        if (!container) return;
+
+        // Check if already in fullscreen
+        var isFullscreen = container.classList.contains('fullscreen');
+
+        if (isFullscreen) {
+            // Exit fullscreen - this will trigger our fullscreenchange event handler
+            if (document.exitFullscreen) {
+                document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                document.webkitExitFullscreen();
+            } else if (document.mozCancelFullScreen) {
+                document.mozCancelFullScreen();
+            } else if (document.msExitFullscreen) {
+                document.msExitFullscreen();
+            }
+
+            // The rest of the cleanup will be handled by our fullscreenchange event listener
+        } else {
+            // Before entering fullscreen, store current state
+            currentZoomBeforeFullscreen = currentZoom;
+
+            // Make sure only this block is visible in fullscreen mode
+            document.querySelectorAll('.pdfx_block').forEach(function(block) {
+                if (block.id !== 'pdfx-block-' + blockId) {
+                    block.style.display = 'none';
+                }
+            });
+
+            // Enter fullscreen
+            container.classList.add('fullscreen');
+
+            // Try to use browser fullscreen API
+            try {
+                if (container.requestFullscreen) {
+                    container.requestFullscreen();
+                } else if (container.mozRequestFullScreen) {
+                    container.mozRequestFullScreen();
+                } else if (container.webkitRequestFullscreen) {
+                    container.webkitRequestFullscreen();
+                } else if (container.msRequestFullscreen) {
+                    container.msRequestFullscreen();
+                }
+            } catch (e) {
+                debug('Browser fullscreen API not supported, using CSS fullscreen: ' + e.message);
+            }
+
+            // Update button appearance
+            var fullscreenBtn = document.getElementById('fullscreen-btn-' + blockId);
+            if (fullscreenBtn) {
+                fullscreenBtn.classList.add('active');
+            }
+
+            // Apply fit to page when entering fullscreen
+            // Wait a moment for the transition to complete before re-rendering
+            setTimeout(function() {
+                fitToPage();
+            }, 300);
+        }
+    }
+
+    // Toggle grayscale mode
+    function toggleGrayscale() {
+        isGrayscale = !isGrayscale;
+        debug('Toggling grayscale mode: ' + isGrayscale);
+
+        // Use block-specific selectors to ensure we only modify this instance
+        var button = document.getElementById('grayscale-toggle-' + blockId);
+        var pdfCanvas = document.getElementById('pdf-canvas-' + blockId);
+
+        if (isGrayscale) {
+            if (button) button.classList.add('active');
+            if (pdfCanvas) pdfCanvas.style.filter = `brightness(${currentBrightness / 100}) grayscale(100%)`;
+        } else {
+            if (button) button.classList.remove('active');
+            if (pdfCanvas) pdfCanvas.style.filter = `brightness(${currentBrightness / 100})`;
+        }
+
+        // Save state to server if needed (not in studio)
+        if (!isStudio) {
+            saveToServer();
+        }
+
+        return isGrayscale;
+    }
+
+    // Initialize event listeners
     function initEventListeners() {
-        $('#prev-page', element).click(function() {
-            changePage(-1);
+        debug('Initializing event listeners with block ID: ' + blockId);
+
+        // Fullscreen change event listener to handle Escape key exits
+        function handleFullscreenChange() {
+            // Check if we're no longer in fullscreen mode
+            if (!document.fullscreenElement &&
+                !document.webkitFullscreenElement &&
+                !document.mozFullScreenElement &&
+                !document.msFullscreenElement) {
+
+                var container = document.querySelector('.pdfx_block#pdfx-block-' + blockId);
+                if (container && container.classList.contains('fullscreen')) {
+                    // Remove the fullscreen class
+                    container.classList.remove('fullscreen');
+
+                    // Update button appearance
+                    var fullscreenBtn = document.getElementById('fullscreen-btn-' + blockId);
+                    if (fullscreenBtn) {
+                        fullscreenBtn.classList.remove('active');
+                    }
+
+                    // Make sure other blocks are visible
+                    document.querySelectorAll('.pdfx_block').forEach(function(block) {
+                        block.style.display = '';
+                    });
+
+                    // Fix the height
+                    container.style.height = '800px';
+
+                    // Reset to original zoom (restore before fullscreen state)
+                    if (typeof currentZoomBeforeFullscreen !== 'undefined') {
+                        currentZoom = currentZoomBeforeFullscreen;
+
+                        // Wait for the DOM to update after exiting fullscreen
+                        setTimeout(function() {
+                            renderPage(currentPage);
+                        }, 300);
+                    }
+                }
+            }
+        }
+
+        // Add various browser-specific fullscreen change event listeners
+        document.addEventListener('fullscreenchange', handleFullscreenChange);
+        document.addEventListener('webkitfullscreenchange', handleFullscreenChange);
+        document.addEventListener('mozfullscreenchange', handleFullscreenChange);
+        document.addEventListener('MSFullscreenChange', handleFullscreenChange);
+
+        // Use jQuery to attach events for better browser compatibility
+        var prevPageBtn = document.getElementById('prev-page-' + blockId);
+        if (prevPageBtn) {
+            prevPageBtn.addEventListener('click', function() {
+                changePage(-1);
+            });
+        }
+
+        var nextPageBtn = document.getElementById('next-page-' + blockId);
+        if (nextPageBtn) {
+            nextPageBtn.addEventListener('click', function() {
+                changePage(1);
+            });
+        }
+
+        var zoomInBtn = document.getElementById('zoom-in-' + blockId);
+        if (zoomInBtn) {
+            zoomInBtn.addEventListener('click', function() {
+                debug('Zoom in clicked, current zoom: ' + currentZoom);
+                currentZoom += 0.1;
+                debug('New zoom level: ' + currentZoom);
+                jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
+
+                // Clear active state from fit buttons when manual zoom is used
+                var fitToWidthBtn = document.getElementById('fit-to-width-' + blockId);
+                var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
+                if (fitToWidthBtn) fitToWidthBtn.classList.remove('active');
+                if (fitToPageBtn) fitToPageBtn.classList.remove('active');
+
+                // Reset scroll position first
+                var pdfViewer = element.querySelector('.pdf-viewer');
+                if (pdfViewer) {
+                    pdfViewer.scrollTop = 0;
+                    var viewerContainer = element.querySelector('.pdf-viewer-container');
+                    var contentArea = element.querySelector('.content-area');
+                    if (viewerContainer) viewerContainer.scrollTop = 0;
+                    if (contentArea) contentArea.scrollTop = 0;
+                }
+
+                renderPage(currentPage);
+
+                // Reset scroll position again after rendering
+                setTimeout(function() {
+                    if (pdfViewer) {
+                        pdfViewer.scrollTop = 0;
+                        debug('Scroll position reset after zoom in');
+                        var viewerContainer = element.querySelector('.pdf-viewer-container');
+                        var contentArea = element.querySelector('.content-area');
+                        if (viewerContainer) viewerContainer.scrollTop = 0;
+                        if (contentArea) contentArea.scrollTop = 0;
+                    }
+                }, 200);
+            });
+        }
+
+        var zoomOutBtn = document.getElementById('zoom-out-' + blockId);
+        if (zoomOutBtn) {
+            zoomOutBtn.addEventListener('click', function() {
+                debug('Zoom out clicked, current zoom: ' + currentZoom);
+                currentZoom = Math.max(0.1, currentZoom - 0.1);
+                debug('New zoom level: ' + currentZoom);
+                jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
+
+                // Clear active state from fit buttons when manual zoom is used
+                var fitToWidthBtn = document.getElementById('fit-to-width-' + blockId);
+                var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
+                if (fitToWidthBtn) fitToWidthBtn.classList.remove('active');
+                if (fitToPageBtn) fitToPageBtn.classList.remove('active');
+
+                // Reset scroll position first
+                var pdfViewer = element.querySelector('.pdf-viewer');
+                if (pdfViewer) {
+                    pdfViewer.scrollTop = 0;
+                    var viewerContainer = element.querySelector('.pdf-viewer-container');
+                    var contentArea = element.querySelector('.content-area');
+                    if (viewerContainer) viewerContainer.scrollTop = 0;
+                    if (contentArea) contentArea.scrollTop = 0;
+                }
+
+                renderPage(currentPage);
+
+                // Reset scroll position again after rendering
+                setTimeout(function() {
+                    if (pdfViewer) {
+                        pdfViewer.scrollTop = 0;
+                        debug('Scroll position reset after zoom out');
+                        var viewerContainer = element.querySelector('.pdf-viewer-container');
+                        var contentArea = element.querySelector('.content-area');
+                        if (viewerContainer) viewerContainer.scrollTop = 0;
+                        if (contentArea) contentArea.scrollTop = 0;
+                    }
+                }, 200);
+            });
+        }
+
+        var grayscaleBtn = document.getElementById('grayscale-toggle-' + blockId);
+        if (grayscaleBtn) {
+            grayscaleBtn.addEventListener('click', toggleGrayscale);
+        }
+
+        var fitToWidthBtn = document.getElementById('fit-to-width-' + blockId);
+        if (fitToWidthBtn) {
+            fitToWidthBtn.addEventListener('click', fitToWidth);
+        }
+
+        var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
+        if (fitToPageBtn) {
+            fitToPageBtn.addEventListener('click', fitToPage);
+        }
+
+        var fullscreenBtn = document.getElementById('fullscreen-btn-' + blockId);
+        if (fullscreenBtn) {
+            fullscreenBtn.addEventListener('click', toggleFullscreen);
+        }
+
+        // Debug buttons - using jQuery for these since they're not critical to functionality
+        jq('#toggle-debug').on('click', function() {
+            jq('.pdf-debug').hide();
         });
 
-        $('#next-page', element).click(function() {
-            changePage(1);
-        });
-
-        $('#zoom-in', element).click(function() {
-            currentZoom += 0.1;
-            renderPage(currentPage);
-        });
-
-        $('#zoom-out', element).click(function() {
-            currentZoom = Math.max(0.1, currentZoom - 0.1);
-            renderPage(currentPage);
-        });
-
-        // Debug buttons
-        $('#toggle-debug', element).click(function() {
-            $('.pdf-debug', element).hide();
-        });
-
-        $('#force-reload', element).click(function() {
+        jq('#force-reload-' + blockId).on('click', function() {
             debug('Force reloading PDF...');
             // Clear cached document if any
             pdfDoc = null;
             // Show loading indicator
-            $('.loading-indicator', element).show();
-            $('.pdf-error', element).hide();
+            jq('.loading-indicator').show();
+            jq('.pdf-error').hide();
             // Reload the PDF
             loadPDF();
         });
 
-        $('#direct-download', element).click(function() {
+        jq('#direct-download-' + blockId).on('click', function() {
             var url = getSafePdfUrl();
             if (!url) {
                 debug('No URL available for direct download');
@@ -435,9 +906,9 @@ function PdfxXBlock(runtime, element, initArgs) {
             window.open(url, '_blank');
         });
 
-        $('#check-canvas', element).click(function() {
+        jq('#check-canvas-' + blockId).on('click', function() {
             debug('Checking canvas element...');
-            var canvas = $('#pdf-canvas', element)[0];
+            var canvas = document.getElementById('pdf-canvas-' + blockId);
 
             if (!canvas) {
                 debug('ERROR: Canvas element not found');
@@ -477,7 +948,7 @@ function PdfxXBlock(runtime, element, initArgs) {
             }
         });
 
-        $('#toggle-cors-proxy', element).click(function() {
+        jq('#toggle-cors-proxy-' + blockId).on('click', function() {
             debug('Trying with CORS proxy...');
 
             // Get original URL
@@ -495,8 +966,8 @@ function PdfxXBlock(runtime, element, initArgs) {
             debug('Using proxy URL: ' + proxyUrl);
 
             // Show loading indicator
-            $('.loading-indicator', element).show().text('Loading via CORS proxy...');
-            $('.pdf-error', element).hide();
+            jq('.loading-indicator').show().text('Loading via CORS proxy...');
+            jq('.pdf-error').hide();
 
             // Try loading with proxy
             try {
@@ -504,7 +975,7 @@ function PdfxXBlock(runtime, element, initArgs) {
                 pdfDoc = null;
 
                 // Create a loading task with proxy URL
-                const loadingTask = pdfjsLib.getDocument({
+                var loadingTask = pdfjsLib.getDocument({
                     url: proxyUrl,
                     cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.10.377/cmaps/',
                     cMapPacked: true
@@ -516,14 +987,14 @@ function PdfxXBlock(runtime, element, initArgs) {
                     debug('PDF loaded via proxy with ' + pdf.numPages + ' pages');
 
                     // Update UI
-                    $('#page-count', element).text(pdf.numPages);
-                    $('.pdf-url-debug', element).text(proxyUrl + ' (proxied)');
+                    jq('#page-count-' + blockId).text(pdf.numPages);
+                    jq('.pdf-url-debug').text(proxyUrl + ' (proxied)');
 
                     // Render first page
                     renderPage(currentPage);
 
                     // Hide loading indicator
-                    $('.loading-indicator', element).hide();
+                    jq('.loading-indicator').hide();
                 }).catch(function(error) {
                     debug('Error loading PDF via proxy: ' + error.message);
                     showError('Failed to load PDF via proxy: ' + error.message);
@@ -536,96 +1007,84 @@ function PdfxXBlock(runtime, element, initArgs) {
     }
 
     // Initialize the XBlock
-    $(function() {
-        debug('Initializing PDF XBlock');
+    function init() {
+        debug('Initializing PDF XBlock with ID: ' + blockId);
 
-        // Check if PDF.js is available
-        if (typeof pdfjsLib === 'undefined') {
-            debug('PDF.js is not loaded, attempting to load it dynamically');
+        // Log important environment details
+        debug('User agent: ' + navigator.userAgent);
+        debug('Window dimensions: ' + window.innerWidth + 'x' + window.innerHeight);
 
-            // Load PDF.js dynamically if not available
-            var pdfJsScript = document.createElement('script');
-            pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js';
-            pdfJsScript.async = true;
-            pdfJsScript.onload = function() {
-                debug('PDF.js loaded dynamically');
+        try {
+            // Hide debug panel by default
+            var debugPanel = jq('.pdf-debug');
+            if (debugPanel.length) {
+                debugPanel.hide();
+            }
 
-                // Now load the worker
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+            // Get saved settings from initArgs if available
+            if (initArgs.isGrayscale !== undefined) {
+                isGrayscale = initArgs.isGrayscale;
+                debug('Restored grayscale state: ' + isGrayscale);
 
-                // Continue initialization
-                debug('Continuing initialization after PDF.js loaded');
+                // Activate button if grayscale is enabled
+                if (isGrayscale) {
+                    var button = document.getElementById('grayscale-toggle-' + blockId);
+                    if (button) button.classList.add('active');
+                }
+            }
+
+            if (initArgs.brightness !== undefined) {
+                currentBrightness = initArgs.brightness;
+                debug('Restored brightness: ' + currentBrightness);
+            }
+
+            // Check if PDF.js is available
+            if (typeof pdfjsLib === 'undefined') {
+                debug('PDF.js is not loaded, attempting to load it dynamically');
+
+                // Load PDF.js dynamically if not available
+                var pdfJsScript = document.createElement('script');
+                pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js';
+                pdfJsScript.async = true;
+                pdfJsScript.onload = function() {
+                    debug('PDF.js loaded dynamically');
+
+                    // Now load the worker
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+
+                    // Continue initialization
+                    debug('Continuing initialization after PDF.js loaded');
+                    initEventListeners();
+                    loadPDF();
+                };
+
+                pdfJsScript.onerror = function() {
+                    debug('Failed to load PDF.js dynamically');
+                    showError('Failed to load PDF.js library. Please refresh the page or try a different browser.');
+                };
+
+                document.head.appendChild(pdfJsScript);
+            } else {
+                // PDF.js is already loaded, continuing with initialization
+                debug('PDF.js is already loaded, continuing with initialization');
                 initEventListeners();
                 loadPDF();
-            };
-
-            pdfJsScript.onerror = function() {
-                debug('Failed to load PDF.js dynamically');
-                showError('Failed to load PDF.js library. Please refresh the page or try a different browser.');
-            };
-
-            document.head.appendChild(pdfJsScript);
-        } else {
-            // Always show debug info in LMS for now to help diagnose issues
-            if (!isStudio) {
-                $('.pdf-debug', element).show();
             }
-
-            debug('PDF.js is already loaded, continuing with initialization');
-            initEventListeners();
-            loadPDF();
-        }
-    });
-
-    // Directly test if we can access the PDF by sending a request
-    function testPdfAccess() {
-        var url = getSafePdfUrl();
-        if (!url) {
-            debug('No PDF URL to test');
-            return;
-        }
-
-        debug('Testing direct access to PDF: ' + url);
-
-        // Create an iframe to test loading
-        var testFrame = document.createElement('iframe');
-        testFrame.style.display = 'none';
-        testFrame.src = url;
-
-        testFrame.onload = function() {
-            debug('PDF iframe loaded successfully - PDF seems accessible');
-            document.body.removeChild(testFrame);
-        };
-
-        testFrame.onerror = function() {
-            debug('PDF iframe failed to load - PDF may not be accessible');
-            document.body.removeChild(testFrame);
-        };
-
-        document.body.appendChild(testFrame);
-
-        // Also try with XMLHttpRequest
-        var xhr = new XMLHttpRequest();
-        xhr.open('HEAD', url, true);
-
-        xhr.onload = function() {
-            if (xhr.status >= 200 && xhr.status < 300) {
-                debug('XHR head request successful - PDF is accessible');
-                debug('Content-Type: ' + xhr.getResponseHeader('Content-Type'));
-            } else {
-                debug('XHR head request failed with status: ' + xhr.status);
+        } catch (error) {
+            debug('Error during initialization: ' + error.message);
+            if (error.stack) {
+                debug('Stack trace: ' + error.stack);
             }
-        };
-
-        xhr.onerror = function() {
-            debug('XHR head request failed - PDF may not be accessible due to CORS or network issues');
-        };
-
-        xhr.send();
+            showError('Error initializing PDF viewer: ' + error.message);
+        }
     }
 
-    // Call the test function after a short delay
-    setTimeout(testPdfAccess, 1000);
+    // Start initialization when document is ready
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(init, 1);
+    } else {
+        document.addEventListener('DOMContentLoaded', init);
+    }
 
     // Return an empty object (required by XBlock pattern)
     return {};
