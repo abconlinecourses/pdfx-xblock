@@ -1,17 +1,96 @@
 <!-- PDF Viewer XBlock -->
 <link rel="stylesheet" type="text/css" href="../css/pdfx.css"/>
+<!-- Add fabric.js library -->
+<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 <div class="pdfx_block" id="pdfx-block-${block.block_id}">
     <h2 class="pdf-title">${block.display_name}</h2>
 
     <!-- PDF Viewer and Tools -->
     <div class="pdf-viewer-container">
+        <!-- Left Sidebar -->
+        <div class="sidebar">
+            <div class="tool-section">
+                <button class="tool-btn" id="marker-tool-${block.block_id}" title="Marker">
+                    <i class="fas fa-pen"></i>
+                </button>
+                <button class="tool-btn" id="highlight-tool-${block.block_id}" title="Highlighter">
+                    <i class="fas fa-highlighter"></i>
+                </button>
+                <button class="tool-btn" id="text-tool-${block.block_id}" title="Text">
+                    <i class="fas fa-font"></i>
+                </button>
+            </div>
+            <div class="tool-section">
+                <button class="tool-btn" id="shape-tool-${block.block_id}" title="Shape">
+                    <i class="fas fa-shapes"></i>
+                </button>
+                <button class="tool-btn" id="note-tool-${block.block_id}" title="Note">
+                    <i class="fas fa-sticky-note"></i>
+                </button>
+                <button class="tool-btn" id="comment-tool-${block.block_id}" title="Comment">
+                    <i class="fas fa-comment"></i>
+                </button>
+            </div>
+            <div class="tool-section">
+                <button class="tool-btn" id="select-tool-${block.block_id}" title="Select">
+                    <i class="fas fa-mouse-pointer"></i>
+                </button>
+                <button class="tool-btn" id="eraser-tool-${block.block_id}" title="Eraser">
+                    <i class="fas fa-eraser"></i>
+                </button>
+            </div>
+            <div class="horizontal-separator"></div>
+            <button class="tool-btn" id="undo-btn-${block.block_id}" title="Undo">
+                <i class="fas fa-undo"></i>
+            </button>
+            <button class="tool-btn" id="redo-btn-${block.block_id}" title="Redo">
+                <i class="fas fa-redo"></i>
+            </button>
+        </div>
+
         <!-- Main Content Area -->
         <div class="content-area">
+            <!-- Top Toolbar -->
+            <div class="top-toolbar">
+                <div class="tool-group">
+                    <div class="drawing-controls">
+                        <input type="color" id="color-input-${block.block_id}" value="#FF0000" title="Color">
+                        <input type="range" id="width-input-${block.block_id}" min="1" max="20" value="5" title="Line Width">
+                        <span id="width-value-${block.block_id}">5px</span>
+                    </div>
+                </div>
+                <div class="separator"></div>
+                <div class="tool-group">
+                    <button class="tool-btn" id="clear-tool-${block.block_id}" title="Clear All">
+                        <i class="fas fa-trash"></i>
+                    </button>
+                </div>
+                <div class="separator"></div>
+                <div class="brightness-controls">
+                    <button class="tool-btn" id="brightness-down-${block.block_id}" title="Decrease Brightness">
+                        <i class="fas fa-sun"></i>
+                        <i class="fas fa-minus" style="font-size: 8px; position: absolute; margin-left: -8px; margin-top: 12px;"></i>
+                    </button>
+                    <span id="brightness-level-${block.block_id}" style="font-size: 12px; color: #555;">100%</span>
+                    <button class="tool-btn" id="brightness-up-${block.block_id}" title="Increase Brightness">
+                        <i class="fas fa-sun"></i>
+                        <i class="fas fa-plus" style="font-size: 8px; position: absolute; margin-left: -8px; margin-top: 12px;"></i>
+                    </button>
+                </div>
+                <div style="margin-left: auto;">
+                    <button class="tool-btn" id="download-tool-${block.block_id}" title="Download">
+                        <i class="fas fa-download"></i>
+                    </button>
+                </div>
+            </div>
+
             <!-- PDF Viewer -->
             <div class="pdf-viewer">
                 <div id="pdf-container-${block.block_id}" class="pdf-container">
                     <canvas id="pdf-canvas-${block.block_id}"></canvas>
-                    <div id="draw-container-${block.block_id}" class="draw-container"></div>
+                    <div id="text-layer-${block.block_id}" class="text-layer"></div>
+                    <div id="draw-container-${block.block_id}" class="draw-container" style="position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; z-index: 2;"></div>
+                    <div id="highlight-layer-${block.block_id}" class="highlight-layer"></div>
                 </div>
                 <!-- Loading indicator -->
                 <div class="loading-indicator">Loading PDF...</div>
@@ -38,31 +117,25 @@
                 <div class="zoom-controls">
                     <button class="page-btn zoom-out" id="zoom-out-${block.block_id}" title="Zoom Out">
                         <i class="fas fa-search-minus"></i>
-                        <span>Zoom Out</span>
                     </button>
                     <span id="zoom-level-${block.block_id}" class="zoom-level">100%</span>
                     <button class="page-btn zoom-in" id="zoom-in-${block.block_id}" title="Zoom In">
                         <i class="fas fa-search-plus"></i>
-                        <span>Zoom In</span>
                     </button>
                 </div>
                 <div class="separator"></div>
                 <div class="view-controls">
                     <button class="page-btn fit-to-width" id="fit-to-width-${block.block_id}" title="Fit to Width">
                         <i class="fas fa-arrows-alt-h"></i>
-                        <span>Fit Width</span>
                     </button>
                     <button class="page-btn fit-to-page" id="fit-to-page-${block.block_id}" title="Fit to Page">
                         <i class="fas fa-compress-arrows-alt"></i>
-                        <span>Fit Page</span>
                     </button>
                     <button class="page-btn fullscreen-btn" id="fullscreen-btn-${block.block_id}" title="Toggle Fullscreen">
                         <i class="fas fa-expand"></i>
-                        <span>Fullscreen</span>
                     </button>
                     <button class="page-btn grayscale-toggle" id="grayscale-toggle-${block.block_id}" title="Toggle Grayscale">
                         <i class="fas fa-adjust"></i>
-                        <span>Grayscale</span>
                     </button>
                 </div>
             </div>

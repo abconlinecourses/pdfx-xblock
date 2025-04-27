@@ -7,6 +7,7 @@ import logging
 import mimetypes
 import uuid
 import pkg_resources
+from datetime import datetime
 
 from web_fragments.fragment import Fragment
 from xblock.core import XBlock
@@ -16,6 +17,10 @@ from django.core.files.storage import default_storage
 from django.core.files.base import ContentFile
 from django.conf import settings
 from webob import Response
+from .models import HighlightAnnotation
+from django.core.exceptions import PermissionDenied
+from django.utils.translation import gettext_lazy as _
+from xblock.exceptions import JsonHandlerError
 
 log = logging.getLogger(__name__)
 
@@ -30,6 +35,7 @@ class SafeDict(Dict):
         """
         Convert stored value to dict, handling non-dict values by converting to empty dict.
         """
+        log.debug(f"SafeDict.from_json called with value type: {type(value)}")
         if value is None:
             return {}
         if isinstance(value, dict):
@@ -41,7 +47,8 @@ class SafeDict(Dict):
                 if len(value) > 0 and all(isinstance(item, list) and len(item) == 2 for item in value):
                     return dict(value)
                 return {}
-            except Exception:
+            except Exception as e:
+                log.error(f"Error converting list to dict: {str(e)}")
                 return {}
         if isinstance(value, str):
             # Try to deserialize JSON string
@@ -49,12 +56,15 @@ class SafeDict(Dict):
                 result = json.loads(value)
                 if isinstance(result, dict):
                     return result
-            except Exception:
+            except Exception as e:
+                log.error(f"Error deserializing JSON string: {str(e)}")
                 pass
 
         log.warning(f"Invalid data type for Dict field {self.name}: {type(value)}, using empty dict")
         return {}
 
+@XBlock.needs('i18n')
+@XBlock.needs('user')
 class PdfxXBlock(XBlock):
     """
     XBlock providing a rich PDF viewing and annotation experience.
@@ -64,8 +74,8 @@ class PdfxXBlock(XBlock):
 
     # XBlock fields
     display_name = String(
-        display_name="Display Name",
-        help="Name of the component in the edxplatform",
+        display_name=_("Display Name"),
+        help=_("Name of the component in the edxplatform"),
         scope=Scope.settings,
         default="PDF Viewer"
     )
@@ -79,8 +89,8 @@ class PdfxXBlock(XBlock):
     )
 
     pdf_url = String(
-        display_name="PDF URL",
-        help="URL or path to the PDF file to display",
+        display_name=_("PDF URL"),
+        help=_("URL or path to the PDF file to display"),
         scope=Scope.settings,
         default=""
     )
@@ -141,6 +151,27 @@ class PdfxXBlock(XBlock):
         default={}
     )
 
+    # Store user highlight data - separate from drawing highlights
+    user_highlights = SafeDict(
+        help="Student's user-specific text highlights by page",
+        scope=Scope.user_state,
+        default={}
+    )
+
+    # Store staff-created highlights (instructor/author highlights)
+    staff_highlights = SafeDict(
+        help="Staff-created highlights for all users",
+        scope=Scope.content,
+        default={}
+    )
+
+    # Store all highlights data with user scope
+    all_highlights = SafeDict(
+        help="All highlights for this document, keyed by user_id",
+        scope=Scope.user_state_summary,
+        default={}
+    )
+
     # Store brightness setting
     brightness = Integer(
         help="PDF brightness setting (50-150)",
@@ -176,6 +207,102 @@ class PdfxXBlock(XBlock):
         except Exception as e:
             log.error(f"Error loading resource {path}: {str(e)}")
             return ""
+
+    def get_user_info(self):
+        """
+        Get current user information from Open edX.
+
+        Returns:
+            dict: User information including id, username, email, etc.
+        """
+        user_info = {
+            'id': self.scope_ids.user_id,  # Always available
+            'username': None,
+            'email': None,
+            'full_name': None
+        }
+
+        # Try to get additional user information from Open edX services
+        try:
+            # First try using the user service provided by Open edX
+            if hasattr(self, 'runtime') and hasattr(self.runtime, 'service'):
+                user_service = self.runtime.service(self, 'user')
+                if user_service:
+                    current_user = user_service.get_current_user()
+                    if current_user:
+                        user_info['username'] = current_user.opt_attrs.get('edx-platform.username')
+                        user_info['email'] = current_user.opt_attrs.get('edx-platform.email')
+                        user_info['full_name'] = current_user.opt_attrs.get('edx-platform.full_name')
+                        log.info(f"Retrieved user info from user service: {user_info}")
+                        return user_info
+        except Exception as e:
+            log.warning(f"Error retrieving user info from user service: {str(e)}")
+
+        # Fallback: try to get user from Django user model
+        try:
+            from django.contrib.auth.models import User
+            user = User.objects.get(id=self.scope_ids.user_id)
+            user_info['username'] = user.username
+            user_info['email'] = user.email
+            user_info['full_name'] = f"{user.first_name} {user.last_name}".strip()
+            log.info(f"Retrieved user info from Django model: {user_info}")
+        except Exception as e:
+            log.warning(f"Error retrieving user info from Django: {str(e)}")
+
+        return user_info
+
+    def get_course_info(self):
+        """
+        Get current course information.
+
+        Returns:
+            dict: Course information including id, name, etc.
+        """
+        course_info = {
+            'id': None,
+            'name': None
+        }
+
+        try:
+            # Try to get course key from XBlock
+            if hasattr(self, 'runtime') and hasattr(self.runtime, 'course_id'):
+                course_info['id'] = str(self.runtime.course_id)
+            elif hasattr(self, 'location') and hasattr(self.location, 'course_key'):
+                course_info['id'] = str(self.location.course_key)
+
+            # Try to get course name
+            if hasattr(self, 'runtime') and hasattr(self.runtime, 'modulestore'):
+                course_key = self.runtime.course_id
+                course = self.runtime.modulestore.get_course(course_key)
+                if course:
+                    course_info['name'] = course.display_name
+        except Exception as e:
+            log.warning(f"Error retrieving course info: {str(e)}")
+
+        return course_info
+
+    def is_staff_user(self):
+        """
+        Check if the current user is staff for this course.
+
+        Returns:
+            bool: True if the user is staff, False otherwise
+        """
+        try:
+            # Check if we have access to the user_is_staff method from runtime
+            if hasattr(self.runtime, 'user_is_staff'):
+                return self.runtime.user_is_staff
+
+            # Alternatively, try the has_permission method
+            if hasattr(self, 'runtime') and hasattr(self.runtime, 'service'):
+                user_service = self.runtime.service(self, 'user')
+                if user_service:
+                    return user_service.get_current_user().opt_attrs.get('edx-platform.user_is_staff', False)
+
+            return False
+        except Exception as e:
+            log.warning(f"Error checking staff status: {str(e)}")
+            return False
 
     def student_view(self, context=None):
         """
@@ -257,6 +384,32 @@ class PdfxXBlock(XBlock):
         frag.add_javascript(self.resource_string("static/js/src/pdfx_highlight.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
 
+        # Get user and course information
+        user_info = self.get_user_info()
+        course_info = self.get_course_info()
+        is_staff = self.is_staff_user()
+
+        # Get document info
+        document_info = {
+            'title': self.pdf_file_name or 'PDF Document',
+            'url': pdf_url
+        }
+
+        # Get correct highlights based on user type
+        if is_staff:
+            # Staff can see all highlights
+            highlights_to_display = self.get_all_user_highlights()
+        else:
+            # Regular students only see their own highlights and staff-created highlights
+            highlights_to_display = self.get_user_highlights(user_info['id'])
+
+            # Add staff highlights if any
+            if self.staff_highlights:
+                for page, page_highlights in self.staff_highlights.items():
+                    if page not in highlights_to_display:
+                        highlights_to_display[page] = []
+                    highlights_to_display[page].extend(page_highlights)
+
         # Initialize the PDF viewer with parameters
         frag.initialize_js('PdfxXBlock', {
             'pdfUrl': pdf_url,
@@ -265,10 +418,17 @@ class PdfxXBlock(XBlock):
             'savedAnnotations': self.annotations,
             'drawingStrokes': self.drawing_strokes,
             'highlights': self.highlights,
+            'userHighlights': highlights_to_display,
             'currentPage': self.current_page,
             'blockId': self.block_id,
             'brightness': self.brightness,
-            'isGrayscale': self.is_grayscale
+            'isGrayscale': self.is_grayscale,
+            'userId': user_info['id'],
+            'username': user_info['username'],
+            'email': user_info['email'],
+            'courseId': course_info['id'],
+            'documentInfo': document_info,
+            'isStaff': is_staff
         })
 
         return frag
@@ -459,6 +619,146 @@ class PdfxXBlock(XBlock):
         response.status_code = status_code
         return response
 
+    def get_all_user_highlights(self):
+        """
+        Get all user highlights for this document.
+        Used in staff/instructor view.
+
+        Returns:
+            dict: Dictionary of highlights by page with user info
+        """
+        return self.all_highlights
+
+    def get_user_highlights(self, user_id):
+        """
+        Get highlights for a specific user.
+
+        Args:
+            user_id (str): The user ID to get highlights for
+
+        Returns:
+            dict: Dictionary of highlights by page
+        """
+        if user_id in self.all_highlights:
+            return self.all_highlights[user_id]
+        return {}
+
+    def save_highlight(self, user_id, highlight_data):
+        """
+        Save a highlight in the XBlock storage.
+
+        Args:
+            user_id (str): The user ID who created the highlight
+            highlight_data (dict): The highlight data
+
+        Returns:
+            str: Highlight ID
+        """
+        try:
+            log.debug(f"Saving highlight for user {user_id}, data: {highlight_data}")
+            # Generate a highlight ID if not provided
+            highlight_id = highlight_data.get('highlightId', f"highlight-{uuid.uuid4().hex}")
+            highlight_data['highlightId'] = highlight_id
+
+            # Add timestamp if not present
+            if 'timestamp' not in highlight_data:
+                highlight_data['timestamp'] = datetime.utcnow().isoformat()
+
+            # Get page number as string
+            page_num = str(highlight_data.get('page', 1))
+
+            # Initialize user's highlights if not existing
+            if user_id not in self.all_highlights:
+                log.debug(f"Initializing highlights for user {user_id}")
+                self.all_highlights[user_id] = {}
+
+            if page_num not in self.all_highlights[user_id]:
+                self.all_highlights[user_id][page_num] = []
+
+            # Add the highlight
+            self.all_highlights[user_id][page_num].append(highlight_data)
+            log.debug(f"Added highlight {highlight_id} to all_highlights for user {user_id} on page {page_num}")
+
+            # Also save to user_highlights for this user if it's the current user
+            if user_id == str(self.scope_ids.user_id):
+                if page_num not in self.user_highlights:
+                    self.user_highlights[page_num] = []
+                self.user_highlights[page_num].append(highlight_data)
+                log.debug(f"Added highlight {highlight_id} to user_highlights for current user")
+
+            # If staff user, also save to staff_highlights
+            if self.is_staff_user():
+                if page_num not in self.staff_highlights:
+                    self.staff_highlights[page_num] = []
+
+                # Add staff info
+                staff_data = dict(highlight_data)
+                staff_data['isStaffHighlight'] = True
+                self.staff_highlights[page_num].append(staff_data)
+                log.debug(f"Added highlight {highlight_id} to staff_highlights")
+
+            log.info(f"Successfully saved highlight {highlight_id} for user {user_id} on page {page_num}")
+            return highlight_id
+
+        except Exception as e:
+            log.error(f"Error saving highlight: {str(e)}", exc_info=True)
+            return None
+
+    def delete_highlight(self, user_id, highlight_id):
+        """
+        Delete a highlight from XBlock storage.
+
+        Args:
+            user_id (str): The user ID who owns the highlight
+            highlight_id (str): The highlight ID to delete
+
+        Returns:
+            bool: True if successful, False otherwise
+        """
+        try:
+            log.debug(f"Attempting to delete highlight {highlight_id} for user {user_id}")
+            # Check if user exists in highlights
+            if user_id not in self.all_highlights:
+                log.warning(f"User {user_id} not found in all_highlights")
+                return False
+
+            # Find and remove the highlight
+            highlight_found = False
+            for page_num, highlights in self.all_highlights[user_id].items():
+                for i, highlight in enumerate(highlights):
+                    if highlight.get('highlightId') == highlight_id:
+                        # Remove the highlight
+                        self.all_highlights[user_id][page_num].pop(i)
+                        highlight_found = True
+                        log.debug(f"Removed highlight {highlight_id} from all_highlights on page {page_num}")
+
+                        # Also remove from user_highlights if it's the current user
+                        if user_id == str(self.scope_ids.user_id) and page_num in self.user_highlights:
+                            for i, h in enumerate(self.user_highlights[page_num]):
+                                if h.get('highlightId') == highlight_id:
+                                    self.user_highlights[page_num].pop(i)
+                                    log.debug(f"Removed highlight {highlight_id} from user_highlights")
+                                    break
+
+                        # If staff user, also remove from staff_highlights
+                        if self.is_staff_user():
+                            for page, staff_highlights in self.staff_highlights.items():
+                                for i, h in enumerate(staff_highlights):
+                                    if h.get('highlightId') == highlight_id:
+                                        self.staff_highlights[page].pop(i)
+                                        log.debug(f"Removed highlight {highlight_id} from staff_highlights")
+                                        break
+
+                        log.info(f"Successfully deleted highlight {highlight_id} for user {user_id}")
+                        return True
+
+            if not highlight_found:
+                log.warning(f"Highlight {highlight_id} not found for user {user_id}")
+            return highlight_found
+        except Exception as e:
+            log.error(f"Error deleting highlight: {str(e)}", exc_info=True)
+            return False
+
     @XBlock.json_handler
     def save_annotations(self, data, suffix=''):
         """
@@ -466,17 +766,22 @@ class PdfxXBlock(XBlock):
         This includes drawings, highlights, and the current page.
         """
         if not self.allow_annotation:
+            log.warning("Annotation attempt rejected - annotations not allowed")
             return {'result': 'error', 'message': 'Annotations are not allowed'}
 
         try:
+            log.debug(f"Saving annotations: {json.dumps(data)[:200]}...")  # Log first 200 chars to avoid huge logs
+
             # Update current page
             if 'currentPage' in data and isinstance(data['currentPage'], int):
                 self.current_page = data['currentPage']
+                log.debug(f"Updated current page to {self.current_page}")
 
             # Update drawings - ensure it's a dict
             if 'drawings' in data:
                 if isinstance(data['drawings'], dict):
                     self.drawing_strokes = data['drawings']
+                    log.debug(f"Updated drawing strokes with {len(data['drawings'])} items")
                 else:
                     log.warning(f"Received invalid drawings type: {type(data['drawings'])}")
                     # Convert to dict if possible
@@ -489,6 +794,7 @@ class PdfxXBlock(XBlock):
             if 'highlights' in data:
                 if isinstance(data['highlights'], dict):
                     self.highlights = data['highlights']
+                    log.debug(f"Updated highlights with {len(data['highlights'])} items")
                 else:
                     log.warning(f"Received invalid highlights type: {type(data['highlights'])}")
                     # Convert to dict if possible
@@ -497,10 +803,47 @@ class PdfxXBlock(XBlock):
                     else:
                         self.highlights = {}
 
+            # Update user text highlights - ensure it's a dict
+            if 'userHighlights' in data:
+                if isinstance(data['userHighlights'], dict):
+                    # Process and save highlights using XBlock storage
+                    user_id = str(self.scope_ids.user_id)
+                    course_info = self.get_course_info()
+                    document_info = {
+                        'title': self.pdf_file_name or 'PDF Document',
+                        'url': self.get_pdf_url()
+                    }
+                    log.debug(f"Processing userHighlights for user {user_id}, course {course_info.get('id')}")
+
+                    # Save each highlight
+                    user_highlights = data['userHighlights']
+                    total_highlights = 0
+                    for page_num, highlights in user_highlights.items():
+                        total_highlights += len(highlights)
+                        for highlight in highlights:
+                            # Add additional metadata
+                            highlight['userId'] = user_id
+                            highlight['courseId'] = course_info.get('id')
+                            highlight['blockId'] = self.block_id
+                            highlight['documentInfo'] = document_info
+
+                            # Save highlight
+                            self.save_highlight(user_id, highlight)
+
+                    log.info(f"Saved {total_highlights} user highlights for user {user_id}")
+                else:
+                    log.warning(f"Received invalid userHighlights type: {type(data['userHighlights'])}")
+                    # Convert to dict if possible
+                    if hasattr(data['userHighlights'], '__dict__'):
+                        self.user_highlights = data['userHighlights'].__dict__
+                    else:
+                        self.user_highlights = {}
+
             # Update general annotations - ensure it's a dict
             if 'annotations' in data:
                 if isinstance(data['annotations'], dict):
                     self.annotations = data['annotations']
+                    log.debug(f"Updated annotations with {len(data['annotations'])} items")
                 else:
                     log.warning(f"Received invalid annotations type: {type(data['annotations'])}")
                     # Convert to dict if possible
@@ -513,14 +856,80 @@ class PdfxXBlock(XBlock):
             if 'brightness' in data and isinstance(data['brightness'], (int, float)):
                 # Ensure brightness is within valid range (50-150)
                 self.brightness = max(50, min(150, int(data['brightness'])))
+                log.debug(f"Updated brightness to {self.brightness}")
 
             # Update grayscale setting
             if 'isGrayscale' in data:
                 self.is_grayscale = bool(data['isGrayscale'])
+                log.debug(f"Updated isGrayscale to {self.is_grayscale}")
 
+            log.info("Successfully saved all annotations")
             return {'result': 'success'}
         except Exception as e:
-            log.error(f"Error saving annotations: {str(e)}")
+            log.error(f"Error saving annotations: {str(e)}", exc_info=True)
+            return {'result': 'error', 'message': str(e)}
+
+    @XBlock.json_handler
+    def get_user_highlights(self, data, suffix=''):
+        """
+        Retrieve user highlights from XBlock storage.
+        """
+        try:
+            # Get user ID
+            user_id = str(self.scope_ids.user_id)
+            log.debug(f"Getting highlights for user {user_id}")
+
+            # Get user highlights
+            highlights = self.get_user_highlights(user_id)
+            log.debug(f"Found {sum(len(page_highlights) for page_highlights in highlights.values() if isinstance(page_highlights, list))} highlights for user {user_id}")
+
+            # If staff, also add staff highlights
+            if self.is_staff_user() and data.get('includeAll'):
+                log.debug("User is staff, including all highlights")
+                all_highlights = self.get_all_user_highlights()
+                return {
+                    'result': 'success',
+                    'highlights': highlights,
+                    'allHighlights': all_highlights
+                }
+
+            return {
+                'result': 'success',
+                'highlights': highlights
+            }
+        except Exception as e:
+            log.error(f"Error retrieving user highlights: {str(e)}", exc_info=True)
+            return {
+                'result': 'error',
+                'message': str(e),
+                'highlights': self.user_highlights  # Fallback to user state
+            }
+
+    @XBlock.json_handler
+    def delete_highlight(self, data, suffix=''):
+        """
+        Delete a highlight from storage.
+        """
+        if not data or 'highlightId' not in data:
+            log.warning("Delete highlight attempt with no highlightId provided")
+            return {'result': 'error', 'message': 'No highlight ID provided'}
+
+        try:
+            highlight_id = data['highlightId']
+            user_id = str(self.scope_ids.user_id)
+            log.debug(f"Deleting highlight {highlight_id} for user {user_id}")
+
+            # Delete from storage
+            success = self.delete_highlight(user_id, highlight_id)
+
+            if success:
+                log.info(f"Successfully deleted highlight {highlight_id}")
+                return {'result': 'success'}
+            else:
+                log.warning(f"Failed to delete highlight {highlight_id}")
+                return {'result': 'error', 'message': 'Failed to delete highlight'}
+        except Exception as e:
+            log.error(f"Error deleting highlight: {str(e)}", exc_info=True)
             return {'result': 'error', 'message': str(e)}
 
     @XBlock.handler

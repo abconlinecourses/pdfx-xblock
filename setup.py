@@ -21,7 +21,7 @@ def package_data(pkg, roots):
 
 setup(
     name='pdfx-xblock',
-    version='0.1.0',
+    version='0.2.0',
     description='PDF Viewer XBlock for Open edX',
     license='MIT',
     packages=[
@@ -29,13 +29,15 @@ setup(
     ],
     install_requires=[
         'XBlock',
+        'xblock-utils',
+        'pymongo>=3.12.0',
     ],
     entry_points={
         'xblock.v1': [
             'pdfx = pdfx:PdfxXBlock',
         ]
     },
-    package_data=package_data("pdfx", ["static", "public", "static/html", "static/css", "static/js", "static/js/src", "static/vendor"]),
+    package_data=package_data("pdfx", ["static", "public", "translations"]),
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Web Environment',

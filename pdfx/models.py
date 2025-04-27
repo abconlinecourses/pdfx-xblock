@@ -11,7 +11,6 @@ from datetime import datetime
 
 logger = logging.getLogger(__name__)
 
-
 class PDFDocument:
     """Model representing a PDF document."""
 
@@ -248,61 +247,106 @@ class TextAnnotation(Annotation):
         return annotation
 
 
-class HighlightAnnotation(Annotation):
-    """Model representing a highlight annotation."""
+class HighlightAnnotation:
+    """
+    Model class for PDF highlight annotations.
 
-    def __init__(self, page_number, rects, color="#ffff00", user_id=None):
-        """
-        Initialize a highlight annotation.
+    This class is a helper for formatting and validating highlight data.
+    It does not use MongoDB directly, as Open edX XBlocks should use the built-in
+    storage mechanisms (XBlock fields) for data persistence.
+    """
 
-        Args:
-            page_number (int): The page number the annotation is on.
-            rects (list): List of rectangle objects {x, y, width, height}.
-            color (str, optional): The color of the highlight.
-            user_id (str, optional): The ID of the user who created the annotation.
-        """
-        super().__init__(page_number, user_id)
-        self.rects = rects
-        self.color = color
-        self.type = "highlight"
-
-    def to_dict(self):
-        """
-        Convert the highlight annotation to a dictionary.
-
-        Returns:
-            dict: The highlight annotation as a dictionary.
-        """
-        data = super().to_dict()
-        data.update({
-            'data': {
-                'rects': self.rects,
-                'color': self.color
-            }
-        })
-        return data
+    REQUIRED_FIELDS = ['highlightId', 'text', 'page']
 
     @classmethod
-    def from_dict(cls, data):
+    def validate_highlight_data(cls, data):
         """
-        Create a highlight annotation from a dictionary.
+        Validate the highlight data.
 
         Args:
-            data (dict): The dictionary to create the annotation from.
+            data (dict): The highlight data to validate
 
         Returns:
-            HighlightAnnotation: The created highlight annotation.
+            bool: True if valid, False otherwise
         """
-        annotation_data = data.get('data', {})
-        annotation = cls(
-            page_number=data.get('pageNumber', 1),
-            rects=annotation_data.get('rects', []),
-            color=annotation_data.get('color', "#ffff00"),
-            user_id=data.get('userId')
-        )
-        annotation.id = data.get('id', annotation.id)
-        annotation.timestamp = data.get('timestamp', annotation.timestamp)
-        return annotation
+        # Check for required fields
+        for field in cls.REQUIRED_FIELDS:
+            if field not in data:
+                logger.warning(f"Missing required field: {field}")
+                return False
+
+        # Validate page is a number
+        try:
+            page = int(data.get('page', 0))
+            if page < 1:
+                logger.warning("Page number must be greater than 0")
+                return False
+        except (ValueError, TypeError):
+            logger.warning("Invalid page number")
+            return False
+
+        return True
+
+    @classmethod
+    def format_highlight_for_storage(cls, data):
+        """
+        Format the highlight data for storage.
+
+        Args:
+            data (dict): The highlight data to format
+
+        Returns:
+            dict: The formatted highlight data
+        """
+        # Create a copy of the data to avoid modifying the original
+        formatted_data = data.copy()
+
+        # Add timestamp if not present
+        if 'timestamp' not in formatted_data:
+            formatted_data['timestamp'] = datetime.utcnow().isoformat()
+
+        # Truncate large text fields if necessary
+        if 'text' in formatted_data and len(formatted_data['text']) > 1000:
+            formatted_data['text'] = formatted_data['text'][:1000] + '...'
+
+        # Ensure page is stored as a string for consistency
+        if 'page' in formatted_data:
+            formatted_data['page'] = str(formatted_data['page'])
+
+        return formatted_data
+
+    @classmethod
+    def format_highlights_for_display(cls, highlights_by_page):
+        """
+        Format highlights for display in the frontend.
+
+        Args:
+            highlights_by_page (dict): Dictionary of highlights keyed by page number
+
+        Returns:
+            dict: Formatted highlights by page
+        """
+        formatted_highlights = {}
+
+        for page, page_highlights in highlights_by_page.items():
+            formatted_highlights[page] = []
+
+            for highlight in page_highlights:
+                # Create a copy to avoid modifying the original
+                formatted_highlight = highlight.copy()
+
+                # Convert timestamp to a more readable format if it exists
+                if 'timestamp' in formatted_highlight:
+                    try:
+                        timestamp = datetime.fromisoformat(formatted_highlight['timestamp'])
+                        formatted_highlight['timestamp'] = timestamp.strftime('%Y-%m-%d %H:%M:%S')
+                    except (ValueError, TypeError):
+                        # Keep the original if parsing fails
+                        pass
+
+                formatted_highlights[page].append(formatted_highlight)
+
+        return formatted_highlights
 
 
 class ShapeAnnotation(Annotation):
