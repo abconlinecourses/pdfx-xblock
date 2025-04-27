@@ -279,9 +279,9 @@
 
 .separator {
     width: 1px;
-    height: 30px;
+    height: 24px;
     background: #ddd;
-    margin: 0 10px;
+    margin: 0 5px;
 }
 
 /* Drawing Controls */
@@ -404,15 +404,14 @@ input[type="range"] {
 
 /* Bottom Toolbar */
 .bottom-toolbar {
-    height: 50px;
-    background: white;
-    border-top: 1px solid #ddd;
+    height: 40px;
+    padding: 0 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 30px;
-    padding: 8px;
-    flex-wrap: wrap;
+    background: white;
+    border-top: 1px solid #ddd;
+    gap: 10px;
 }
 
 .page-controls {
@@ -423,16 +422,16 @@ input[type="range"] {
 
 .page-btn {
     background: none;
-    border: 1px solid #ccc;
-    border-radius: 4px;
-    padding: 5px 10px;
-    margin: 0 5px;
+    border: none;
     cursor: pointer;
-    font-size: 18px;
     color: #555;
     display: flex;
-    flex-direction: column;
     align-items: center;
+    justify-content: center;
+    padding: 5px;
+    border-radius: 4px;
+    min-width: 36px;
+    height: 36px;
 }
 
 .page-btn:hover {
@@ -440,8 +439,12 @@ input[type="range"] {
 }
 
 .page-btn span {
-    font-size: 10px;
-    margin-top: 2px;
+    display: none;
+}
+
+.page-btn i {
+    font-size: 18px;
+    padding: 8px;
 }
 
 .page-info {
@@ -459,6 +462,13 @@ input[type="range"] {
     display: flex;
     align-items: center;
     gap: 20px;
+}
+
+/* Adjust zoom level display */
+.zoom-level {
+    min-width: 50px;
+    text-align: center;
+    font-size: 14px;
 }
 
 /* Error Messages */
