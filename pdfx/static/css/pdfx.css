@@ -411,32 +411,51 @@ input[type="range"] {
     box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
 }
 
+/* Update draw container styles */
 .draw-container, #draw-container, [id^="draw-container-"] {
-    position: absolute;
-    top: 0;
-    left: 0;
-    width: 100%;
-    height: 100%;
-    pointer-events: none;
-    z-index: 4; /* Above text layer so drawings are visible */
-}
-
-.draw-container.active, #draw-container.active, [id^="draw-container-"].active {
-    pointer-events: auto;
-}
-
-.draw-container .canvas-container {
-    margin: 0 auto;
-}
-
-/* Ensure the drawing canvas perfectly overlays the PDF */
-.canvas-container {
     position: absolute !important;
-    top: 0;
-    left: 0;
-    right: 0;
-    bottom: 0;
-    margin: auto !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 25 !important; /* Higher than text layer but lower than UI */
+    pointer-events: none; /* Default state is no pointer events */
+}
+
+/* Super-specific override for draw container when in drawing mode */
+html body .pdfx_block .draw-container.draw-mode,
+html body .pdfx_block [id^="draw-container-"].draw-mode {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+    z-index: 50 !important; /* Highest priority */
+}
+
+/* Force pointer events for draw mode regardless of other styles */
+.draw-mode {
+    pointer-events: auto !important;
+}
+
+/* Ensure upper canvas can receive events when in draw mode */
+html body .upper-canvas,
+html body .canvas-container .upper-canvas {
+    cursor: crosshair !important;
+}
+
+/* Active state for scribble tool button */
+#marker-tool-active, [id^="marker-tool-"].active {
+    background-color: #4CAF50 !important;
+    color: white !important;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Enhanced scribble stroke style */
+.marker-stroke {
+    position: absolute;
+    opacity: 0.7;
+    mix-blend-mode: multiply;
+    border-radius: 2px;
+    transition: opacity 0.2s;
+    pointer-events: none;
 }
 
 /* Bottom Toolbar */
@@ -916,4 +935,118 @@ input[type="range"] {
     z-index: 2; /* Between canvas and text layer */
     pointer-events: none;
     background-color: transparent !important;
+}
+
+/* Marker tool styles */
+.tool-btn#marker-tool-active {
+    background-color: #eee;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Marker stroke style */
+.marker-stroke {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.7;
+    mix-blend-mode: multiply;
+    border-radius: 2px;
+    transition: opacity 0.2s;
+}
+
+/* Active tool highlight */
+.tool-btn.active {
+    background-color: #e0e0e0;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+    color: #2c5d98;
+}
+
+/* Drawing container in scribble mode */
+.draw-container[data-current-tool="marker"],
+#draw-container[data-current-tool="marker"],
+[id^="draw-container-"][data-current-tool="marker"] {
+    pointer-events: auto !important;
+    z-index: 20 !important; /* Ensure it's above text layer */
+}
+
+/* Upper canvas in draw mode */
+.draw-mode .upper-canvas {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+}
+
+/* Make sure the text layer doesn't interfere with scribble drawing */
+.draw-mode ~ .text-layer,
+.draw-mode ~ #text-layer,
+.draw-mode ~ [id^="text-layer-"] {
+    pointer-events: none !important;
+}
+
+/* When scribble tool is active */
+.tool-btn#marker-tool-active,
+[id^="marker-tool-"].active {
+    background-color: #4CAF50 !important;
+    color: white !important;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Canvas container in drawing mode */
+.draw-mode .canvas-container {
+    pointer-events: auto !important;
+}
+
+/* Scribble tool styles (formerly marker) */
+body .pdfx_block .draw-container.draw-mode,
+body #draw-container.draw-mode,
+body [id^="draw-container-"].draw-mode {
+    pointer-events: auto !important;
+    z-index: 30 !important; /* Very high z-index to ensure it captures events */
+}
+
+/* Even more specific rules for containers with scribble tool */
+body .pdfx_block [id^="draw-container-"][data-current-tool="marker"],
+body .pdfx_block [id^="draw-container-"].draw-mode {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+    z-index: 50 !important; /* Highest priority */
+}
+
+/* Prevent text layer from capturing events when in drawing mode */
+body .pdfx_block [id^="text-layer-"] {
+    pointer-events: none !important;
+    z-index: 5 !important;
+}
+
+/* Canvas styles with high specificity */
+body .pdfx_block .draw-mode .canvas-container,
+body .pdfx_block [id^="draw-container-"][data-current-tool="marker"] .canvas-container {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+}
+
+/* Override for fabric upper canvas */
+body .pdfx_block .upper-canvas {
+    position: absolute !important;
+    pointer-events: none;
+    z-index: 30 !important;
+}
+
+body .pdfx_block .draw-mode .upper-canvas,
+body .pdfx_block [id^="draw-container-"][data-current-tool="marker"] .upper-canvas {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+}
+
+/* Make sure scribble tool button shows active state */
+body .pdfx_block [id^="marker-tool-"].active {
+    background-color: #4CAF50 !important;
+    color: white !important;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2) !important;
+}
+
+/* When scribble tool is active, force the button to show active state */
+html body [id^="marker-tool-"].active {
+    background-color: #4CAF50 !important;
+    color: white !important;
+    font-weight: bold !important;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5) !important;
 }

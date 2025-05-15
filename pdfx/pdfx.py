@@ -27,7 +27,7 @@ log = logging.getLogger(__name__)
 # Use ResourceLoader for reliable resource loading
 loader = ResourceLoader(__name__)
 
-# Define custom field with type conversion for handling invalid data
+# Define custom field with type conversion for handling invalid data.
 class SafeDict(Dict):
     """Dict field that safely handles invalid data types by converting to dict."""
 
@@ -184,6 +184,13 @@ class PdfxXBlock(XBlock):
         help="Whether grayscale mode is enabled",
         scope=Scope.user_state,
         default=False
+    )
+
+    # Add marker_strokes field to the XBlock class after the drawing_strokes field
+    marker_strokes = SafeDict(
+        help="Student's marker strokes on the PDF",
+        scope=Scope.user_state,
+        default={}
     )
 
     def __init__(self, *args, **kwargs):
@@ -377,12 +384,15 @@ class PdfxXBlock(XBlock):
             })();
         """)
 
-        # Add drawing-related scripts
+        # Add the direct fix script after the other scripts
         frag.add_javascript(self.resource_string("static/js/src/pdfx_init.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_drawing.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_navigation.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_highlight.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble_init.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_debug_utils.js"))
 
         # Get user and course information
         user_info = self.get_user_info()
@@ -401,7 +411,7 @@ class PdfxXBlock(XBlock):
             highlights_to_display = self.get_all_user_highlights()
         else:
             # Regular students only see their own highlights and staff-created highlights
-            highlights_to_display = self.get_user_highlights(user_info['id'])
+            highlights_to_display = self.retrieve_user_highlights(user_info['id'])
 
             # Add staff highlights if any
             if self.staff_highlights:
@@ -409,6 +419,37 @@ class PdfxXBlock(XBlock):
                     if page not in highlights_to_display:
                         highlights_to_display[page] = []
                     highlights_to_display[page].extend(page_highlights)
+
+        # Prepare marker strokes data
+        marker_strokes_data = self.marker_strokes
+
+        # If marker_strokes is empty or invalid, initialize it as an empty dict
+        if not marker_strokes_data or not isinstance(marker_strokes_data, dict):
+            marker_strokes_data = {}
+        else:
+            # Log some info about the marker strokes for debugging
+            stroke_count = 0
+            page_count = len([k for k in marker_strokes_data.keys() if not k.startswith('_')])
+
+            for page_key, strokes in marker_strokes_data.items():
+                if not page_key.startswith('_') and isinstance(strokes, list):
+                    stroke_count += len(strokes)
+
+            log.info(f"[PDFX SCRIBBLE] Loading marker strokes for user {user_info['id']}: {page_count} pages, {stroke_count} strokes")
+
+        # Ensure it's a JSON-serializable dictionary
+        try:
+            json.dumps(marker_strokes_data)
+        except (TypeError, ValueError):
+            log.warning(f"[PDFX SCRIBBLE] Marker strokes for block {self.block_id} is not JSON serializable, resetting to empty dict")
+            marker_strokes_data = {}
+
+        # Log the marker strokes data size for debugging
+        marker_size = len(json.dumps(marker_strokes_data))
+        log.info(f"[PDFX SCRIBBLE] Marker strokes data size for block {self.block_id}: {marker_size} bytes")
+
+        # Get the handler URL for saving annotations
+        save_url = self.runtime.handler_url(self, 'save_annotations')
 
         # Initialize the PDF viewer with parameters
         frag.initialize_js('PdfxXBlock', {
@@ -419,6 +460,7 @@ class PdfxXBlock(XBlock):
             'drawingStrokes': self.drawing_strokes,
             'highlights': self.highlights,
             'userHighlights': highlights_to_display,
+            'markerStrokes': marker_strokes_data,
             'currentPage': self.current_page,
             'blockId': self.block_id,
             'brightness': self.brightness,
@@ -428,8 +470,23 @@ class PdfxXBlock(XBlock):
             'email': user_info['email'],
             'courseId': course_info['id'],
             'documentInfo': document_info,
-            'isStaff': is_staff
+            'isStaff': is_staff,
+            'handlerUrl': save_url
         })
+
+        # Add a data element with the same data to the DOM for direct access by JavaScript
+        data_html = f"""
+        <div id="pdfx-data-{self.block_id}"
+            data-block-id="{self.block_id}"
+            data-user-id="{user_info['id']}"
+            data-course-id="{course_info['id']}"
+            data-handler-url="{save_url}"
+            data-marker-strokes='{json.dumps(marker_strokes_data)}'
+            data-document-info='{json.dumps(document_info)}'
+            style="display:none;">
+        </div>
+        """
+        frag.add_resource(data_html, mimetype='text/html')
 
         return frag
 
@@ -629,7 +686,7 @@ class PdfxXBlock(XBlock):
         """
         return self.all_highlights
 
-    def get_user_highlights(self, user_id):
+    def retrieve_user_highlights(self, user_id):
         """
         Get highlights for a specific user.
 
@@ -761,101 +818,36 @@ class PdfxXBlock(XBlock):
 
     @XBlock.json_handler
     def save_annotations(self, data, suffix=''):
-        """
-        Save the annotations made by the student.
-        This includes drawings, highlights, and the current page.
-        """
-        if not self.allow_annotation:
-            log.warning("Annotation attempt rejected - annotations not allowed")
-            return {'result': 'error', 'message': 'Annotations are not allowed'}
-
+        """Save user annotations to the XBlock."""
         try:
-            log.debug(f"Saving annotations: {json.dumps(data)[:200]}...")  # Log first 200 chars to avoid huge logs
+            log.info(f"[PDFX DEBUG] save_annotations called for block {self.block_id}, user {self.scope_ids.user_id}")
+
+            # Log request data size statistics
+            data_stats = {
+                'has_marker_strokes': 'markerStrokes' in data,
+                'data_keys': list(data.keys()),
+                'request_size': len(json.dumps(data))
+            }
+            log.info(f"[PDFX DEBUG] save_annotations request data: {json.dumps(data_stats)}")
 
             # Update current page
-            if 'currentPage' in data and isinstance(data['currentPage'], int):
-                self.current_page = data['currentPage']
-                log.debug(f"Updated current page to {self.current_page}")
+            if 'currentPage' in data:
+                self.current_page = int(data['currentPage'])
+                log.debug(f"Updated current_page to {self.current_page}")
 
-            # Update drawings - ensure it's a dict
-            if 'drawings' in data:
-                if isinstance(data['drawings'], dict):
-                    self.drawing_strokes = data['drawings']
-                    log.debug(f"Updated drawing strokes with {len(data['drawings'])} items")
-                else:
-                    log.warning(f"Received invalid drawings type: {type(data['drawings'])}")
-                    # Convert to dict if possible
-                    if hasattr(data['drawings'], '__dict__'):
-                        self.drawing_strokes = data['drawings'].__dict__
-                    else:
-                        self.drawing_strokes = {}
-
-            # Update highlights - ensure it's a dict
-            if 'highlights' in data:
-                if isinstance(data['highlights'], dict):
-                    self.highlights = data['highlights']
-                    log.debug(f"Updated highlights with {len(data['highlights'])} items")
-                else:
-                    log.warning(f"Received invalid highlights type: {type(data['highlights'])}")
-                    # Convert to dict if possible
-                    if hasattr(data['highlights'], '__dict__'):
-                        self.highlights = data['highlights'].__dict__
-                    else:
-                        self.highlights = {}
-
-            # Update user text highlights - ensure it's a dict
-            if 'userHighlights' in data:
-                if isinstance(data['userHighlights'], dict):
-                    # Process and save highlights using XBlock storage
-                    user_id = str(self.scope_ids.user_id)
-                    course_info = self.get_course_info()
-                    document_info = {
-                        'title': self.pdf_file_name or 'PDF Document',
-                        'url': self.get_pdf_url()
-                    }
-                    log.debug(f"Processing userHighlights for user {user_id}, course {course_info.get('id')}")
-
-                    # Save each highlight
-                    user_highlights = data['userHighlights']
-                    total_highlights = 0
-                    for page_num, highlights in user_highlights.items():
-                        total_highlights += len(highlights)
-                        for highlight in highlights:
-                            # Add additional metadata
-                            highlight['userId'] = user_id
-                            highlight['courseId'] = course_info.get('id')
-                            highlight['blockId'] = self.block_id
-                            highlight['documentInfo'] = document_info
-
-                            # Save highlight
-                            self.save_highlight(user_id, highlight)
-
-                    log.info(f"Saved {total_highlights} user highlights for user {user_id}")
-                else:
-                    log.warning(f"Received invalid userHighlights type: {type(data['userHighlights'])}")
-                    # Convert to dict if possible
-                    if hasattr(data['userHighlights'], '__dict__'):
-                        self.user_highlights = data['userHighlights'].__dict__
-                    else:
-                        self.user_highlights = {}
-
-            # Update general annotations - ensure it's a dict
+            # Update annotations
             if 'annotations' in data:
-                if isinstance(data['annotations'], dict):
-                    self.annotations = data['annotations']
-                    log.debug(f"Updated annotations with {len(data['annotations'])} items")
-                else:
-                    log.warning(f"Received invalid annotations type: {type(data['annotations'])}")
-                    # Convert to dict if possible
-                    if hasattr(data['annotations'], '__dict__'):
-                        self.annotations = data['annotations'].__dict__
-                    else:
-                        self.annotations = {}
+                self.annotations = data['annotations']
+                log.debug(f"Updated annotations, size: {len(json.dumps(self.annotations))}")
+
+            # Update drawing strokes
+            if 'drawingStrokes' in data:
+                self.drawing_strokes = data['drawingStrokes']
+                log.debug(f"Updated drawing_strokes, size: {len(json.dumps(self.drawing_strokes))}")
 
             # Update brightness setting
-            if 'brightness' in data and isinstance(data['brightness'], (int, float)):
-                # Ensure brightness is within valid range (50-150)
-                self.brightness = max(50, min(150, int(data['brightness'])))
+            if 'brightness' in data:
+                self.brightness = int(data['brightness'])
                 log.debug(f"Updated brightness to {self.brightness}")
 
             # Update grayscale setting
@@ -863,10 +855,75 @@ class PdfxXBlock(XBlock):
                 self.is_grayscale = bool(data['isGrayscale'])
                 log.debug(f"Updated isGrayscale to {self.is_grayscale}")
 
-            log.info("Successfully saved all annotations")
-            return {'result': 'success'}
+            # Update marker strokes (scribble strokes) - ensure it's a dict
+            if 'markerStrokes' in data:
+                marker_stats = {
+                    'is_dict': isinstance(data['markerStrokes'], dict),
+                    'type': str(type(data['markerStrokes'])),
+                }
+
+                log.info(f"[PDFX DEBUG] Received marker strokes data: {json.dumps(marker_stats)}")
+
+                if marker_stats['is_dict']:
+                    # Count total strokes
+                    stroke_count = 0
+                    page_count = 0
+
+                    for page, strokes in data['markerStrokes'].items():
+                        if isinstance(strokes, list):
+                            stroke_count += len(strokes)
+                            page_count += 1
+
+                    marker_stats['page_count'] = page_count
+                    marker_stats['stroke_count'] = stroke_count
+                    marker_stats['pages'] = list(data['markerStrokes'].keys())
+
+                    log.info(f"[PDFX DEBUG] Marker strokes details: {json.dumps(marker_stats)}")
+
+                    # Save the marker strokes
+                    self.marker_strokes = data['markerStrokes']
+                    log.info(f"[PDFX SCRIBBLE] Updated marker strokes: {json.dumps(marker_stats)}")
+
+                    # Add timestamp for tracking
+                    self.marker_strokes['_last_saved'] = datetime.utcnow().isoformat()
+
+                    # Attempt to save to MongoDB (this happens automatically with the XBlock field system)
+                    log.info(f"[PDFX SCRIBBLE] Saved marker_strokes to MongoDB for user {self.scope_ids.user_id}")
+                else:
+                    log.warning(f"[PDFX DEBUG] Received invalid markerStrokes: {json.dumps(marker_stats)}")
+
+                    # Attempt conversion
+                    try:
+                        if hasattr(data['markerStrokes'], '__dict__'):
+                            self.marker_strokes = data['markerStrokes'].__dict__
+                            self.marker_strokes['_last_saved'] = datetime.utcnow().isoformat()
+                            log.info(f"[PDFX DEBUG] Converted markerStrokes from object to dictionary")
+                        else:
+                            # Try string conversion if it's a JSON string
+                            if isinstance(data['markerStrokes'], str):
+                                try:
+                                    parsed = json.loads(data['markerStrokes'])
+                                    if isinstance(parsed, dict):
+                                        self.marker_strokes = parsed
+                                        self.marker_strokes['_last_saved'] = datetime.utcnow().isoformat()
+                                        log.info(f"[PDFX DEBUG] Converted markerStrokes from JSON string to dictionary")
+                                    else:
+                                        self.marker_strokes = {}
+                                        log.warning(f"[PDFX DEBUG] markerStrokes JSON string did not contain a dictionary")
+                                except json.JSONDecodeError:
+                                    self.marker_strokes = {}
+                                    log.warning(f"[PDFX DEBUG] markerStrokes string was not valid JSON")
+                            else:
+                                self.marker_strokes = {}
+                                log.warning(f"[PDFX DEBUG] Could not convert markerStrokes to dictionary. Type: {type(data['markerStrokes'])}")
+                    except Exception as conversion_error:
+                        self.marker_strokes = {}
+                        log.error(f"[PDFX DEBUG] Error converting markerStrokes: {str(conversion_error)}", exc_info=True)
+
+            log.info(f"[PDFX DEBUG] Successfully saved all annotations for block {self.block_id}, user {self.scope_ids.user_id}")
+            return {'result': 'success', 'saved_at': datetime.utcnow().isoformat()}
         except Exception as e:
-            log.error(f"Error saving annotations: {str(e)}", exc_info=True)
+            log.error(f"[PDFX DEBUG] Error saving annotations: {str(e)}", exc_info=True)
             return {'result': 'error', 'message': str(e)}
 
     @XBlock.json_handler
@@ -880,7 +937,7 @@ class PdfxXBlock(XBlock):
             log.debug(f"Getting highlights for user {user_id}")
 
             # Get user highlights
-            highlights = self.get_user_highlights(user_id)
+            highlights = self.retrieve_user_highlights(user_id)
             log.debug(f"Found {sum(len(page_highlights) for page_highlights in highlights.values() if isinstance(page_highlights, list))} highlights for user {user_id}")
 
             # If staff, also add staff highlights

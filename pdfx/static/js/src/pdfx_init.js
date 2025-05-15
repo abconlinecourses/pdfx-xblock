@@ -7,6 +7,23 @@
 (function() {
     'use strict';
 
+    console.log('PDF XBlock initialization script loaded at: ' + new Date().toISOString());
+
+    // Add a global event listener to check when DOM is ready
+    document.addEventListener('DOMContentLoaded', function() {
+        console.log('PDF XBlock DOM content loaded at: ' + new Date().toISOString());
+        // Find all marker tool buttons and attach console log on click
+        var markerButtons = document.querySelectorAll('[id^="marker-tool-"]');
+        console.log('Found ' + markerButtons.length + ' marker tool buttons');
+
+        markerButtons.forEach(function(button) {
+            console.log('Setting up click listener for: ' + button.id);
+            button.addEventListener('click', function() {
+                console.log('Marker tool button clicked: ' + this.id + ' at ' + new Date().toISOString());
+            });
+        });
+    });
+
     // Check if PDF.js is loaded immediately
     if (typeof pdfjsLib !== 'undefined') {
         console.log('PDF XBlock: PDF.js library already loaded');
@@ -107,41 +124,84 @@
     window.initPdfJsWorker = initPDFJS;
 })();
 
-function PdfxXBlock(runtime, element, initArgs) {
+console.log('[PDFX INIT][DEBUG] Loading PDF XBlock initialization script at: ' + new Date().toISOString());
+
+// PDF XBlock initialization
+function PdfxInit(runtime, element, options) {
     'use strict';
 
-    // Ensure block-specific IDs for DOM elements
-    const blockId = initArgs.blockId || 'default';
+    console.log('[PDFX INIT][DEBUG] Initializing PDF XBlock with runtime, element and options');
 
-    // Add block ID to container elements for isolation
-    $(element).find('.pdf-container').attr('id', `pdf-container-${blockId}`);
-    $(element).find('.text-layer').attr('id', `text-layer-${blockId}`);
-    $(element).find('.highlight-layer').attr('id', `highlight-layer-${blockId}`);
-    $(element).find('.draw-container').attr('id', `draw-container-${blockId}`);
+    // Check if element is valid
+    if (!element) {
+        console.error('[PDFX INIT][DEBUG] Invalid element provided to PdfxInit');
+        return;
+    }
+
+    // Extract block ID from element ID
+    var blockId = element.id.replace('pdfx-block-', '');
+    console.log('[PDFX INIT][DEBUG] Initializing block with ID: ' + blockId);
+
+    // Debug runtime
+    if (runtime) {
+        console.log('[PDFX INIT][DEBUG] Runtime provided:', {
+            handlerUrl: typeof runtime.handlerUrl === 'function' ? 'function available' : 'not available'
+        });
+    } else {
+        console.error('[PDFX INIT][DEBUG] No runtime provided to PdfxInit');
+    }
+
+    // Debug options
+    if (options) {
+        console.log('[PDFX INIT][DEBUG] Options provided:', Object.keys(options));
+    } else {
+        console.warn('[PDFX INIT][DEBUG] No options provided to PdfxInit');
+    }
+
+    // Create data element if it doesn't exist
+    var dataElement = document.getElementById(`pdfx-data-${blockId}`);
+    if (!dataElement) {
+        console.log('[PDFX INIT][DEBUG] Creating data element for block ' + blockId);
+        dataElement = document.createElement('div');
+        dataElement.id = `pdfx-data-${blockId}`;
+        dataElement.style.display = 'none';
+        element.appendChild(dataElement);
+    } else {
+        console.log('[PDFX INIT][DEBUG] Data element already exists for block ' + blockId);
+    }
+
+    // Ensure handler URL is set in the data element
+    if (runtime && typeof runtime.handlerUrl === 'function') {
+        var saveAnnotationsUrl = runtime.handlerUrl(element, 'save_annotations');
+        console.log('[PDFX INIT][DEBUG] Setting handler URL: ' + saveAnnotationsUrl);
+        dataElement.dataset.handlerUrl = saveAnnotationsUrl;
+    } else {
+        console.error('[PDFX INIT][DEBUG] Unable to set handler URL - runtime.handlerUrl not available');
+    }
 
     // Initialize PDF viewer once loaded
     var pdfViewer = null;
     var pdfDoc = null;
     var pdfPages = [];
-    var currentPage = initArgs.currentPage || 1;
+    var currentPage = options.currentPage || 1;
     var viewMode = 'fit-width';
     var scale = 1.0;
     var pdfOriginalWidth = 0;
     var pdfOriginalHeight = 0;
-    var brightness = initArgs.brightness || 100;
-    var isGrayscale = initArgs.isGrayscale || false;
+    var brightness = options.brightness || 100;
+    var isGrayscale = options.isGrayscale || false;
 
     // FabricJS canvas for both drawing and highlighting
     var fabricCanvas = null;
 
     // User and course information
-    var userId = initArgs.userId || 'anonymous';
-    var username = initArgs.username;
-    var email = initArgs.email;
-    var courseId = initArgs.courseId;
-    var documentInfo = initArgs.documentInfo || {
+    var userId = options.userId || 'anonymous';
+    var username = options.username;
+    var email = options.email;
+    var courseId = options.courseId;
+    var documentInfo = options.documentInfo || {
         title: 'PDF Document',
-        url: initArgs.pdfUrl
+        url: options.pdfUrl
     };
 
     // Initialize tools and components
@@ -151,13 +211,80 @@ function PdfxXBlock(runtime, element, initArgs) {
         debugCallback: debugLog,
         saveCallback: saveAnnotations,
         getHighlightColor: getHighlightColor,
-        allowAnnotation: initArgs.allowAnnotation,
+        allowAnnotation: options.allowAnnotation,
         courseId: courseId,
         documentInfo: documentInfo
     });
 
+    var marker = new PdfxScribble(element, {
+        blockId: blockId,
+        userId: userId,
+        debugCallback: debugLog,
+        saveCallback: saveAnnotations,
+        color: '#FF0000',
+        width: 5,
+        courseId: courseId,
+        documentInfo: documentInfo,
+        saveIntervalTime: 10000 // Save to server every 10 seconds
+    });
+
     // Text highlighting is disabled by default until user selects highlighter tool
     var highlightingEnabled = false;
+
+    // Add global debug functions immediately
+    console.log("Initializing PdfxXBlock with ID:", options.blockId || 'default');
+    window.pdfxDebug = window.pdfxDebug || {};
+    window.pdfxDebug[options.blockId || 'default'] = {
+        checkStatus: function() {
+            console.log("=== PDF XBLOCK DEBUG INFO ===");
+            console.log("Block ID:", options.blockId || 'default');
+            console.log("FabricCanvas available:", !!fabricCanvas);
+            if (fabricCanvas) {
+                console.log("Drawing mode:", fabricCanvas.isDrawingMode);
+                console.log("Marker mode:", fabricCanvas.freeDrawingBrush?.markerMode);
+                console.log("Upper canvas pointer events:", fabricCanvas.upperCanvasEl.style.pointerEvents);
+            }
+
+            var drawContainer = $(element).find(`#draw-container-${options.blockId || 'default'}`)[0];
+            if (drawContainer) {
+                console.log("Draw container pointer events:", drawContainer.style.pointerEvents);
+                console.log("Draw container classes:", drawContainer.className);
+                console.log("Current tool:", drawContainer.dataset.currentTool);
+            }
+
+            console.log("Current tool UI state:", $(".tool-btn.active").attr('id'));
+            return "Debug check complete - see console for details";
+        },
+
+        fixMarker: function() {
+            console.log("Attempting to fix marker tool...");
+            if (!fabricCanvas) {
+                console.error("FabricCanvas not available!");
+                return "ERROR: Canvas not available";
+            }
+
+            fabricCanvas.isDrawingMode = true;
+            fabricCanvas.freeDrawingBrush.markerMode = true;
+            fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+
+            var drawContainer = $(element).find(`#draw-container-${options.blockId || 'default'}`)[0];
+            if (drawContainer) {
+                drawContainer.style.pointerEvents = 'auto';
+                drawContainer.classList.add('draw-mode');
+                drawContainer.dataset.currentTool = 'marker';
+            }
+
+            $(element).find(`#marker-tool-${options.blockId || 'default'}`).addClass('active');
+
+            if (marker && typeof marker.enable === 'function') {
+                marker.enable();
+            }
+
+            return "Marker fixed - tool should now work";
+        }
+    };
+
+    console.log("Global debug functions added to window.pdfxDebug['" + (options.blockId || 'default') + "']");
 
     // Set up UI elements and event handlers
     function setupUI() {
@@ -232,16 +359,16 @@ function PdfxXBlock(runtime, element, initArgs) {
         }
 
         // Download button
-        if (initArgs.allowDownload) {
+        if (options.allowDownload) {
             $(element).find('.download-pdf').show().click(function() {
-                window.open(initArgs.pdfUrl, '_blank');
+                window.open(options.pdfUrl, '_blank');
             });
         } else {
             $(element).find('.download-pdf').hide();
         }
 
         // Annotation tools
-        if (initArgs.allowAnnotation) {
+        if (options.allowAnnotation) {
             $(element).find('.annotation-tools').show();
 
             // Color picker for highlighting and drawing
@@ -430,24 +557,32 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Save annotations including user highlights
     function saveAnnotations(data) {
-        var annotations = {
-            currentPage: currentPage,
-            brightness: brightness,
-            isGrayscale: isGrayscale
-        };
-
-        if (data) {
-            Object.assign(annotations, data);
+        // If no specific data is provided, collect all annotations
+        if (!data) {
+            data = {
+                currentPage: currentPage,
+                drawings: fabricCanvas ? getDrawingsForStorage() : {},
+                highlights: highlighter ? highlighter.getAllHighlights() : {},
+                userHighlights: highlighter ? highlighter.getUserHighlightsForStorage() : {},
+                markerStrokes: marker ? marker.getAllMarkerStrokes() : {},
+                brightness: brightness,
+                isGrayscale: isGrayscale
+            };
         }
 
-        // Send to server using XBlock runtime
-        runtime.notify('save', {state: 'start'});
-        var handlerUrl = runtime.handlerUrl(element, 'save_annotations');
-        $.post(handlerUrl, JSON.stringify(annotations)).done(function(response) {
-            runtime.notify('save', {state: 'end'});
-            debugLog('Saved annotations to server');
-        }).fail(function(error) {
-            debugLog('Error saving annotations: ' + JSON.stringify(error));
+        // Send annotations to server via XBlock handler
+        $.ajax({
+            type: "POST",
+            url: runtime.handlerUrl(element, 'save_annotations'),
+            data: JSON.stringify(data),
+            success: function(response) {
+                if (response.result !== 'success') {
+                    debugLog('Error saving annotations: ' + (response.message || 'Unknown error'));
+                }
+            },
+            error: function(jqXHR) {
+                debugLog('Error saving annotations: ' + jqXHR.responseText);
+            }
         });
     }
 
@@ -463,7 +598,7 @@ function PdfxXBlock(runtime, element, initArgs) {
         setupToolButtons();
 
         // Initialize the PDF viewer
-        loadPdfDocument(initArgs.pdfUrl);
+        loadPdfDocument(options.pdfUrl);
 
         // Set up UI elements and event handlers
         setupUI();
@@ -474,7 +609,7 @@ function PdfxXBlock(runtime, element, initArgs) {
         }
 
         // Enable features based on permissions
-        if (initArgs.allowAnnotation) {
+        if (options.allowAnnotation) {
             // Set metadata for the highlighter
             highlighter.setMetadata(courseId, documentInfo);
 
@@ -485,18 +620,53 @@ function PdfxXBlock(runtime, element, initArgs) {
 
         // After page is loaded, we should restore user highlights for viewing (but not enable highlighting)
         loadUserHighlights();
+
+        // Add this inside the initializeWhenReady function, after fabric canvas initialization
+        // Direct binding for marker tool button
+        $(element).find(`#marker-tool-${blockId}`).off('click.pdfx').on('click.pdfx', function() {
+            console.log("%c[DIRECT EVENT] Marker tool button clicked through direct binding", "background:#2980b9;color:white;padding:3px;border-radius:3px;");
+
+            // Force drawing mode
+            if (fabricCanvas) {
+                fabricCanvas.isDrawingMode = true;
+                fabricCanvas.freeDrawingBrush.color = $(element).find(`#color-input-${blockId}`).val() || '#FF0000';
+                fabricCanvas.freeDrawingBrush.width = parseInt($(element).find(`#width-input-${blockId}`).val() || 5);
+                fabricCanvas.freeDrawingBrush.markerMode = true;
+                fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+
+                // Add active class to button
+                $(this).addClass('active');
+
+                // Make sure draw container is in drawing mode
+                var drawContainer = $(element).find(`#draw-container-${blockId}`)[0];
+                if (drawContainer) {
+                    drawContainer.style.pointerEvents = 'auto';
+                    drawContainer.classList.add('draw-mode');
+                    drawContainer.dataset.currentTool = 'marker';
+                }
+
+                // Enable marker in the marker object
+                if (marker && typeof marker.enable === 'function') {
+                    marker.enable();
+                    console.log("[DIRECT EVENT] Marker tool enabled through direct call to marker.enable()");
+                }
+            } else {
+                console.error("[DIRECT EVENT] Fabric canvas not available!");
+            }
+
+            return true;
+        });
     }
 
     // Setup tool buttons in left sidebar
     function setupToolButtons() {
-        // Marker tool
-        $(element).find('#marker-tool-' + blockId).click(function() {
+        // Tool selection
+        $(element).find(`#marker-tool-${blockId}`).click(function() {
             setActiveTool('marker');
         });
 
-        // Highlighter tool
-        $(element).find('#highlight-tool-' + blockId).click(function() {
-            setActiveTool('highlighter');
+        $(element).find(`#highlight-tool-${blockId}`).click(function() {
+            setActiveTool('highlight');
         });
 
         // Text tool
@@ -540,43 +710,136 @@ function PdfxXBlock(runtime, element, initArgs) {
         });
     }
 
-    // Set active tool and update UI
+    // Update the setActiveTool function to include more detailed logging
     function setActiveTool(tool) {
+        console.log(`%c[TOOL EVENT] Setting active tool: ${tool}`, 'background:#3498db;color:white;padding:3px;border-radius:3px;');
+        debugLog(`Setting active tool: ${tool}`);
+
+        // First, disable active tools across all PDF blocks to prevent cross-block interference
+        $('.draw-container').each(function() {
+            if (this.id !== `draw-container-${blockId}`) {
+                $(this).removeClass('draw-mode');
+                $(this).css('pointerEvents', 'none');
+
+                // Also disable any fabric canvas for this container
+                if (this._fabricCanvas) {
+                    this._fabricCanvas.isDrawingMode = false;
+                    this._fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+                }
+            }
+        });
+
         // Remove active class from all tool buttons
         $(element).find('.tool-btn').removeClass('active');
 
-        // Add active class to the selected tool
-        $(element).find('#' + tool + '-tool-' + blockId).addClass('active');
+        // Disable text highlighting by default
+        highlightingEnabled = false;
+        highlighter.disableTextHighlighting();
 
-        // Handle specific tool actions
-        switch (tool) {
-            case 'highlighter':
-                // Enable text highlighting
-                highlightingEnabled = true;
-                highlighter.enableTextHighlighting();
-                debugLog('Text highlighting enabled');
-                break;
-            case 'marker':
-                // Disable text highlighting and enable drawing
-                highlightingEnabled = false;
-                highlighter.disableTextHighlighting();
-                // Set up marker drawing logic here
-                debugLog('Marker tool activated');
-                break;
-            case 'text':
-                // Enable text adding, disable highlighting
-                highlightingEnabled = false;
-                highlighter.disableTextHighlighting();
-                // Set up text adding logic here
-                debugLog('Text tool activated');
-                break;
-            // Add other tool handlers
-            default:
-                // Disable highlighting for other tools
-                highlightingEnabled = false;
-                highlighter.disableTextHighlighting();
-                debugLog(`Tool set: ${tool}`);
+        // Reset drawing container and canvas pointer events
+        var drawContainer = $(element).find(`#draw-container-${blockId}`)[0];
+        if (drawContainer) {
+            drawContainer.classList.remove('draw-mode');
         }
+
+        // Now set up the specific tool
+        switch (tool) {
+            case 'marker':
+                console.log("%c[SCRIBBLE] Activating scribble tool", "background:#f39c12;color:white;padding:3px;border-radius:3px;");
+                // Set active class on marker tool button
+                $(element).find(`#marker-tool-${blockId}`).addClass('active');
+
+                // Enable drawing mode with proper settings
+                if (fabricCanvas) {
+                    // Set up the drawing brush for marker
+                    fabricCanvas.isDrawingMode = true;
+                    fabricCanvas.freeDrawingBrush.color = $(element).find(`#color-input-${blockId}`).val() || '#FF0000';
+                    fabricCanvas.freeDrawingBrush.width = parseInt($(element).find(`#width-input-${blockId}`).val() || 5);
+                    fabricCanvas.freeDrawingBrush.markerMode = true;
+
+                    // Make sure drawing container is interactive
+                    if (drawContainer) {
+                        drawContainer.classList.add('draw-mode');
+                        drawContainer.style.pointerEvents = 'auto';
+                        drawContainer.dataset.currentTool = 'marker';
+                        drawContainer.dataset.blockId = blockId; // Add block ID to container for reference
+                    }
+
+                    // Make sure canvas elements have proper pointer events
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+
+                    // Call marker's enable function to ensure all settings are applied
+                    marker.enable();
+
+                    console.log("%c[SCRIBBLE] Tool activated successfully", "background:#2ecc71;color:white;padding:3px;border-radius:3px;");
+                    debugLog('Scribble tool activated with proper pointer events settings');
+                } else {
+                    console.error("[SCRIBBLE] Fabric canvas not available");
+                    debugLog('ERROR: Fabric canvas not available for scribble tool');
+                }
+                break;
+
+            case 'highlight':
+                $(element).find(`#highlight-tool-${blockId}`).addClass('active');
+                highlightingEnabled = true;
+                highlighter.setHighlightColor($(element).find(`#color-input-${blockId}`).val() + '80'); // Add 50% transparency
+                highlighter.enableTextHighlighting();
+
+                // Disable drawing mode
+                if (fabricCanvas) {
+                    fabricCanvas.isDrawingMode = false;
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+                }
+                break;
+
+            case 'text':
+            case 'shape':
+            case 'sticky-note':
+            case 'comment':
+            case 'select':
+            case 'eraser':
+                // Add active class to the appropriate tool button
+                $(element).find(`#${tool}-tool-${blockId}`).addClass('active');
+
+                // Set appropriate drawing mode for each tool
+                if (fabricCanvas) {
+                    fabricCanvas.isDrawingMode = (tool === 'eraser');
+
+                    if (tool === 'eraser') {
+                        // Set up eraser
+                        fabricCanvas.freeDrawingBrush.color = '#FFFFFF';
+                        fabricCanvas.freeDrawingBrush.width = 20;
+                        fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                        if (drawContainer) {
+                            drawContainer.classList.add('draw-mode');
+                            drawContainer.style.pointerEvents = 'auto';
+                            drawContainer.dataset.blockId = blockId; // Add block ID to container for reference
+                        }
+                    } else if (tool === 'select') {
+                        // Enable selection mode
+                        fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                        fabricCanvas.selection = true;
+                        fabricCanvas.forEachObject(function(o) {
+                            o.selectable = true;
+                        });
+                    } else {
+                        // Default handling for other tools
+                        fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                    }
+                }
+                break;
+
+            default:
+                debugLog(`Unknown tool: ${tool}`);
+                break;
+        }
+
+        // Save the current tool state
+        saveAnnotations({
+            currentTool: tool
+        });
+
+        return true;
     }
 
     // Undo last action
@@ -625,70 +888,52 @@ function PdfxXBlock(runtime, element, initArgs) {
         }
 
         currentPage = pageNum;
-        highlighter.setCurrentPage(pageNum);
+        renderPage(pageNum);
 
-        // Update UI
-        $(element).find('.page-input').val(pageNum);
-        $(element).find('#page-num-' + blockId).text(pageNum);
+        // Update marker's current page
+        marker.setCurrentPage(pageNum);
 
-        // Render the page
-        renderCurrentPage();
+        // Update navigation display
+        $(element).find(`#page-num-${blockId}`).text(pageNum);
 
-        // Save current page to server
-        saveAnnotations({currentPage: pageNum});
+        // Save current page
+        saveAnnotations({
+            currentPage: pageNum
+        });
+
+        // For debugging
+        debugLog(`Navigated to page ${pageNum}`);
     }
 
-    // Render the current page with appropriate scaling
+    // Update the renderCurrentPage function to properly handle drawing tools state
     function renderCurrentPage() {
-        if (!pdfDoc) return;
+        debugLog('Rendering current page: ' + currentPage);
 
-        pdfDoc.getPage(currentPage).then(function(page) {
-            var viewport = page.getViewport({scale: 1.0});
-            var container = $(element).find(`#pdf-container-${blockId}`);
-            var canvas = container.find('canvas')[0];
-            var ctx = canvas.getContext('2d');
+        // Clear any existing page content
+        $(element).find(`#pdf-page-${blockId}`).empty();
 
-            // Store original dimensions for page fit calculations
-            pdfOriginalWidth = viewport.width;
-            pdfOriginalHeight = viewport.height;
-
-            // Calculate scale based on view mode
-            var containerWidth = container.width();
-            var containerHeight = container.height();
-
-            if (viewMode === 'fit-width') {
-                scale = containerWidth / viewport.width;
-            } else if (viewMode === 'fit-page') {
-                var widthScale = containerWidth / viewport.width;
-                var heightScale = containerHeight / viewport.height;
-                scale = Math.min(widthScale, heightScale);
+        // Get the page from cache if available
+        if (pdfPages[currentPage - 1]) {
+            renderPage(currentPage);
+            // Do not automatically enable drawing tools when rendering pages
+            if (marker) {
+                // Only update the current page in the marker without enabling it
+                marker.setCurrentPage(currentPage);
             }
+            return;
+        }
 
-            // Apply scale
-            viewport = page.getViewport({scale: scale});
+        // Otherwise, get the page from the PDF document
+        pdfDoc.getPage(currentPage).then(function(page) {
+            // Cache the page
+            pdfPages[currentPage - 1] = page;
+            renderPage(currentPage);
 
-            // Set canvas dimensions
-            canvas.width = viewport.width;
-            canvas.height = viewport.height;
-
-            // Render page
-            var renderContext = {
-                canvasContext: ctx,
-                viewport: viewport
-            };
-
-            page.render(renderContext).promise.then(function() {
-                // Apply filters
-                applyFilters();
-
-                // Update text layer
-                updateTextLayer(page, viewport);
-
-                // Restore highlights - both local and server-saved
-                highlighter.restoreHighlights();
-
-                debugLog(`Page ${currentPage} rendered at scale ${scale.toFixed(2)}`);
-            });
+            // Do not automatically enable drawing tools when rendering pages
+            if (marker) {
+                // Only update the current page in the marker without enabling it
+                marker.setCurrentPage(currentPage);
+            }
         });
     }
 
@@ -730,54 +975,207 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Load user highlights from MongoDB and initialize highlighter
     function loadUserHighlights() {
-        // Fetch highlights directly from MongoDB through the XBlock handler
-        highlighter.fetchMongoDBHighlights();
+        $.ajax({
+            type: "POST",
+            url: runtime.handlerUrl(element, 'get_user_highlights'),
+            data: JSON.stringify({includeAll: options.isStaff}),
+            success: function(response) {
+                if (response.result === 'success') {
+                    highlighter.setAllHighlights(response.highlights || {});
+                    debugLog('Loaded user highlights');
+
+                    // If we have marker strokes, load them
+                    if (options.markerStrokes) {
+                        marker.loadMarkerStrokes(options.markerStrokes);
+                        debugLog('Loaded marker strokes');
+                    }
+                } else {
+                    debugLog('Error loading highlights: ' + (response.message || 'Unknown error'));
+                }
+            },
+            error: function(jqXHR) {
+                debugLog('Error loading highlights: ' + jqXHR.responseText);
+            }
+        });
     }
 
-    // Initialize fabric.js canvas for drawing and highlighting
+    // Update the initFabricCanvas function to better handle drawing canvas initialization
     function initFabricCanvas() {
+        console.log("%c[FABRIC] Initializing fabric canvas", "background:#2c3e50;color:white;padding:3px;border-radius:3px;");
+        debugLog('Initializing fabric canvas');
+
+        var drawContainer = $(element).find(`#draw-container-${blockId}`)[0];
+        var pdfContainer = $(element).find(`#pdf-container-${blockId}`)[0];
+
+        if (!drawContainer || !pdfContainer) {
+            console.error("%c[FABRIC] Required containers not found:", "background:red;color:white;padding:3px;border-radius:3px;", {
+                drawContainerFound: !!drawContainer,
+                pdfContainerFound: !!pdfContainer,
+                blockId: blockId
+            });
+            debugLog('Error: Required containers not found');
+            return false;
+        }
+
         try {
-            var drawContainer = document.getElementById(`draw-container-${blockId}`);
-            if (!drawContainer) {
-                debugLog('Draw container not found');
-                return false;
-            }
+            console.log("[FABRIC] Container found, dimensions:", {
+                drawContainer: drawContainer.getBoundingClientRect(),
+                pdfContainer: pdfContainer.getBoundingClientRect()
+            });
 
             // Create canvas element
             var canvas = document.createElement('canvas');
-            canvas.id = `fabric-canvas-${blockId}`;
-            canvas.width = drawContainer.offsetWidth;
-            canvas.height = drawContainer.offsetHeight;
+            canvas.id = `drawing-canvas-${blockId}`;
+            canvas.width = pdfContainer.offsetWidth;
+            canvas.height = pdfContainer.offsetHeight;
             canvas.style.position = 'absolute';
             canvas.style.top = '0';
             canvas.style.left = '0';
-            canvas.style.pointerEvents = 'auto';
+
+            console.log("[FABRIC] Created canvas with dimensions:", {
+                width: canvas.width,
+                height: canvas.height
+            });
+
+            // Append canvas to draw container
+            drawContainer.innerHTML = ''; // Clear any existing canvas
             drawContainer.appendChild(canvas);
 
-            // Initialize fabric canvas
-            fabricCanvas = new fabric.Canvas(canvas.id, {
-                isDrawingMode: false,
-                renderOnAddRemove: true,
-                selection: false,
-                backgroundColor: 'transparent'
+            // Manually set critical styles on draw container
+            drawContainer.style.position = 'absolute';
+            drawContainer.style.top = '0';
+            drawContainer.style.left = '0';
+            drawContainer.style.width = '100%';
+            drawContainer.style.height = '100%';
+            drawContainer.style.zIndex = '20';
+
+            // Check if fabric is loaded
+            if (typeof fabric === 'undefined') {
+                console.error("%c[FABRIC] fabric.js library not loaded!", "background:red;color:white;padding:3px;border-radius:3px;");
+                debugLog('Error: fabric.js library not loaded');
+                return false;
+            }
+
+            // Initialize fabric canvas with proper settings
+            try {
+                fabricCanvas = new fabric.Canvas(canvas, {
+                    isDrawingMode: false,
+                    selection: false,
+                    renderOnAddRemove: true,
+                    backgroundColor: null
+                });
+
+                console.log("%c[FABRIC] Canvas created successfully", "background:#27ae60;color:white;padding:3px;border-radius:3px;", fabricCanvas);
+            } catch (err) {
+                console.error("%c[FABRIC] Error creating fabric canvas:", "background:red;color:white;padding:3px;border-radius:3px;", err);
+                debugLog('Error creating fabric canvas: ' + err.message);
+                return false;
+            }
+
+            debugLog('Fabric canvas created');
+
+            // Initialize the marker with fabric canvas
+            if (marker && typeof marker.init === 'function') {
+                console.log("[FABRIC] Initializing marker with fabric canvas");
+                marker.init(fabricCanvas);
+            } else {
+                console.error("%c[FABRIC] Marker object not available or init method missing!", "background:red;color:white;padding:3px;border-radius:3px;");
+            }
+
+            // Set up brush
+            fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
+            fabricCanvas.freeDrawingBrush.color = $(element).find(`#color-input-${blockId}`).val() || '#FF0000';
+            fabricCanvas.freeDrawingBrush.width = parseInt($(element).find(`#width-input-${blockId}`).val() || 5);
+
+            // Update the fabric mouse event handlers to include more detailed logging
+            fabricCanvas.on('mouse:down', function(e) {
+                console.log("%c[MOUSE EVENT] mouse:down", "background:#9b59b6;color:white;padding:3px;border-radius:3px;", {
+                    isDrawingMode: fabricCanvas.isDrawingMode,
+                    markerMode: fabricCanvas.freeDrawingBrush?.markerMode,
+                    activeTool: $(".tool-btn.active").attr('id')
+                });
+
+                debugLog('Canvas mouse:down event');
+                if (fabricCanvas.isDrawingMode) {
+                    // Important: Make sure pointer events are enabled during drawing
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                    drawContainer.style.pointerEvents = 'auto';
+                    console.log("[MOUSE EVENT] Drawing mode active, set pointer-events to auto");
+                }
             });
 
-            // Store reference to fabricCanvas in drawContainer for other components to access
+            fabricCanvas.on('mouse:move', function(e) {
+                // Don't log every mouse move to avoid console spam
+                // For marker tool, make sure pointer events stay enabled
+                if (fabricCanvas.isDrawingMode && fabricCanvas.freeDrawingBrush.markerMode) {
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                    drawContainer.style.pointerEvents = 'auto';
+                }
+            });
+
+            fabricCanvas.on('mouse:up', function(e) {
+                console.log("%c[MOUSE EVENT] mouse:up", "background:#9b59b6;color:white;padding:3px;border-radius:3px;", {
+                    isDrawingMode: fabricCanvas.isDrawingMode,
+                    markerMode: fabricCanvas.freeDrawingBrush?.markerMode,
+                    activeTool: $(".tool-btn.active").attr('id')
+                });
+
+                debugLog('Canvas mouse:up event');
+                // Don't disable pointer events if still in drawing mode and marker is active
+                if (fabricCanvas.isDrawingMode && fabricCanvas.freeDrawingBrush.markerMode) {
+                    console.log("[MOUSE EVENT] Marker still active, keeping pointer-events auto");
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                    drawContainer.style.pointerEvents = 'auto';
+                } else if (!fabricCanvas.isDrawingMode) {
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+                }
+            });
+
+            // Path created event
+            fabricCanvas.on('path:created', function(e) {
+                console.log("%c[FABRIC EVENT] path:created", "background:#e74c3c;color:white;padding:3px;border-radius:3px;", {
+                    isDrawingMode: fabricCanvas.isDrawingMode,
+                    markerMode: fabricCanvas.freeDrawingBrush?.markerMode
+                });
+
+                debugLog('Path created on canvas');
+                // Make sure drawing mode stays active for marker tool
+                if (fabricCanvas.freeDrawingBrush.markerMode) {
+                    console.log("[FABRIC EVENT] Keeping marker mode active after path creation");
+                    fabricCanvas.isDrawingMode = true;
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                    drawContainer.style.pointerEvents = 'auto';
+                }
+            });
+
+            // Store reference to fabricCanvas in draw container
             drawContainer._fabricCanvas = fabricCanvas;
 
-            // Set up drawing brush
-            fabricCanvas.freeDrawingBrush.color = '#FF0000';
-            fabricCanvas.freeDrawingBrush.width = 5;
-
-            // Add event listeners for canvas
-            fabricCanvas.on('mouse:down', function(e) {
-                debugLog('Canvas mousedown at: ' + e.pointer.x + ', ' + e.pointer.y);
+            // Set up color picker event handler
+            $(element).find(`#color-input-${blockId}`).on('change', function() {
+                var color = $(this).val();
+                if (fabricCanvas && fabricCanvas.freeDrawingBrush) {
+                    fabricCanvas.freeDrawingBrush.color = color;
+                    marker.setColor(color);
+                    debugLog(`Color changed to ${color}`);
+                }
             });
 
-            debugLog('Fabric canvas initialized');
+            // Set up width slider event handler
+            $(element).find(`#width-input-${blockId}`).on('input', function() {
+                var width = parseInt($(this).val());
+                if (fabricCanvas && fabricCanvas.freeDrawingBrush) {
+                    fabricCanvas.freeDrawingBrush.width = width;
+                    marker.setWidth(width);
+                    $(element).find(`#width-value-${blockId}`).text(width + 'px');
+                    debugLog(`Width changed to ${width}px`);
+                }
+            });
+
+            debugLog('Fabric canvas fully initialized');
             return true;
         } catch (error) {
-            debugLog('Error initializing fabric canvas: ' + error.message);
+            debugLog(`Error initializing fabric canvas: ${error.message}`);
             return false;
         }
     }
@@ -794,19 +1192,42 @@ function PdfxXBlock(runtime, element, initArgs) {
         drawContainer.style.width = width + 'px';
         drawContainer.style.height = height + 'px';
 
-        // If fabric canvas exists, resize it, otherwise create it
+        // Ensure tools are disabled by default when setting up drawing layers
+        drawContainer.classList.remove('draw-mode');
+        drawContainer.style.pointerEvents = 'none';
+
+        // Update highlighter dimensions
+        var highlightLayer = $(element).find(`#highlight-layer-${blockId}`);
+        highlightLayer.css({
+            width: width + 'px',
+            height: height + 'px'
+        });
+
+        // Update text layer dimensions
+        var textLayer = $(element).find(`#text-layer-${blockId}`);
+        textLayer.css({
+            width: width + 'px',
+            height: height + 'px'
+        });
+
+        // Resize fabric canvas if it exists
         if (fabricCanvas) {
             fabricCanvas.setWidth(width);
             fabricCanvas.setHeight(height);
+            fabricCanvas.calcOffset();
             fabricCanvas.renderAll();
-            debugLog('Fabric canvas resized to: ' + width + 'x' + height);
-        } else {
-            // Initialize fabric canvas
-            var success = initFabricCanvas();
-            if (success) {
-                debugLog('Fabric canvas created with dimensions: ' + width + 'x' + height);
+
+            // Ensure drawing mode is OFF by default on page render
+            fabricCanvas.isDrawingMode = false;
+            fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+
+            // Make sure marker knows about new dimensions
+            if (marker) {
+                marker.setCurrentPage(currentPage);
             }
         }
+
+        debugLog(`Drawing layers set up with dimensions: ${width}x${height}`);
     }
 
     // Modify the renderPage function to ensure filters are applied correctly
@@ -944,6 +1365,202 @@ function PdfxXBlock(runtime, element, initArgs) {
             debug('Error getting page: ' + error);
         });
     }
+
+    // Add this function after the debugLog function
+    function checkDrawingStatus() {
+        var status = {
+            drawContainer: $(element).find(`#draw-container-${blockId}`)[0],
+            fabricCanvas: fabricCanvas,
+            isDrawingMode: fabricCanvas ? fabricCanvas.isDrawingMode : false,
+            freeDrawingBrush: fabricCanvas ? fabricCanvas.freeDrawingBrush : null,
+            upperCanvasPointerEvents: fabricCanvas ? fabricCanvas.upperCanvasEl.style.pointerEvents : 'none',
+            drawContainerPointerEvents: $(element).find(`#draw-container-${blockId}`)[0] ?
+                $(element).find(`#draw-container-${blockId}`)[0].style.pointerEvents : 'none',
+            activeTools: {
+                marker: $(element).find(`#marker-tool-${blockId}`).hasClass('active'),
+                highlight: $(element).find(`#highlight-tool-${blockId}`).hasClass('active')
+            }
+        };
+
+        console.log('===== DRAWING STATUS =====');
+        console.log(JSON.stringify(status, null, 2));
+
+        if (fabricCanvas) {
+            console.log('Canvas size:', fabricCanvas.width, 'x', fabricCanvas.height);
+            console.log('Objects on canvas:', fabricCanvas.getObjects().length);
+
+            if (fabricCanvas.freeDrawingBrush) {
+                console.log('Drawing brush:',
+                    'color =', fabricCanvas.freeDrawingBrush.color,
+                    'width =', fabricCanvas.freeDrawingBrush.width,
+                    'markerMode =', fabricCanvas.freeDrawingBrush.markerMode);
+            }
+        }
+
+        debugLog('Drawing status checked - see console for details');
+
+        // Do NOT force any mode changes in the status check function
+        // This caused tools to be unexpectedly enabled
+
+        return status;
+    }
+
+    // Add this to window for debugging if needed
+    window.checkPdfDrawingStatus = function() {
+        var blocks = document.querySelectorAll('.pdfx_block');
+        blocks.forEach(function(block) {
+            var blockId = block.id.replace('pdfx-block-', '');
+            console.log('Checking PDF block:', blockId);
+            if (window['checkDrawingStatus_' + blockId]) {
+                window['checkDrawingStatus_' + blockId]();
+            } else {
+                console.log('No check function available for this block');
+            }
+        });
+    };
+
+    // Expose the check function with a block-specific name
+    window['checkDrawingStatus_' + blockId] = checkDrawingStatus;
+
+    // Add this function to the end of the file, before the initializeWhenReady() call
+    function fixMarkerToolIssues() {
+        debugLog('Attempting to fix marker tool issues...');
+
+        // Force enable drawing mode
+        if (fabricCanvas) {
+            // Reset drawing mode
+            fabricCanvas.isDrawingMode = true;
+
+            // Configure brush
+            fabricCanvas.freeDrawingBrush.color = $(element).find(`#color-input-${blockId}`).val() || '#FF0000';
+            fabricCanvas.freeDrawingBrush.width = parseInt($(element).find(`#width-input-${blockId}`).val() || 5);
+            fabricCanvas.freeDrawingBrush.markerMode = true;
+
+            // Fix pointer events
+            fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+
+            // Fix draw container
+            var drawContainer = $(element).find(`#draw-container-${blockId}`)[0];
+            if (drawContainer) {
+                drawContainer.style.pointerEvents = 'auto';
+                drawContainer.classList.add('draw-mode');
+                drawContainer.dataset.currentTool = 'marker';
+            }
+
+            // Set active state on marker button
+            $(element).find(`#marker-tool-${blockId}`).addClass('active');
+
+            // Explicitly call marker enable
+            marker.enable();
+
+            debugLog('Marker tool fixed and re-enabled');
+        } else {
+            debugLog('ERROR: Cannot fix marker tool - fabric canvas not available');
+        }
+    }
+
+    // Expose the function globally for debugging purposes
+    window[`fixMarkerTool_${blockId}`] = fixMarkerToolIssues;
+
+    // Add global debug functions
+    window.pdfxDebug = window.pdfxDebug || {};
+
+    // Function to force initialize the marker tool
+    window.forcePdfxInit = function(blockId) {
+        console.log("%c[FORCE INIT] Forcing PDF XBlock initialization", "background:#9b59b6;color:white;padding:3px;border-radius:3px;");
+
+        // If no blockId provided, try to find one
+        if (!blockId) {
+            var pdfxBlocks = document.querySelectorAll('.pdfx_block');
+            if (pdfxBlocks.length > 0) {
+                blockId = pdfxBlocks[0].id.replace('pdfx-block-', '');
+                console.log("[FORCE INIT] Found block ID:", blockId);
+            } else {
+                console.error("[FORCE INIT] No PDF XBlock found on the page!");
+                return false;
+            }
+        }
+
+        // Find the marker tool button
+        var markerBtn = document.getElementById('marker-tool-' + blockId);
+        if (markerBtn) {
+            console.log("[FORCE INIT] Found marker button, clicking it...");
+            markerBtn.click();
+
+            // Try to fix drawing issues
+            setTimeout(function() {
+                // Access our debug object if available
+                if (window.pdfxDebug[blockId] && typeof window.pdfxDebug[blockId].fixMarker === 'function') {
+                    console.log("[FORCE INIT] Running fixMarker()...");
+                    window.pdfxDebug[blockId].fixMarker();
+                } else {
+                    console.log("[FORCE INIT] Debug functions not available, trying manual fix...");
+
+                    // Manual fix - find the draw container and force drawing mode
+                    var drawContainer = document.getElementById('draw-container-' + blockId);
+                    if (drawContainer) {
+                        drawContainer.style.pointerEvents = 'auto';
+                        drawContainer.classList.add('draw-mode');
+                        drawContainer.dataset.currentTool = 'marker';
+
+                        // Find the canvas container
+                        var canvasEl = drawContainer.querySelector('.upper-canvas');
+                        if (canvasEl) {
+                            canvasEl.style.pointerEvents = 'auto';
+                        }
+
+                        console.log("[FORCE INIT] Manual fix applied to draw container and canvas");
+                    }
+                }
+            }, 500);
+
+            return true;
+        } else {
+            console.error("[FORCE INIT] Marker button not found for block:", blockId);
+            return false;
+        }
+    };
+
+    // Global function to check all debug functions
+    window.checkPdfxTools = function() {
+        console.log("%c[DEBUG CHECK] Checking PDF XBlock tools", "background:#3498db;color:white;padding:3px;border-radius:3px;");
+
+        // Check for fabric.js
+        console.log("fabric.js loaded:", typeof fabric !== 'undefined');
+
+        // Find all PDF XBlocks
+        var pdfxBlocks = document.querySelectorAll('.pdfx_block');
+        console.log("PDF XBlocks found:", pdfxBlocks.length);
+
+        pdfxBlocks.forEach(function(block) {
+            var blockId = block.id.replace('pdfx-block-', '');
+            console.log("Checking block:", blockId);
+
+            // Check draw container
+            var drawContainer = document.getElementById('draw-container-' + blockId);
+            console.log("Draw container:", !!drawContainer);
+            if (drawContainer) {
+                console.log("Draw container styles:", {
+                    position: drawContainer.style.position,
+                    zIndex: drawContainer.style.zIndex,
+                    pointerEvents: drawContainer.style.pointerEvents,
+                    className: drawContainer.className
+                });
+            }
+
+            // Check marker button
+            var markerBtn = document.getElementById('marker-tool-' + blockId);
+            console.log("Marker button:", !!markerBtn);
+            if (markerBtn) {
+                console.log("Marker button active:", markerBtn.classList.contains('active'));
+            }
+
+            // Check debug functions
+            console.log("Debug functions available:", !!window.pdfxDebug[blockId]);
+        });
+
+        return "Check complete - see console for details";
+    };
 
     // Start initialization
     initializeWhenReady();

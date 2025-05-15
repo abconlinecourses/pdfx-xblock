@@ -1,14 +1,25 @@
 # PDF XBlock
 
-An interactive PDF viewer XBlock for Open edX, providing advanced features such as highlighting, annotations, and user interaction tracking.
+An interactive PDF viewer XBlock for Open edX, providing advanced features such as highlighting, annotations, scribble drawing, and user interaction tracking.
 
 ## Features
 
 - Responsive PDF viewing with zoom, page navigation, and fullscreen support
 - Text highlighting with automatic saving
+- Scribble tool for freehand drawing and annotations
 - Per-user annotations stored in MongoDB
 - Brightness and grayscale view controls
 - Instructor analytics for viewing student interactions (coming soon)
+
+## Recent Updates
+
+The codebase has been refactored to improve stability and maintainability:
+
+- Renamed "marker" functionality to "scribble" for clarity
+- Removed all workaround fixes and replaced with proper module-based solutions
+- Improved initialization and error handling
+- Added clean debug utilities for development
+- Removed all legacy code completely for a cleaner codebase
 
 ## Installation
 
@@ -64,6 +75,7 @@ mongo_db = mongo_client.get_database('your_database_name')
 - **PDF File**: Upload a PDF file or provide a URL
 - **Allow Download**: Enable/disable downloading the PDF
 - **Allow Annotation**: Enable/disable text highlighting and annotations
+- **Allow Scribble**: Enable/disable the scribble tool for freehand drawing
 
 ## Highlighting Feature
 
@@ -84,6 +96,15 @@ Students can:
 - See all their own highlights across course materials
 - Highlight text in yellow by selecting it while in highlight mode
 
+## Scribble Feature
+
+The scribble tool allows freehand drawing on PDFs:
+
+- Draw directly on PDF pages with adjustable brush size and color
+- Automatically saves drawings to MongoDB for persistence
+- Drawings are preserved per page and per user
+- Toggle the scribble tool on/off with the toolbar button
+
 ## Developers
 
 ### Structure
@@ -93,6 +114,11 @@ Students can:
 - `pdfx/static/js/src/`: JavaScript implementation
   - `pdfx_init.js`: Core initialization
   - `pdfx_highlight.js`: Text highlighting implementation
+  - `pdfx_scribble.js`: Scribble tool implementation
+  - `pdfx_scribble_init.js`: Reliable scribble initialization
+  - `pdfx_debug_utils.js`: Developer debugging utilities
+
+For detailed JS documentation, see `pdfx/static/js/src/README.md`.
 
 ### Adding Features
 
