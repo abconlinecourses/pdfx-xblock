@@ -79,6 +79,7 @@
     transition: all 0.2s;
     border-radius: 4px;
     min-width: 36px;
+    margin-bottom: 5px; /* Add spacing between buttons */
 }
 
 .tool-btn:hover {
@@ -86,8 +87,11 @@
 }
 
 .tool-btn.active {
-    background: #4CAF50;
-    color: white;
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    transform: scale(1.05);
+    position: relative;
 }
 
 .tool-btn i {
@@ -298,12 +302,19 @@
 }
 
 input[type="color"] {
-    width: 30px;
+    width: 40px;
     height: 30px;
-    border: none;
+    border: 2px solid #ccc;
     border-radius: 4px;
-    padding: 0;
     cursor: pointer;
+    padding: 0;
+    background: transparent;
+    transition: transform 0.2s ease;
+}
+
+input[type="color"]:hover {
+    transform: scale(1.1);
+    border-color: #3498db;
 }
 
 input[type="range"] {
@@ -341,7 +352,8 @@ input[type="range"] {
     filter: brightness(1) grayscale(0) !important; /* Override to ensure PDF renders in normal colors by default */
 }
 
-.text-layer, #text-layer, [id^="text-layer-"] {
+/* PDF.js text layer classes - supporting both older and newer versions */
+.textLayer, .text-layer, #text-layer, [id^="text-layer-"] {
     position: absolute;
     left: 0;
     top: 0;
@@ -351,18 +363,21 @@ input[type="range"] {
     opacity: 0.2;
     line-height: 1.0;
     user-select: text;
-    z-index: 3; /* Text layer on top for selection */
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
     --scale-factor: 1;
     pointer-events: none;
+    z-index: 3; /* Text layer on top for selection */
 }
 
-.text-layer.active, #text-layer.active, [id^="text-layer-"].active {
+.textLayer.active, .text-layer.active, #text-layer.active, [id^="text-layer-"].active {
     pointer-events: auto;
     cursor: text;
     opacity: 1;
 }
 
-.text-layer > span, #text-layer > span, [id^="text-layer-"] > span {
+.textLayer span, .text-layer > span, #text-layer > span, [id^="text-layer-"] > span {
     color: transparent;
     position: absolute;
     white-space: pre;
@@ -377,8 +392,40 @@ input[type="range"] {
     background-color: rgba(255, 255, 255, 0.0);
 }
 
-.text-layer.active > span::selection, #text-layer.active > span::selection, [id^="text-layer-"].active > span::selection {
+.text-layer.active > span::selection, #text-layer.active > span::selection, [id^="text-layer-"].active > span::selection,
+.textLayer ::selection {
     background: rgba(255, 255, 0, 0.3);
+}
+
+/* PDF.js 3.x specific highlight classes */
+.textLayer .highlight {
+    margin: -1px;
+    padding: 1px;
+    background-color: rgba(255, 255, 0, 0.3);
+    border-radius: 4px;
+}
+
+.textLayer .highlight.begin {
+    border-radius: 4px 0 0 4px;
+}
+
+.textLayer .highlight.end {
+    border-radius: 0 4px 4px 0;
+}
+
+.textLayer .highlight.middle {
+    border-radius: 0;
+}
+
+.textLayer .highlight.selected {
+    background-color: rgba(0, 100, 0, 0.3);
+}
+
+/* Style for Links in the Text Layer */
+.textLayer a {
+    color: transparent;
+    text-decoration: none;
+    pointer-events: all;
 }
 
 /* Highlight layer - separate from text layer */
@@ -443,9 +490,10 @@ html body .canvas-container .upper-canvas {
 
 /* Active state for scribble tool button */
 #marker-tool-active, [id^="marker-tool-"].active {
-    background-color: #4CAF50 !important;
+    background-color: #3498db !important;
     color: white !important;
-    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    font-weight: normal !important;
 }
 
 /* Enhanced scribble stroke style */
@@ -657,12 +705,12 @@ html body .canvas-container .upper-canvas {
     font-style: normal;
     font-weight: 900;
     font-display: block;
-    src: url('../vendor/webfonts/fa-solid-900.eot');
-    src: url('../vendor/webfonts/fa-solid-900.eot?#iefix') format('embedded-opentype'),
-         url('../vendor/webfonts/fa-solid-900.woff2') format('woff2'),
-         url('../vendor/webfonts/fa-solid-900.woff') format('woff'),
-         url('../vendor/webfonts/fa-solid-900.ttf') format('truetype'),
-         url('../vendor/webfonts/fa-solid-900.svg#fontawesome') format('svg');
+    src: url('../static/vendor/webfonts/fa-solid-900.eot');
+    src: url('../static/vendor/webfonts/fa-solid-900.eot?#iefix') format('embedded-opentype'),
+         url('../static/vendor/webfonts/fa-solid-900.woff2') format('woff2'),
+         url('../static/vendor/webfonts/fa-solid-900.woff') format('woff'),
+         url('../static/vendor/webfonts/fa-solid-900.ttf') format('truetype'),
+         url('../static/vendor/webfonts/fa-solid-900.svg#fontawesome') format('svg');
 }
 
 @font-face {
@@ -670,12 +718,12 @@ html body .canvas-container .upper-canvas {
     font-style: normal;
     font-weight: 400;
     font-display: block;
-    src: url('../vendor/webfonts/fa-regular-400.eot');
-    src: url('../vendor/webfonts/fa-regular-400.eot?#iefix') format('embedded-opentype'),
-         url('../vendor/webfonts/fa-regular-400.woff2') format('woff2'),
-         url('../vendor/webfonts/fa-regular-400.woff') format('woff'),
-         url('../vendor/webfonts/fa-regular-400.ttf') format('truetype'),
-         url('../vendor/webfonts/fa-regular-400.svg#fontawesome') format('svg');
+    src: url('../static/vendor/webfonts/fa-regular-400.eot');
+    src: url('../static/vendor/webfonts/fa-regular-400.eot?#iefix') format('embedded-opentype'),
+         url('../static/vendor/webfonts/fa-regular-400.woff2') format('woff2'),
+         url('../static/vendor/webfonts/fa-regular-400.woff') format('woff'),
+         url('../static/vendor/webfonts/fa-regular-400.ttf') format('truetype'),
+         url('../static/vendor/webfonts/fa-regular-400.svg#fontawesome') format('svg');
 }
 
 /* Make sure PDF display adapts to left panel state */
@@ -884,8 +932,11 @@ html body .canvas-container .upper-canvas {
 
 /* Tool buttons */
 .tool-btn.active {
-    background-color: #e0f7fa;
-    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.1);
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    transform: scale(1.05);
+    position: relative;
 }
 
 /* PDF view modes */
@@ -984,9 +1035,10 @@ html body .canvas-container .upper-canvas {
 /* When scribble tool is active */
 .tool-btn#marker-tool-active,
 [id^="marker-tool-"].active {
-    background-color: #4CAF50 !important;
+    background-color: #3498db !important;
     color: white !important;
-    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    font-weight: normal !important;
 }
 
 /* Canvas container in drawing mode */
@@ -1038,15 +1090,206 @@ body .pdfx_block [id^="draw-container-"][data-current-tool="marker"] .upper-canv
 
 /* Make sure scribble tool button shows active state */
 body .pdfx_block [id^="marker-tool-"].active {
-    background-color: #4CAF50 !important;
+    background-color: #3498db !important;
     color: white !important;
-    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2) !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    font-weight: normal !important;
 }
 
 /* When scribble tool is active, force the button to show active state */
 html body [id^="marker-tool-"].active {
-    background-color: #4CAF50 !important;
+    background-color: #3498db !important;
     color: white !important;
-    font-weight: bold !important;
-    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.5) !important;
+    font-weight: normal !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* Enhanced text selection cursor styles */
+.text-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 0.5;
+    line-height: 1.0;
+    z-index: 10;
+}
+
+/* Make text spans show text cursor on hover */
+.text-layer span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text !important; /* Force text cursor */
+    pointer-events: auto !important; /* Make sure spans are interactive */
+    transform-origin: 0% 0%;
+    user-select: text !important; /* Make text selectable */
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+}
+
+/* Add subtle highlight effect on text layer hover to indicate it's selectable */
+.text-layer:hover {
+    background-color: rgba(0, 0, 0, 0.01); /* Very subtle gray background */
+}
+
+.text-layer span:hover {
+    background-color: rgba(0, 0, 255, 0.02); /* Very subtle blue highlight */
+}
+
+/* Make sure draw container doesn't interfere with text selection when inactive */
+.draw-container:not(.draw-mode) {
+    pointer-events: none !important;
+}
+
+/* Only when drawing mode is active, make the draw container interactive */
+.draw-container.draw-mode {
+    pointer-events: auto !important;
+}
+
+/* Ensure upper canvas doesn't interfere with text selection when not in drawing mode */
+.upper-canvas:not(.drawing-active) {
+    pointer-events: none !important;
+}
+
+/* Highlight tool specific styles */
+.text-layer.highlight-tool-active {
+    opacity: 0.9 !important;
+    background-color: rgba(255, 255, 0, 0.03);
+    cursor: text !important;
+}
+
+/* Hover effect for text spans when highlighter is active */
+.text-layer span.highlight-hover-effect:hover {
+    background-color: rgba(255, 255, 0, 0.15) !important;
+    box-shadow: 0 0 2px rgba(255, 220, 0, 0.4);
+}
+
+/* Active highlight tool button specific styling */
+#highlight-tool-active,
+[id^="highlight-tool-"].active {
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    border: none !important;
+    position: relative;
+}
+
+/* Remove the custom after element for the highlight tool active state */
+[id^="highlight-tool-"].active:after {
+    display: none;
+}
+
+/* Remove the tool indicator dot in sidebar */
+.sidebar .tool-btn.active::after {
+    display: none;
+}
+
+/* Highlight selection styles */
+.text-layer.highlight-tool-active ::selection {
+    background-color: rgba(255, 215, 0, 0.5) !important;
+    color: #000;
+}
+
+.text-layer.highlight-tool-active ::-moz-selection {
+    background-color: rgba(255, 215, 0, 0.5) !important;
+    color: #000;
+}
+
+/* Enhanced highlight rectangles */
+.highlight-tool-active ~ .highlight-layer [class^="highlight-"],
+.highlight-tool-active ~ [id^="highlight-layer-"] [class^="highlight-"] {
+    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
+    mix-blend-mode: multiply;
+}
+
+/* Ensure cursor is always text selection when highlight tool is active */
+.highlight-tool-active,
+.highlight-tool-active * {
+    cursor: text !important;
+}
+
+/* Cursor styles for different tools */
+.draw-container.draw-mode {
+    cursor: crosshair !important;
+}
+
+/* Highlight hover effect for text spans */
+.highlight-hover-effect:hover {
+    background-color: rgba(255, 255, 0, 0.2) !important;
+    border-radius: 2px;
+    transition: background-color 0.2s ease;
+}
+
+/* Highlight tool active state for text layer */
+.text-layer.active,
+.text-layer.highlight-tool-active {
+    cursor: text !important;
+}
+
+.text-layer.highlight-tool-active span {
+    cursor: text !important;
+}
+
+/* Canvas cursor styles */
+.upper-canvas {
+    cursor: default;
+}
+
+.upper-canvas.drawing-mode {
+    cursor: crosshair !important;
+}
+
+/* Active tool indicator in sidebar */
+.sidebar .tool-section {
+    position: relative;
+}
+
+.sidebar .tool-btn {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.sidebar .tool-btn.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 8px;
+    background-color: #2ecc71;
+    border-radius: 50%;
+}
+
+/* Tool-specific cursor styles */
+.draw-container[data-current-tool="marker"] {
+    cursor: crosshair !important;
+}
+
+.draw-container[data-current-tool="highlighter"] ~ .text-layer,
+.text-layer.highlight-tool-active {
+    cursor: text !important;
+}
+
+.draw-container[data-current-tool="select"] {
+    cursor: pointer !important;
+}
+
+.draw-container[data-current-tool="eraser"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17a2.998 2.998 0 0 1 0-4.24l9.24-9.21c1.21-1.21 3.17-1.21 4.19.01zm-5.66 15.66l.83-.82-1.41-1.41-.83.82c-.78.78-2.05.78-2.83 0l-3.53-3.53c-.39-.39-.39-1.03 0-1.42L11.8 4.24c.39-.39 1.04-.39 1.43 0l4.95 4.95c.39.39.39 1.02 0 1.41L8.99 19.71l1.59-1.59 1.59 1.59 1.59-1.59-1.59-1.59 1.59-1.59 1.59 1.59 1.59-1.59-1.59-1.59 1.59-1.59 1.59 1.59zM7.12 19.12c.39.39 1.02.39 1.41 0l.7-.7-1.41-1.41-.7.7c-.39.39-.39 1.03 0 1.41z"/></svg>') 12 12, auto !important;
+}
+
+.draw-container[data-current-tool="shape"] {
+    cursor: crosshair !important;
+}
+
+.draw-container[data-current-tool="text"] {
+    cursor: text !important;
+}
+
+.draw-container[data-current-tool="note"] {
+    cursor: cell !important;
 }

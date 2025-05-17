@@ -169,42 +169,228 @@ function PdfxXBlock(runtime, element, initArgs) {
                 return;
             }
 
-            debug('Attempting to load PDF from URL: ' + url);
+            debug('PDF URL: ' + url);
 
-            // Test for potential CORS issues
-            debug('Checking if URL might have CORS issues...');
+            // Check if PdfxStorage is available
+            if (typeof window.PdfxStorage === 'undefined') {
+                debug('PdfxStorage not available, falling back to direct loading');
+                loadPdfFromUrl(url);
+                return;
+            }
+
+            // Prepare metadata for IndexedDB storage
+            const metadata = {
+                courseId: '',
+                blockId: blockId,
+                filename: pdfUrl.split('/').pop() || '',
+            };
+
+            // Try to get courseId safely from different possible sources
             try {
-                const pdfOrigin = new URL(url).origin;
-                const pageOrigin = window.location.origin;
-                const corsIssuesPossible = pdfOrigin !== pageOrigin;
-                debug('PDF origin: ' + pdfOrigin + ', Page origin: ' + pageOrigin);
-                debug('Cross-origin request: ' + (corsIssuesPossible ? 'Yes (CORS needed)' : 'No (same origin)'));
-
-                if (corsIssuesPossible) {
-                    debug('⚠️ Warning: PDF is loaded from a different origin, CORS headers must be present on the server.');
+                // First try from element's data attributes if it exists
+                const pdfxBlock = element.querySelector('.pdfx_block');
+                if (pdfxBlock && pdfxBlock.dataset && pdfxBlock.dataset.courseId) {
+                    metadata.courseId = pdfxBlock.dataset.courseId;
+                }
+                // Next try from the element itself
+                else if (element.dataset && element.dataset.courseId) {
+                    metadata.courseId = element.dataset.courseId;
+                }
+                // Try from a directly accessible data element
+                else {
+                    const dataElement = document.getElementById('pdfx-data-' + blockId);
+                    if (dataElement && dataElement.dataset && dataElement.dataset.courseId) {
+                        metadata.courseId = dataElement.dataset.courseId;
+                    }
                 }
             } catch (e) {
-                debug('Error checking CORS: ' + e.message);
+                debug('Error getting courseId: ' + e.message + ', continuing without it');
+                // Continue without courseId, it's not critical
             }
 
-            // Store debug info but don't show the panel
-            var debugElement = jq('.pdf-debug');
-            if (debugElement.length) {
-                jq('.pdf-url-debug').text(url);
+            debug('Checking if PDF exists in IndexedDB storage with metadata: ' + JSON.stringify(metadata));
+
+            // Set a timeout to fall back to direct loading if IndexedDB is too slow or hangs
+            const timeoutId = setTimeout(() => {
+                debug('IndexedDB operation timed out, falling back to direct loading');
+                loadPdfFromUrl(url);
+            }, 3000); // 3 second timeout
+
+            // Check if PDF exists in IndexedDB
+            window.PdfxStorage.hasPdf(url, metadata)
+                .then(exists => {
+                    clearTimeout(timeoutId); // Clear the timeout as we got a response
+
+                    if (exists) {
+                        debug('PDF found in IndexedDB storage, loading from there');
+                        return window.PdfxStorage.getPdf(url, metadata)
+                            .catch(error => {
+                                debug('Error retrieving PDF from IndexedDB: ' + error.message);
+                                debug('Falling back to direct loading');
+                                loadPdfFromUrl(url);
+                                return null;
+                            });
+                    } else {
+                        debug('PDF not found in IndexedDB storage, fetching from URL');
+                        // Show loading indicator
+                        jq('.loading-indicator').text('Loading PDF from server...');
+
+                        // Fetch PDF from URL and store in IndexedDB
+                        return window.PdfxStorage.fetchPdfAsArrayBuffer(url)
+                            .then(pdfData => {
+                                if (!pdfData) {
+                                    throw new Error('No data received from fetchPdfAsArrayBuffer');
+                                }
+
+                                debug('PDF fetched from server, storing in IndexedDB');
+                                // Get last modified information if possible via HEAD request
+                                return new Promise((resolve, reject) => {
+                                    jQuery.ajax({
+                                        type: "HEAD",
+                                        url: url,
+                                        timeout: 3000, // 3 second timeout
+                                        success: function(data, textStatus, xhr) {
+                                            const lastModified = xhr.getResponseHeader('Last-Modified') || '';
+                                            metadata.lastModified = lastModified;
+
+                                            // Store PDF in IndexedDB
+                                            window.PdfxStorage.storePdf(url, pdfData, metadata)
+                                                .then(() => resolve(pdfData))
+                                                .catch(error => {
+                                                    debug('Error storing PDF in IndexedDB: ' + error.message);
+                                                    resolve(pdfData); // Continue even if storage fails
+                                                });
+                                        },
+                                        error: function() {
+                                            // Continue without last-modified date
+                                            window.PdfxStorage.storePdf(url, pdfData, metadata)
+                                                .then(() => resolve(pdfData))
+                                                .catch(error => {
+                                                    debug('Error storing PDF in IndexedDB: ' + error.message);
+                                                    resolve(pdfData); // Continue even if storage fails
+                                                });
+                                        }
+                                    });
+                                });
+                            })
+                            .catch(error => {
+                                debug('Error fetching PDF: ' + error.message);
+                                // Fall back to direct loading
+                                loadPdfFromUrl(url);
+                                return null;
+                            });
+                    }
+                })
+                .then(pdfData => {
+                    if (pdfData) {
+                        try {
+                            debug('PDF data obtained, loading with PDF.js');
+                            loadPdfFromData(pdfData);
+                        } catch (error) {
+                            debug('Error loading PDF from data: ' + error.message);
+                            // Fall back to direct loading
+                            loadPdfFromUrl(url);
+                        }
+                    }
+                })
+                .catch(error => {
+                    clearTimeout(timeoutId); // Clear the timeout in case of an error
+                    debug('Error in IndexedDB storage flow: ' + error.message);
+                    // Fall back to direct loading
+                    loadPdfFromUrl(url);
+                });
+        } catch (error) {
+            debug('Error during PDF initialization: ' + error.message);
+            showError('Error initializing PDF: ' + error.message);
+
+            // Fall back to direct loading
+            const url = getSafePdfUrl();
+            if (url) {
+                loadPdfFromUrl(url);
             }
+        }
+    }
 
-            // Create a loading task with more detailed options
-            debug('Creating PDF.js loading task');
-            const loadingTask = pdfjsLib.getDocument({
-                url: url,
-                cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@2.10.377/cmaps/',
-                cMapPacked: true,
-                disableRange: false,
-                disableStream: false,
-                disableAutoFetch: false
-            });
+    // Load PDF directly from URL (fallback method)
+    function loadPdfFromUrl(url) {
+        debug('Loading PDF directly from URL: ' + url);
 
-            // Add progress handler
+        // Test for potential CORS issues
+        debug('Checking if URL might have CORS issues...');
+        try {
+            const pdfOrigin = new URL(url).origin;
+            const pageOrigin = window.location.origin;
+            const corsIssuesPossible = pdfOrigin !== pageOrigin;
+            debug('PDF origin: ' + pdfOrigin + ', Page origin: ' + pageOrigin);
+            debug('Cross-origin request: ' + (corsIssuesPossible ? 'Yes (CORS needed)' : 'No (same origin)'));
+
+            if (corsIssuesPossible) {
+                debug('⚠️ Warning: PDF is loaded from a different origin, CORS headers must be present on the server.');
+            }
+        } catch (e) {
+            debug('Error checking CORS: ' + e.message);
+        }
+
+        // Store debug info but don't show the panel
+        var debugElement = jq('.pdf-debug');
+        if (debugElement.length) {
+            jq('.pdf-url-debug').text(url);
+        }
+
+        // Create a loading task with more detailed options
+        debug('Creating PDF.js loading task');
+
+        // Check if we're using PDF.js v5+ which uses the PDF namespace
+        const pdfLib = window.pdfjsLib || window.pdf;
+
+        if (!pdfLib) {
+            debug('Error: PDF.js library not available');
+            showError('PDF.js library not available. Please refresh the page.');
+            return;
+        }
+
+        // Determine which API to use based on available functions
+        const getDocumentFn = pdfLib.getDocument || (pdfLib.PDFDocumentLoadingTask && pdfLib.PDFDocumentLoadingTask.prototype.getDocument);
+
+        if (!getDocumentFn) {
+            debug('Error: PDF.js getDocument function not available');
+            showError('PDF.js API not available. Please refresh the page.');
+            return;
+        }
+
+        let loadingTask;
+
+        try {
+            // For PDF.js 5.x
+            if (pdfLib.PDFDocumentLoadingTask) {
+                loadingTask = new pdfLib.PDFDocumentLoadingTask();
+                loadingTask.docId = url;
+                debug('Using PDF.js 5.x API');
+            }
+            // For PDF.js 2.x and 3.x
+            else if (pdfLib.getDocument) {
+                loadingTask = pdfLib.getDocument({
+                    url: url,
+                    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.0.375/cmaps/',
+                    cMapPacked: true,
+                    disableRange: false,
+                    disableStream: false,
+                    disableAutoFetch: false
+                });
+                debug('Using PDF.js 2.x/3.x API');
+            } else {
+                debug('Error: Could not determine PDF.js API version');
+                showError('Unsupported PDF.js API version. Please contact your course administrator.');
+                return;
+            }
+        } catch (err) {
+            debug('Error creating PDF loading task: ' + err.message);
+            showError('Error initializing PDF loader: ' + err.message);
+            return;
+        }
+
+        // Add progress handler if available
+        if (loadingTask.onProgress) {
             loadingTask.onProgress = function(progress) {
                 debug('PDF loading progress: ' +
                       Math.round(progress.loaded / Math.max(progress.total, 1) * 100) + '%' +
@@ -215,30 +401,84 @@ function PdfxXBlock(runtime, element, initArgs) {
                     jq('.loading-indicator').text('Loading PDF... ' + percent + '%');
                 }
             };
-
-            // Send a HEAD request to check if the PDF exists and is accessible
-            debug('Sending HEAD request to verify PDF accessibility');
-            jQuery.ajax({
-                type: "HEAD",
-                url: url,
-                success: function(data, textStatus, xhr) {
-                    debug('HEAD request successful: ' + xhr.status);
-                    debug('Content-Type: ' + xhr.getResponseHeader('Content-Type'));
-                    debug('Content-Length: ' + xhr.getResponseHeader('Content-Length'));
-                    // Continue loading with PDF.js
-                    continuePdfLoading(loadingTask);
-                },
-                error: function(xhr, textStatus, error) {
-                    debug('HEAD request failed: ' + xhr.status + ' - ' + error);
-                    // Try loading with PDF.js anyway
-                    debug('Continuing PDF loading despite HEAD request failure');
-                    continuePdfLoading(loadingTask);
-                }
-            });
-        } catch (error) {
-            debug('Error during PDF initialization: ' + error.message);
-            showError('Error initializing PDF: ' + error.message);
         }
+
+        // Send a HEAD request to check if the PDF exists and is accessible
+        debug('Sending HEAD request to verify PDF accessibility');
+        jQuery.ajax({
+            type: "HEAD",
+            url: url,
+            success: function(data, textStatus, xhr) {
+                debug('HEAD request successful: ' + xhr.status);
+                debug('Content-Type: ' + xhr.getResponseHeader('Content-Type'));
+                debug('Content-Length: ' + xhr.getResponseHeader('Content-Length'));
+                // Continue loading with PDF.js
+                continuePdfLoading(loadingTask);
+            },
+            error: function(xhr, textStatus, error) {
+                debug('HEAD request failed: ' + xhr.status + ' - ' + error);
+                // Try loading with PDF.js anyway
+                debug('Continuing PDF loading despite HEAD request failure');
+                continuePdfLoading(loadingTask);
+            }
+        });
+    }
+
+    // Load PDF from ArrayBuffer data
+    function loadPdfFromData(pdfData) {
+        debug('Loading PDF from ArrayBuffer data');
+
+        // Check if we're using PDF.js v5+ which uses the PDF namespace
+        const pdfLib = window.pdfjsLib || window.pdf;
+
+        if (!pdfLib) {
+            debug('Error: PDF.js library not available');
+            showError('PDF.js library not available. Please refresh the page.');
+            return;
+        }
+
+        // Create loading task
+        let loadingTask;
+
+        try {
+            // For PDF.js 5.x
+            if (pdfLib.PDFDocumentLoadingTask) {
+                loadingTask = new pdfLib.PDFDocumentLoadingTask();
+                loadingTask.docId = 'data';
+
+                // Directly load data for newer PDF.js versions
+                loadingTask.data = pdfData;
+                debug('Using PDF.js 5.x API for data loading');
+            }
+            // For PDF.js 2.x and 3.x
+            else if (pdfLib.getDocument) {
+                loadingTask = pdfLib.getDocument({
+                    data: pdfData,
+                    cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.0.375/cmaps/',
+                    cMapPacked: true
+                });
+                debug('Using PDF.js 2.x/3.x API for data loading');
+            } else {
+                debug('Error: Could not determine PDF.js API version');
+                showError('Unsupported PDF.js API version. Please contact your course administrator.');
+                return;
+            }
+        } catch (err) {
+            debug('Error creating PDF loading task for data: ' + err.message);
+            showError('Error initializing PDF loader: ' + err.message);
+            return;
+        }
+
+        // Add progress handler if available
+        if (loadingTask.onProgress) {
+            loadingTask.onProgress = function(progress) {
+                debug('PDF loading progress: ' +
+                     Math.round(progress.loaded / Math.max(progress.total, 1) * 100) + '%');
+            };
+        }
+
+        // Continue with standard loading process
+        continuePdfLoading(loadingTask);
     }
 
     // Continue PDF loading after HEAD request check
@@ -272,19 +512,6 @@ function PdfxXBlock(runtime, element, initArgs) {
 
             // Hide loading indicator
             jq('.loading-indicator').hide();
-
-            // Apply fit-to-page after initial render with a slight delay to ensure
-            // all elements are properly initialized and measurements are accurate
-            setTimeout(function() {
-                debug('Applying fit-to-page by default');
-                fitToPage();
-
-                // Activate the fit-to-page button
-                var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
-                if (fitToPageBtn) {
-                    fitToPageBtn.classList.add('active');
-                }
-            }, 300);
         }).catch(function(error) {
             debug('Error loading PDF: ' + error.message);
             showError('Failed to load PDF: ' + error.message);
@@ -372,10 +599,21 @@ function PdfxXBlock(runtime, element, initArgs) {
 
             // Apply zoom level
             if (currentZoom === 'auto' || !currentZoom) {
-                // Auto-scale to fit width
-                currentZoom = viewerWidth / viewport.width;
-                debug('Auto-scaled to width: ' + currentZoom.toFixed(2));
+                // Calculate both fit-to-width and fit-to-page scales
+                var fitWidthScale = viewerWidth / viewport.width;
+                var fitHeightScale = viewerHeight / viewport.height;
+
+                // Use fitWidthScale to make "fit to width" the default behavior
+                currentZoom = fitWidthScale;
+
+                debug('Auto-scaled to fit width: ' + currentZoom.toFixed(2));
                 jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
+
+                // Update button states to reflect fit-to-width is active by default
+                var fitToWidthBtn = document.getElementById('fit-to-width-' + blockId);
+                var fitToPageBtn = document.getElementById('fit-to-page-' + blockId);
+                if (fitToWidthBtn) fitToWidthBtn.classList.add('active');
+                if (fitToPageBtn) fitToPageBtn.classList.remove('active');
             }
 
             // Create new viewport with the applied scale
@@ -880,6 +1118,25 @@ function PdfxXBlock(runtime, element, initArgs) {
             fullscreenBtn.addEventListener('click', toggleFullscreen);
         }
 
+        // Download button
+        var downloadBtn = document.getElementById('download-tool-' + blockId);
+        if (downloadBtn) {
+            if (allowDownload) {
+                downloadBtn.style.display = 'inline-block';
+                downloadBtn.addEventListener('click', function() {
+                    var url = getSafePdfUrl();
+                    if (!url) {
+                        debug('No URL available for download');
+                        return;
+                    }
+                    debug('Downloading PDF: ' + url);
+                    window.open(url, '_blank');
+                });
+            } else {
+                downloadBtn.style.display = 'none';
+            }
+        }
+
         // Debug buttons - using jQuery for these since they're not critical to functionality
         jq('#toggle-debug').on('click', function() {
             jq('.pdf-debug').hide();
@@ -1015,6 +1272,9 @@ function PdfxXBlock(runtime, element, initArgs) {
         debug('Window dimensions: ' + window.innerWidth + 'x' + window.innerHeight);
 
         try {
+            // Expose loadPDF function globally for debugging/refresh
+            window['loadPDF_' + blockId] = loadPDF;
+
             // Hide debug panel by default
             var debugPanel = jq('.pdf-debug');
             if (debugPanel.length) {
@@ -1044,13 +1304,14 @@ function PdfxXBlock(runtime, element, initArgs) {
 
                 // Load PDF.js dynamically if not available
                 var pdfJsScript = document.createElement('script');
-                pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js';
+                pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs';
+                pdfJsScript.type = 'module';
                 pdfJsScript.async = true;
                 pdfJsScript.onload = function() {
                     debug('PDF.js loaded dynamically');
 
                     // Now load the worker
-                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+                    pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
 
                     // Continue initialization
                     debug('Continuing initialization after PDF.js loaded');

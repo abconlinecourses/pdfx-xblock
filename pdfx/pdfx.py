@@ -9,6 +9,7 @@ import uuid
 import pkg_resources
 from datetime import datetime
 
+
 from web_fragments.fragment import Fragment
 from xblock.core import XBlock
 from xblock.fields import Scope, String, Dict, Boolean, Integer, JSONField
@@ -77,7 +78,7 @@ class PdfxXBlock(XBlock):
         display_name=_("Display Name"),
         help=_("Name of the component in the edxplatform"),
         scope=Scope.settings,
-        default="PDF Viewer"
+        default="PDFXpert XBlock"
     )
 
     # Unique block ID - generated on creation
@@ -189,6 +190,27 @@ class PdfxXBlock(XBlock):
     # Add marker_strokes field to the XBlock class after the drawing_strokes field
     marker_strokes = SafeDict(
         help="Student's marker strokes on the PDF",
+        scope=Scope.user_state,
+        default={}
+    )
+
+    # Add fields for text annotations
+    text_annotations = SafeDict(
+        help="Student's text annotations on the PDF",
+        scope=Scope.user_state,
+        default={}
+    )
+
+    # Add fields for shape annotations
+    shape_annotations = SafeDict(
+        help="Student's shape annotations on the PDF",
+        scope=Scope.user_state,
+        default={}
+    )
+
+    # Add fields for note annotations
+    note_annotations = SafeDict(
+        help="Student's note annotations on the PDF",
         scope=Scope.user_state,
         default={}
     )
@@ -311,95 +333,44 @@ class PdfxXBlock(XBlock):
             log.warning(f"Error checking staff status: {str(e)}")
             return False
 
-    def student_view(self, context=None):
+    def student_view(self, context):
         """
-        The primary view of the PdfxXBlock, shown to students
-        when viewing courses.
+        The primary view of the PdfxXBlock, shown to students when viewing courses.
         """
+        # Generate a unique block ID if not already set
+        if not self.block_id:
+            self.block_id = str(uuid.uuid4())[:8]
+
+        # Using Mako templates through the Template object
         html = self.resource_string("static/html/pdfx.html")
 
-        # Create a Template object with the Mako engine
+        # Import Template from Mako
         from mako.template import Template
         template = Template(html)
 
-        # Render the template with the XBlock instance as context
-        rendered_html = template.render(block=self)
-
-        frag = Fragment(rendered_html)
-
-        # Add CSS
-        frag.add_css(self.resource_string("static/css/pdfx.css"))
-        frag.add_css_url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css')
-
-        # Get the actual PDF URL first to pass it to the template
-        pdf_url = self.get_pdf_url()
-        log.info(f"PDF URL for rendering: {pdf_url}")
-
-        # Add direct PDF embed as fallback - hidden by default
-        pdf_embed = f"""
-        <div class="pdf-fallback" style="display:none;">
-            <p>If the PDF viewer doesn't load properly, you can <a href="{pdf_url}" target="_blank">open the PDF directly</a>.</p>
-            <iframe src="{pdf_url}" width="100%" height="500px" style="border:none;"></iframe>
-        </div>
-        """
-        frag.add_resource(pdf_embed, mimetype='text/html')
-
-        # Load required JavaScript libraries in proper order
-        frag.add_javascript("""
-            // Function to load script and return a promise
-            function loadScript(url) {
-                return new Promise((resolve, reject) => {
-                    var script = document.createElement('script');
-                    script.src = url;
-                    script.onload = resolve;
-                    script.onerror = reject;
-                    document.head.appendChild(script);
-                });
-            }
-
-            // Function to initialize PDF.js
-            async function initPDFJS() {
-                if (typeof pdfjsLib === 'undefined') {
-                    console.log('PDF XBlock: Loading PDF.js library');
-                    try {
-                        await loadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js');
-                        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-                        console.log('PDF XBlock: Successfully loaded PDF.js');
-                    } catch (error) {
-                        console.error('PDF XBlock: Failed to load PDF.js:', error);
-                        document.querySelector('.pdf-fallback').style.display = 'block';
-                    }
-                }
-            }
-
-            // Initialize libraries
-            (async function() {
-                // Load jQuery if needed
-                if (typeof jQuery === 'undefined') {
-                    await loadScript('https://cdnjs.cloudflare.com/ajax/libs/jquery/3.6.0/jquery.min.js');
-                }
-
-                // Load PDF.js
-                await initPDFJS();
-            })();
-        """)
-
-        # Add the direct fix script after the other scripts
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_init.js"))
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_drawing.js"))
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_navigation.js"))
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_highlight.js"))
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble.js"))
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble_init.js"))
-        frag.add_javascript(self.resource_string("static/js/src/pdfx_debug_utils.js"))
-
-        # Get user and course information
+        # Prepare context for template
         user_info = self.get_user_info()
         course_info = self.get_course_info()
+        pdf_url = self.get_pdf_url()
         is_staff = self.is_staff_user()
 
-        # Get document info
+        # Get PDF file name - if uploaded, use that, otherwise try to extract from URL
+        if self.pdf_file_name:
+            pdf_file_name = self.pdf_file_name
+        elif pdf_url:
+            # Extract filename from URL if possible
+            try:
+                from urllib.parse import urlparse
+                parsed_url = urlparse(pdf_url)
+                pdf_file_name = os.path.basename(parsed_url.path) or "document.pdf"
+                if not pdf_file_name.lower().endswith('.pdf'):
+                    pdf_file_name += '.pdf'
+            except:
+                pdf_file_name = "document.pdf"
+        else:
+            pdf_file_name = "document.pdf"
+
+        # Document info
         document_info = {
             'title': self.pdf_file_name or 'PDF Document',
             'url': pdf_url
@@ -426,53 +397,108 @@ class PdfxXBlock(XBlock):
         # If marker_strokes is empty or invalid, initialize it as an empty dict
         if not marker_strokes_data or not isinstance(marker_strokes_data, dict):
             marker_strokes_data = {}
-        else:
-            # Log some info about the marker strokes for debugging
-            stroke_count = 0
-            page_count = len([k for k in marker_strokes_data.keys() if not k.startswith('_')])
 
-            for page_key, strokes in marker_strokes_data.items():
-                if not page_key.startswith('_') and isinstance(strokes, list):
-                    stroke_count += len(strokes)
+        # Get text annotation data
+        text_annotations_data = self.text_annotations
+        if not text_annotations_data or not isinstance(text_annotations_data, dict):
+            text_annotations_data = {}
 
-            log.info(f"[PDFX SCRIBBLE] Loading marker strokes for user {user_info['id']}: {page_count} pages, {stroke_count} strokes")
+        # Get shape annotation data
+        shape_annotations_data = self.shape_annotations
+        if not shape_annotations_data or not isinstance(shape_annotations_data, dict):
+            shape_annotations_data = {}
 
-        # Ensure it's a JSON-serializable dictionary
-        try:
-            json.dumps(marker_strokes_data)
-        except (TypeError, ValueError):
-            log.warning(f"[PDFX SCRIBBLE] Marker strokes for block {self.block_id} is not JSON serializable, resetting to empty dict")
-            marker_strokes_data = {}
-
-        # Log the marker strokes data size for debugging
-        marker_size = len(json.dumps(marker_strokes_data))
-        log.info(f"[PDFX SCRIBBLE] Marker strokes data size for block {self.block_id}: {marker_size} bytes")
+        # Get note annotation data
+        note_annotations_data = self.note_annotations
+        if not note_annotations_data or not isinstance(note_annotations_data, dict):
+            note_annotations_data = {}
 
         # Get the handler URL for saving annotations
         save_url = self.runtime.handler_url(self, 'save_annotations')
 
-        # Initialize the PDF viewer with parameters
-        frag.initialize_js('PdfxXBlock', {
-            'pdfUrl': pdf_url,
-            'allowDownload': self.allow_download,
-            'allowAnnotation': self.allow_annotation,
-            'savedAnnotations': self.annotations,
-            'drawingStrokes': self.drawing_strokes,
-            'highlights': self.highlights,
-            'userHighlights': highlights_to_display,
-            'markerStrokes': marker_strokes_data,
-            'currentPage': self.current_page,
-            'blockId': self.block_id,
-            'brightness': self.brightness,
-            'isGrayscale': self.is_grayscale,
-            'userId': user_info['id'],
-            'username': user_info['username'],
-            'email': user_info['email'],
-            'courseId': course_info['id'],
-            'documentInfo': document_info,
-            'isStaff': is_staff,
-            'handlerUrl': save_url
-        })
+        # Render template with context
+        template_context = {
+            'block': self,
+            'block_id': self.block_id,
+            'pdf_url': pdf_url,
+            'pdf_file_name': pdf_file_name,
+            'allow_download': self.allow_download,
+            'allow_annotation': self.allow_annotation,
+            'user_id': user_info.get('id', 'anonymous'),
+            'username': user_info.get('username', ''),
+            'email': user_info.get('email', ''),
+            'current_page': self.current_page or 1,
+            'brightness': self.brightness or 100,
+            'is_grayscale': self.is_grayscale or False,
+            'is_staff': is_staff,
+            'course_id': course_info.get('id', ''),
+            'handler_url': save_url,
+        }
+
+        rendered_html = template.render(**template_context)
+        frag = Fragment(rendered_html)
+
+        # Add CSS
+        frag.add_css(self.resource_string("static/css/pdf_viewer.min.css"))
+        frag.add_css(self.resource_string("static/css/pdfx.css"))
+        frag.add_css_url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css')
+        # Add PDF.js viewer CSS
+        frag.add_css_url('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf_viewer.min.css')
+
+        # Add direct PDF embed as fallback - hidden by default
+        pdf_embed = f"""
+        <div class="pdf-fallback" style="display:none;">
+            <p>If the PDF viewer doesn't load properly, you can <a href="{pdf_url}" target="_blank">open the PDF directly</a>.</p>
+            <iframe src="{pdf_url}" width="100%" height="500px" style="border:none;"></iframe>
+        </div>
+        """
+        frag.add_resource(pdf_embed, mimetype='text/html')
+
+        # Add JS - instead of directly adding the MJS file, create a script element with type="module"
+        log.info(f"Setting up PDF.js as a module in the student view fragment")
+        frag.add_javascript("""
+            // Create a script element for loading PDF.js as a module
+            var pdfJsScript = document.createElement('script');
+            pdfJsScript.type = 'module';
+            pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs';
+            pdfJsScript.onload = function() {
+                console.log("PDF.js module loaded successfully in student view");
+                // Set up worker with matching version
+                if (window.pdfjsLib) {
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
+                }
+            };
+            document.head.appendChild(pdfJsScript);
+
+            // Create a stub for PDF.js to prevent errors while loading
+            if (typeof pdfjsLib === 'undefined') {
+                window.pdfjsLib = {
+                    version: 'stub',
+                    GlobalWorkerOptions: {
+                        workerSrc: ''
+                    }
+                };
+                console.log("Created pdfjsLib stub via Python in student view while module loads");
+            }
+        """)
+
+        # Add other necessary JS files
+        frag.add_javascript(self.resource_string("static/vendor/fabric.min.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_highlight.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_tools_common.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_storage.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_drawing.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_navigation.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_debug_utils.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_text.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_shape.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_note.js"))
+
+        # PDF.js base scripts
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_init.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble_init.js"))
 
         # Add a data element with the same data to the DOM for direct access by JavaScript
         data_html = f"""
@@ -482,15 +508,45 @@ class PdfxXBlock(XBlock):
             data-course-id="{course_info['id']}"
             data-handler-url="{save_url}"
             data-marker-strokes='{json.dumps(marker_strokes_data)}'
+            data-text-annotations='{json.dumps(text_annotations_data)}'
+            data-shape-annotations='{json.dumps(shape_annotations_data)}'
+            data-note-annotations='{json.dumps(note_annotations_data)}'
             data-document-info='{json.dumps(document_info)}'
             style="display:none;">
         </div>
         """
         frag.add_resource(data_html, mimetype='text/html')
 
+        # Initialize JS with context
+        frag.initialize_js('PdfxXBlock', {
+            'pdfUrl': pdf_url,
+            'blockId': self.block_id,
+            'allowDownload': self.allow_download,
+            'allowAnnotation': self.allow_annotation,
+            'savedAnnotations': self.annotations,
+            'drawingStrokes': self.drawing_strokes,
+            'highlights': self.highlights,
+            'userHighlights': highlights_to_display,
+            'markerStrokes': marker_strokes_data,
+            'textAnnotations': text_annotations_data,
+            'shapeAnnotations': shape_annotations_data,
+            'noteAnnotations': note_annotations_data,
+            'userId': user_info.get('id', 'anonymous'),
+            'username': user_info.get('username', ''),
+            'email': user_info.get('email', ''),
+            'currentPage': self.current_page or 1,
+            'brightness': self.brightness or 100,
+            'isGrayscale': self.is_grayscale or False,
+            'courseId': course_info.get('id', ''),
+            'documentInfo': document_info,
+            'isStaff': is_staff,
+            'handlerUrl': save_url
+        })
+
         return frag
 
-    def studio_view(self, context=None):
+    def studio_view(self, context):
+        log.info(f"Studio view called--------------------------------->")
         """
         Create a fragment used to display the edit view in the Studio.
         """
@@ -506,14 +562,47 @@ class PdfxXBlock(XBlock):
         frag = Fragment(rendered_html)
 
         # Add CSS
+        frag.add_css(self.resource_string("static/css/pdf_viewer.min.css"))
         frag.add_css(self.resource_string("static/css/pdfx.css"))
         frag.add_css(self.resource_string("static/css/pdfx_edit.css"))
+        # Add PDF.js viewer CSS
+        frag.add_css_url('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf_viewer.min.css')
 
-        # Add JS
+        # Add JS - instead of directly adding the MJS file, create a script element with type="module"
+        log.info(f"Setting up PDF.js as a module in the fragment")
+        frag.add_javascript("""
+            // Create a script element for loading PDF.js as a module
+            var pdfJsScript = document.createElement('script');
+            pdfJsScript.type = 'module';
+            pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs';
+            pdfJsScript.onload = function() {
+                console.log("PDF.js module loaded successfully");
+                // Set up worker with matching version
+                if (window.pdfjsLib) {
+                    window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
+                }
+            };
+            document.head.appendChild(pdfJsScript);
+
+            // Create a stub for PDF.js to prevent errors in edit view
+            if (typeof pdfjsLib === 'undefined') {
+                window.pdfjsLib = {
+                    version: 'stub',
+                    GlobalWorkerOptions: {
+                        workerSrc: ''
+                    }
+                };
+                console.log("Created pdfjsLib stub via Python while module loads");
+            }
+        """)
+
+        frag.add_javascript(self.resource_string("static/vendor/fabric.min.js"))
+
+        # Add the edit JS
         frag.add_javascript(self.resource_string("static/js/src/pdfx_edit.js"))
 
         # Initialize the XBlock
-        frag.initialize_js('PdfxXBlockEdit')
+        frag.initialize_js('PdfxXBlock')
 
         return frag
 
@@ -920,6 +1009,63 @@ class PdfxXBlock(XBlock):
                         self.marker_strokes = {}
                         log.error(f"[PDFX DEBUG] Error converting markerStrokes: {str(conversion_error)}", exc_info=True)
 
+            # Update text annotations
+            if 'textAnnotations' in data:
+                text_stats = {
+                    'is_dict': isinstance(data['textAnnotations'], dict),
+                    'type': str(type(data['textAnnotations'])),
+                }
+
+                log.info(f"[PDFX DEBUG] Received text annotations data: {json.dumps(text_stats)}")
+
+                if text_stats['is_dict']:
+                    # Save the text annotations
+                    self.text_annotations = data['textAnnotations']
+                    log.info(f"[PDFX TEXT] Updated text annotations")
+
+                    # Add timestamp for tracking
+                    self.text_annotations['_last_saved'] = datetime.utcnow().isoformat()
+                else:
+                    log.warning(f"[PDFX DEBUG] Received invalid textAnnotations: {json.dumps(text_stats)}")
+
+            # Update shape annotations
+            if 'shapeAnnotations' in data:
+                shape_stats = {
+                    'is_dict': isinstance(data['shapeAnnotations'], dict),
+                    'type': str(type(data['shapeAnnotations'])),
+                }
+
+                log.info(f"[PDFX DEBUG] Received shape annotations data: {json.dumps(shape_stats)}")
+
+                if shape_stats['is_dict']:
+                    # Save the shape annotations
+                    self.shape_annotations = data['shapeAnnotations']
+                    log.info(f"[PDFX SHAPE] Updated shape annotations")
+
+                    # Add timestamp for tracking
+                    self.shape_annotations['_last_saved'] = datetime.utcnow().isoformat()
+                else:
+                    log.warning(f"[PDFX DEBUG] Received invalid shapeAnnotations: {json.dumps(shape_stats)}")
+
+            # Update note annotations
+            if 'noteAnnotations' in data:
+                note_stats = {
+                    'is_dict': isinstance(data['noteAnnotations'], dict),
+                    'type': str(type(data['noteAnnotations'])),
+                }
+
+                log.info(f"[PDFX DEBUG] Received note annotations data: {json.dumps(note_stats)}")
+
+                if note_stats['is_dict']:
+                    # Save the note annotations
+                    self.note_annotations = data['noteAnnotations']
+                    log.info(f"[PDFX NOTE] Updated note annotations")
+
+                    # Add timestamp for tracking
+                    self.note_annotations['_last_saved'] = datetime.utcnow().isoformat()
+                else:
+                    log.warning(f"[PDFX DEBUG] Received invalid noteAnnotations: {json.dumps(note_stats)}")
+
             log.info(f"[PDFX DEBUG] Successfully saved all annotations for block {self.block_id}, user {self.scope_ids.user_id}")
             return {'result': 'success', 'saved_at': datetime.utcnow().isoformat()}
         except Exception as e:
@@ -929,16 +1075,28 @@ class PdfxXBlock(XBlock):
     @XBlock.json_handler
     def get_user_highlights(self, data, suffix=''):
         """
-        Retrieve user highlights from XBlock storage.
+        Retrieve user highlights and annotations from XBlock storage.
         """
         try:
             # Get user ID
             user_id = str(self.scope_ids.user_id)
-            log.debug(f"Getting highlights for user {user_id}")
+            log.debug(f"Getting highlights and annotations for user {user_id}")
 
             # Get user highlights
             highlights = self.retrieve_user_highlights(user_id)
             log.debug(f"Found {sum(len(page_highlights) for page_highlights in highlights.values() if isinstance(page_highlights, list))} highlights for user {user_id}")
+
+            # Get marker strokes
+            marker_strokes = self.marker_strokes if hasattr(self, 'marker_strokes') else {}
+
+            # Get text annotations
+            text_annotations = self.text_annotations if hasattr(self, 'text_annotations') else {}
+
+            # Get shape annotations
+            shape_annotations = self.shape_annotations if hasattr(self, 'shape_annotations') else {}
+
+            # Get note annotations
+            note_annotations = self.note_annotations if hasattr(self, 'note_annotations') else {}
 
             # If staff, also add staff highlights
             if self.is_staff_user() and data.get('includeAll'):
@@ -947,19 +1105,31 @@ class PdfxXBlock(XBlock):
                 return {
                     'result': 'success',
                     'highlights': highlights,
-                    'allHighlights': all_highlights
+                    'allHighlights': all_highlights,
+                    'markerStrokes': marker_strokes,
+                    'textAnnotations': text_annotations,
+                    'shapeAnnotations': shape_annotations,
+                    'noteAnnotations': note_annotations
                 }
 
             return {
                 'result': 'success',
-                'highlights': highlights
+                'highlights': highlights,
+                'markerStrokes': marker_strokes,
+                'textAnnotations': text_annotations,
+                'shapeAnnotations': shape_annotations,
+                'noteAnnotations': note_annotations
             }
         except Exception as e:
-            log.error(f"Error retrieving user highlights: {str(e)}", exc_info=True)
+            log.error(f"Error retrieving user highlights and annotations: {str(e)}", exc_info=True)
             return {
                 'result': 'error',
                 'message': str(e),
-                'highlights': self.user_highlights  # Fallback to user state
+                'highlights': self.user_highlights,  # Fallback to user state
+                'markerStrokes': self.marker_strokes if hasattr(self, 'marker_strokes') else {},
+                'textAnnotations': self.text_annotations if hasattr(self, 'text_annotations') else {},
+                'shapeAnnotations': self.shape_annotations if hasattr(self, 'shape_annotations') else {},
+                'noteAnnotations': self.note_annotations if hasattr(self, 'note_annotations') else {}
             }
 
     @XBlock.json_handler
@@ -1012,7 +1182,7 @@ class PdfxXBlock(XBlock):
             log.error(f"Error serving local PDF.js worker, redirecting to CDN: {str(e)}")
 
             # Fallback to CDN if local file can't be served
-            worker_url = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js'
+            worker_url = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs'
             response = Response(status=302, location=worker_url)
 
             # Add cache headers to improve performance

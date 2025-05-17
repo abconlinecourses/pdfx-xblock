@@ -1,54 +1,103 @@
 <!-- PDF Viewer XBlock -->
+
+
 <!-- Add fabric.js library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
-<!-- Early initialization script -->
+<!-- Early initialization script - improved to NOT automatically activate any tool -->
 <script>
-// Early auto-init script
+// Early init script - tool neutral
 (function() {
     // Create a function to run as early as possible
     function earlyInit() {
         console.log('EARLY INIT: Starting at ' + new Date().toISOString());
 
-        // Try in 1 second
-        setTimeout(function() {
-            console.log('EARLY INIT: First attempt');
-            if (typeof window.pdfBlockAutoFix === 'function') {
-                window.pdfBlockAutoFix();
-            } else {
-                console.log('EARLY INIT: pdfBlockAutoFix not available yet');
-            }
-        }, 1000);
+        // Wait for DOM content to load
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('EARLY INIT: DOM content loaded at ' + new Date().toISOString());
 
-        // Try in 3 seconds
-        setTimeout(function() {
-            console.log('EARLY INIT: Second attempt');
-            if (typeof window.pdfBlockAutoFix === 'function') {
-                window.pdfBlockAutoFix();
-            } else if (window['directMarkerFix_' + '${block.block_id}']) {
-                window['directMarkerFix_' + '${block.block_id}']();
-            } else {
-                console.log('EARLY INIT: No fix function available');
-            }
-        }, 3000);
+            // Initialize tools manager when available
+            var initInterval = setInterval(function() {
+                if (typeof PdfxToolsCommon !== 'undefined') {
+                    console.log('EARLY INIT: PdfxToolsCommon found, stopping interval');
+                    clearInterval(initInterval);
+
+                    // IMPORTANT: Do NOT activate any specific tool
+                    // Let the tools manager handle tool selection
+                }
+            }, 500);
+        });
     }
 
-    // Add to document ready event
-    if (document.readyState === 'loading') {
-        document.addEventListener('DOMContentLoaded', earlyInit);
-    } else {
-        // DOM already loaded, run now
-        earlyInit();
-    }
+    // Run early init immediately
+    earlyInit();
 })();
 </script>
 
-<!-- Emergency debug functions -->
+<!-- Fix for marker tool initialization issues - integrated with tool manager -->
+<script>
+// Improved marker initialization function that works with the tools manager
+function directMarkerFix(blockId) {
+    console.log('DIRECT MARKER FIX: Called for block ' + blockId + ' at ' + new Date().toISOString());
+
+    // Look for the tools manager
+    var toolsManager = window['toolsManager_' + blockId];
+
+    if (toolsManager) {
+        console.log('DIRECT MARKER FIX: Using tools manager');
+
+        // IMPORTANT: Do NOT automatically activate marker tool
+        // Instead, just verify canvas initialization
+        var drawContainer = document.getElementById('draw-container-' + blockId);
+        if (drawContainer && !drawContainer._fabricCanvas) {
+            console.log('DIRECT MARKER FIX: Initializing fabric canvas only');
+
+            // Just initialize canvas without activating the tool
+            var pdfContainer = document.getElementById('pdf-container-' + blockId);
+            if (pdfContainer) {
+                var canvas = document.createElement('canvas');
+                canvas.id = 'drawing-canvas-' + blockId;
+                canvas.width = pdfContainer.offsetWidth || 800;
+                canvas.height = pdfContainer.offsetHeight || 600;
+
+                drawContainer.innerHTML = '';
+                drawContainer.appendChild(canvas);
+
+                try {
+                    var fabricCanvas = new fabric.Canvas(canvas, {
+                        isDrawingMode: false,
+                        selection: false
+                    });
+
+                    drawContainer._fabricCanvas = fabricCanvas;
+                    window['fabricCanvas_' + blockId] = fabricCanvas;
+
+                    console.log('DIRECT MARKER FIX: Canvas initialized successfully');
+                } catch (error) {
+                    console.error('DIRECT MARKER FIX: Error creating canvas: ' + error.message);
+                }
+            }
+        }
+
+        return true;
+    } else {
+        console.log('DIRECT MARKER FIX: Tools manager not available yet, will be handled by regular initialization');
+        return false;
+    }
+}
+
+// Store function globally per block for potential use
+window.directMarkerFix = directMarkerFix;
+</script>
+
+<!-- Emergency debug functions - modified to not activate marker by default -->
 <script>
 // Emergency debug functions
 window.emergencyFix = function(blockId) {
-    console.log('EMERGENCY FIX RUNNING for block: ' + blockId);
+    console.log('EMERGENCY FIX disabled for block: ' + blockId);
 
+    // The following code is commented out to prevent auto-activation
+    /*
     // Force marker activation
     var markerButton = document.getElementById('marker-tool-' + blockId);
     if (markerButton) {
@@ -78,39 +127,21 @@ window.emergencyFix = function(blockId) {
         upperCanvas.style.cursor = 'crosshair';
         console.log('Upper canvas pointer events set to auto');
     }
+    */
 
-    return 'Emergency fix applied';
+    return 'Emergency fix disabled - marker tool not activated';
 };
 
-// Add DIRECTLY to document level event handlers
+// Add DIRECTLY to document level event handlers - but don't activate marker tool
 document.addEventListener('DOMContentLoaded', function() {
-    // Add click event to marker button for extra reliability
-    var markerButtons = document.querySelectorAll('[id^="marker-tool-"]');
-    console.log('Found ' + markerButtons.length + ' marker buttons on DOMContentLoaded');
-
-    markerButtons.forEach(function(btn) {
-        console.log('Adding direct click handler to ' + btn.id);
-        btn.addEventListener('click', function(e) {
-            console.log('DIRECT CLICK on marker button: ' + this.id);
-
-            // Add active class
-            this.classList.add('active');
-
-            // Get block ID
-            var blockId = this.id.replace('marker-tool-', '');
-
-            // Force draw container to have pointer events
-            var drawContainer = document.getElementById('draw-container-' + blockId);
-            if (drawContainer) {
-                drawContainer.style.pointerEvents = 'auto';
-                drawContainer.classList.add('draw-mode');
-            }
-        });
-    });
+    // Log but don't add auto-activation
+    console.log('DOMContentLoaded - auto marker activation is disabled');
 });
 </script>
 
-<div class="pdfx_block" id="pdfx-block-${block.block_id}">
+<div class="pdfx_block" id="pdfx-block-${block.block_id}"
+     data-course-id="${block.course_id}"
+     data-id="${block.block_id}">
     <h2 class="pdf-title">${block.display_name}</h2>
 
     <!-- PDF Viewer and Tools -->
@@ -118,7 +149,7 @@ document.addEventListener('DOMContentLoaded', function() {
         <!-- Left Sidebar -->
         <div class="sidebar">
             <div class="tool-section">
-                <button class="tool-btn" id="marker-tool-${block.block_id}" title="Scribble" onclick="this.classList.add('active'); document.getElementById('draw-container-${block.block_id}').style.pointerEvents='auto'; document.getElementById('draw-container-${block.block_id}').classList.add('draw-mode');">
+                <button class="tool-btn" id="marker-tool-${block.block_id}" title="Scribble">
                     <i class="fas fa-pen"></i>
                 </button>
                 <button class="tool-btn" id="highlight-tool-${block.block_id}" title="Highlighter">
@@ -127,19 +158,12 @@ document.addEventListener('DOMContentLoaded', function() {
                 <button class="tool-btn" id="text-tool-${block.block_id}" title="Text">
                     <i class="fas fa-font"></i>
                 </button>
-            </div>
-            <div class="tool-section">
                 <button class="tool-btn" id="shape-tool-${block.block_id}" title="Shape">
                     <i class="fas fa-shapes"></i>
                 </button>
                 <button class="tool-btn" id="note-tool-${block.block_id}" title="Note">
                     <i class="fas fa-sticky-note"></i>
                 </button>
-                <button class="tool-btn" id="comment-tool-${block.block_id}" title="Comment">
-                    <i class="fas fa-comment"></i>
-                </button>
-            </div>
-            <div class="tool-section">
                 <button class="tool-btn" id="select-tool-${block.block_id}" title="Select">
                     <i class="fas fa-mouse-pointer"></i>
                 </button>
@@ -147,7 +171,6 @@ document.addEventListener('DOMContentLoaded', function() {
                     <i class="fas fa-eraser"></i>
                 </button>
             </div>
-            <div class="horizontal-separator"></div>
             <button class="tool-btn" id="undo-btn-${block.block_id}" title="Undo">
                 <i class="fas fa-undo"></i>
             </button>
@@ -266,15 +289,36 @@ document.addEventListener('DOMContentLoaded', function() {
             <button id="direct-download-${block.block_id}" class="debug-btn direct-download">Download PDF</button>
             <button id="check-canvas-${block.block_id}" class="debug-btn check-canvas">Check Canvas</button>
         </div>
+
+        <!-- IndexedDB Storage Management -->
+        <div class="storage-management" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
+            <h5>IndexedDB Storage Management</h5>
+            <div id="storage-stats-${block.block_id}" style="margin-bottom: 10px; font-size: 12px;">
+                Checking storage status...
+            </div>
+            <div>
+                <button id="check-storage-${block.block_id}" class="debug-btn check-storage">Check Storage Status</button>
+                <button id="refresh-pdf-${block.block_id}" class="debug-btn refresh-pdf" title="Force refresh current PDF from server">Force Refresh PDF</button>
+                <button id="clear-current-pdf-${block.block_id}" class="debug-btn clear-storage">Clear Current PDF Only</button>
+                <button id="clear-pdf-storage-${block.block_id}" class="debug-btn clear-storage">Clear All PDFs</button>
+            </div>
+        </div>
     </div>
 
-    <!-- Direct fix script that will definitely work -->
+    <!-- Direct fix script - modified to not activate marker by default -->
     <script>
-    // Make 100% sure the fix function is available
+    // Make sure the fix function is available but doesn't activate marker by default
     (function() {
         // Create direct fix function in global scope that uses string concatenation instead of template literals
+        // but modified to not activate marker by default
         window['directMarkerFix_' + '${block.block_id}'] = function() {
-            console.log('Applying direct marker fix for ' + '${block.block_id}');
+            console.log('Auto marker fix is DISABLED for ' + '${block.block_id}');
+
+            // Return without activating marker
+            return false;
+
+            // The original code is commented out below
+            /*
             try {
                 // Get the drawing container
                 var drawContainer = document.getElementById('draw-container-' + '${block.block_id}');
@@ -337,27 +381,35 @@ document.addEventListener('DOMContentLoaded', function() {
             } catch (err) {
                 console.error('Error applying fix:', err);
             }
+            */
         };
 
-        // Attach to button click
+        // Attach to button click but don't auto-run
         document.addEventListener('DOMContentLoaded', function() {
             var fixButton = document.getElementById('fix-marker-' + '${block.block_id}');
             if (fixButton) {
-                fixButton.addEventListener('click', window['directMarkerFix_' + '${block.block_id}']);
+                fixButton.addEventListener('click', function() {
+                    console.log('Fix button clicked but auto-activation is disabled');
+                    // Do not call window['directMarkerFix_' + '${block.block_id}']();
+                });
             }
 
-            // Automatically run the fix when the page loads
+            // Do NOT auto-run the fix - commented out
+            /*
             setTimeout(function() {
                 console.log('Auto-running marker fix...');
                 window['directMarkerFix_' + '${block.block_id}']();
             }, 1000);
+            */
         });
 
-        // Also try to run immediately in case DOM is already loaded
+        // Do NOT try to run immediately - commented out
+        /*
         setTimeout(function() {
             console.log('Immediate marker fix attempt...');
             window['directMarkerFix_' + '${block.block_id}']();
         }, 500);
+        */
     })();
     </script>
 </div>

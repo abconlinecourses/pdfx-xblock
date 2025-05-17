@@ -19,7 +19,7 @@ To add a PDF XBlock to your course:
 1. In Studio, navigate to the unit where you want to add the PDF.
 2. Click the "Add New Component" button.
 3. Select "Advanced" from the component types.
-4. Select "PDF Viewer" from the list of XBlocks.
+4. Select "PDFXpert XBlock" from the list of XBlocks.
 5. Click "Edit" on the newly added component.
 6. Enter the display name and URL of your PDF.
 7. Configure additional settings as desired.
@@ -31,7 +31,7 @@ The PDF XBlock has several configuration options:
 
 | Setting | Description | Default |
 |---------|-------------|---------|
-| Display Name | The name displayed to students | "PDF Viewer" |
+| Display Name | The name displayed to students | "PDFXpert XBlock" |
 | PDF URL | URL or path to the PDF file | "" |
 | Height | Height of the viewer (in pixels) | 800 |
 | Show Toolbar | Shows/hides the toolbar | True |

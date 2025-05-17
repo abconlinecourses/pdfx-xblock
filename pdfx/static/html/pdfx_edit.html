@@ -1,5 +1,5 @@
 <!-- PDF Viewer XBlock Studio Edit View -->
-<link rel="stylesheet" type="text/css" href="../css/pdfx_edit.css"/>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 
     <div class="wrapper-comp-settings is-active editor-with-buttons" id="settings-tab">
         <form id="pdf-form">
@@ -25,6 +25,7 @@
 
                         <div class="tab-content" id="upload-tab">
                             <div class="file-upload-wrapper" id="drop-zone">
+                                <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
                                 <input type="file" id="pdf-file" accept="application/pdf" style="display: none;">
                                 <button type="button" class="button action-primary" id="upload-trigger">Choose PDF File</button>
                                 <div class="file-info" id="file-info">
@@ -40,6 +41,9 @@
 
                         <div class="tab-content" id="url-tab" style="display: none;">
                             <input class="input setting-input" name="pdf_url" id="pdf-url" value="${block.pdf_url}" type="text" placeholder="Enter PDF URL" />
+                            <div class="url-help-text">
+                                <i class="fas fa-info-circle"></i> Enter a full URL to an external PDF (e.g., https://example.com/document.pdf)
+                            </div>
                         </div>
                     </div>
                     <span class="tip setting-help">Upload a PDF file or provide a URL to an external PDF</span>
@@ -80,12 +84,25 @@
             <div class="xblock-actions">
                 <ul>
                     <li class="action-item">
-                        <input id="pdf-submit-options" type="submit" class="button action-primary save-button" value="Save" />
+                        <button id="pdf-submit-options" type="submit" class="button action-primary save-button">Save</button>
                     </li>
                     <li class="action-item">
-                        <a href="#" class="button cancel-button">Cancel</a>
+                        <button type="button" class="button cancel-button">Cancel</button>
                     </li>
                 </ul>
             </div>
         </form>
     </div>
+
+<script>
+// Add this script to fix potential font awesome loading issues
+(function() {
+    // Check if Font Awesome is loaded properly
+    if (typeof FontAwesome === 'undefined') {
+        var cssLink = document.createElement('link');
+        cssLink.rel = 'stylesheet';
+        cssLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css';
+        document.head.appendChild(cssLink);
+    }
+})();
+</script>

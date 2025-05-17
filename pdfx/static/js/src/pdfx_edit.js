@@ -2,6 +2,18 @@
 function PdfxXBlockEdit(runtime, element) {
     'use strict';
 
+    // Create pdfjsLib stub early to prevent errors
+    // We don't actually need PDF.js in the edit view
+    if (typeof pdfjsLib === 'undefined') {
+        window.pdfjsLib = {
+            version: 'stub',
+            GlobalWorkerOptions: {
+                workerSrc: ''
+            }
+        };
+        console.log("Created pdfjsLib stub for edit view");
+    }
+
     var $element = $(element);
 
     // Find form elements
@@ -16,11 +28,101 @@ function PdfxXBlockEdit(runtime, element) {
     var $tabButtons = $element.find('[data-tab]');
     var $tabContents = $element.find('.tab-content');
     var $dropZone = $element.find('#drop-zone');
+    var $editorWrapper = $element.find('.editor-with-buttons');
+    var $xblockActions = $element.find('.xblock-actions');
+    var $modalWindow = $(element).closest('.modal-window');
+    var $modalContent = $modalWindow.find('.modal-content');
 
-    // Set upload as the default active tab
-    $tabButtons.filter('[data-tab="upload"]').addClass('active');
-    $element.find('#upload-tab').show();
-    $element.find('#url-tab').hide();
+    // Adjust modal sizing
+    function adjustModalSizing() {
+        // Get the window dimensions
+        var windowHeight = $(window).height();
+        var windowWidth = $(window).width();
+
+        // Calculate appropriate modal size
+        var modalHeight = Math.min(windowHeight * 0.9, 800);
+        var modalWidth = Math.min(windowWidth * 0.8, 1000);
+
+        // Apply to modal
+        if ($modalWindow.length) {
+            $modalWindow.css({
+                'max-height': modalHeight + 'px',
+                'height': modalHeight + 'px',
+                'max-width': modalWidth + 'px',
+                'width': modalWidth + 'px'
+            });
+
+            $modalContent.css({
+                'max-height': (modalHeight - 50) + 'px !important', // Account for header
+                'overflow': 'auto'
+            });
+        }
+
+        // Fix editor wrapper
+        $editorWrapper.css({
+            'max-height': 'none',
+            'padding-bottom': '80px' // Space for fixed buttons
+        });
+
+        // Fix the xblock-actions container to stay within bounds
+        $xblockActions.css({
+            'position': 'fixed',
+            'bottom': '0',
+            'left': '0',
+            'right': '0',
+            'background-color': '#fff',
+            'z-index': '10000',
+            'margin': '0',
+            'padding': '15px 20px',
+            'box-shadow': '0 -2px 10px rgba(0,0,0,0.1)'
+        });
+    }
+
+    // Enhance upload area visual feedback
+    function enhanceUploadArea() {
+        // Make the upload area more visually appealing
+        var $fileUploadWrapper = $element.find('.file-upload-wrapper');
+
+        // Add visual cues
+        $fileUploadWrapper.append('<div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>');
+
+        // Add Font Awesome if it doesn't exist
+        if ($('link[href*="font-awesome"]').length === 0) {
+            $('head').append('<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">');
+        }
+
+        // Style the upload icon
+        $('<style>', {
+            text: `
+                .upload-icon {
+                    font-size: 48px;
+                    color: #0075b4;
+                    margin-bottom: 15px;
+                }
+                .filename {
+                    word-break: break-all;
+                }
+            `
+        }).appendTo('head');
+    }
+
+    // Initialize the form
+    function initializeForm() {
+        // Call adjustments
+        adjustModalSizing();
+        enhanceUploadArea();
+
+        // Call on resize event
+        $(window).on('resize', adjustModalSizing);
+
+        // Set upload as the default active tab
+        $tabButtons.filter('[data-tab="upload"]').addClass('active');
+        $element.find('#upload-tab').show();
+        $element.find('#url-tab').hide();
+    }
+
+    // Call initialization
+    initializeForm();
 
     // Handle tab switching
     $tabButtons.on('click', function(e) {
@@ -114,6 +216,12 @@ function PdfxXBlockEdit(runtime, element) {
                         $fileInfo.append('<span class="filename">' + response.filename + '</span>');
                     }
 
+                    // Show success message
+                    runtime.notify('success', {
+                        title: 'Upload successful',
+                        message: 'PDF file uploaded successfully.'
+                    });
+
                     $pdfUrl.val('');  // Clear URL field
                 } else {
                     runtime.notify('error', {msg: response.message || 'Upload failed'});
@@ -129,16 +237,43 @@ function PdfxXBlockEdit(runtime, element) {
         });
     });
 
+    // Validate form before submission
+    function validateForm() {
+        var valid = true;
+        var errorMessage = '';
+
+        // Check if at least one source is provided
+        var hasPdfFile = $fileInfo.find('.filename').length > 0 && $fileInfo.find('.filename').is(':visible');
+        var hasPdfUrl = $pdfUrl.val().trim() !== '';
+
+        if (!hasPdfFile && !hasPdfUrl) {
+            errorMessage = 'Please upload a PDF file or enter a PDF URL.';
+            valid = false;
+        }
+
+        if (!valid) {
+            runtime.notify('error', {msg: errorMessage});
+        }
+
+        return valid;
+    }
+
     // Handle form submission
     $form.on('submit', function(e) {
         e.preventDefault();
-        saveSettings();
+
+        if (validateForm()) {
+            saveSettings();
+        }
     });
 
     // Handle save button click
     $element.find('#pdf-submit-options').on('click', function(e) {
         e.preventDefault();
-        saveSettings();
+
+        if (validateForm()) {
+            saveSettings();
+        }
     });
 
     // Handle cancel button click

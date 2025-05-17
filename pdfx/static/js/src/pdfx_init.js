@@ -4,6 +4,448 @@
  * This module initializes the PDF.js library with proper configuration.
  * It must be loaded before any other PDF.js-dependent modules.
  */
+
+// Global tool activation/deactivation functions
+window.activateToolByName = function(toolName, blockId) {
+    console.log(`[TOOL] Activating tool: ${toolName} for block ${blockId}`);
+
+    // Handle specific tools first
+    if (toolName === 'marker') {
+        var scribbleInstance = window[`scribbleInstance_${blockId}`];
+        if (scribbleInstance && typeof scribbleInstance.enable === 'function') {
+            scribbleInstance.enable();
+            return;
+        } else {
+            console.log(`[TOOL] Scribble instance not found for ${blockId}, attempting to initialize`);
+            // Try to re-initialize the scribble instance
+            if (typeof window.initScribbleInstance === 'function') {
+                window.initScribbleInstance(blockId, {});
+                // Try again with the newly created instance
+                scribbleInstance = window[`scribbleInstance_${blockId}`];
+                if (scribbleInstance && typeof scribbleInstance.enable === 'function') {
+                    scribbleInstance.enable();
+                    return;
+                }
+            } else {
+                // Manual fallback if initScribbleInstance is not available
+                var block = document.getElementById(`pdfx-block-${blockId}`);
+                var fabricCanvas = window[`fabricCanvas_${blockId}`];
+
+                if (fabricCanvas) {
+                    // Configure canvas for marker mode
+                    fabricCanvas.isDrawingMode = true;
+
+                    if (fabricCanvas.freeDrawingBrush) {
+                        var colorInput = document.getElementById(`color-input-${blockId}`);
+                        fabricCanvas.freeDrawingBrush.color = colorInput ? colorInput.value : '#FF0000';
+                        fabricCanvas.freeDrawingBrush.width = 5;
+                        fabricCanvas.freeDrawingBrush.scribbleMode = true;
+                        fabricCanvas.freeDrawingBrush.markerMode = true;
+                    }
+
+                    if (fabricCanvas.upperCanvasEl) {
+                        fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                        fabricCanvas.upperCanvasEl.style.cursor = 'crosshair';
+                    }
+
+                    // Enable draw container
+                    var drawContainer = document.getElementById(`draw-container-${blockId}`);
+                    if (drawContainer) {
+                        drawContainer.style.pointerEvents = 'auto';
+                        drawContainer.classList.add('draw-mode');
+                        drawContainer.style.cursor = 'crosshair';
+                        drawContainer.setAttribute('data-current-tool', 'marker');
+                    }
+
+                    console.log(`[TOOL] Manual marker activation for ${blockId} complete`);
+                    return;
+                }
+            }
+        }
+    } else if (toolName === 'highlight') {
+        var highlightInstance = window[`highlightInstance_${blockId}`];
+
+        // Better handling for highlight tool initialization
+        try {
+            // Check if the highlight instance exists
+            if (!highlightInstance) {
+                console.error(`[TOOL] Highlight instance not found for ${blockId}`);
+                console.log(`[TOOL] Available global variables:`, Object.keys(window).filter(k => k.includes(blockId)));
+                return;
+            }
+
+            if (typeof highlightInstance.enableTextHighlighting !== 'function') {
+                console.error(`[TOOL] Highlight instance exists but is missing enableTextHighlighting method for ${blockId}`);
+                console.log(`[TOOL] Highlight instance methods:`, Object.keys(highlightInstance).filter(k => typeof highlightInstance[k] === 'function'));
+                return;
+            }
+
+            console.log(`[TOOL] Found highlight instance for ${blockId}, enabling text highlighting`);
+
+            // Make sure text layer is visible and prepared
+            var textLayer = document.getElementById(`text-layer-${blockId}`);
+            if (textLayer) {
+                // Ensure text layer is interactive
+                textLayer.style.pointerEvents = 'auto';
+                textLayer.style.cursor = 'text';
+
+                console.log(`[TOOL] Prepared text layer for highlighting`);
+            }
+
+            // Now enable highlighting
+            var result = highlightInstance.enableTextHighlighting();
+
+            if (result === false) {
+                console.error(`[TOOL] Failed to enable text highlighting for ${blockId}`);
+                // Try to repair text layer if highlighting fails
+                if (textLayer) {
+                    console.log(`[TOOL] Attempting to repair text layer`);
+                    textLayer.style.pointerEvents = 'auto';
+                    textLayer.style.userSelect = 'text';
+                    textLayer.style.webkitUserSelect = 'text';
+                    textLayer.style.MozUserSelect = 'text';
+                    textLayer.style.msUserSelect = 'text';
+                }
+            }
+
+            return;
+        } catch (highlightError) {
+            console.error(`[TOOL] Error activating highlight tool: ${highlightError.message}`);
+        }
+    } else if (toolName === 'text') {
+        var textInstance = window[`textInstance_${blockId}`];
+        if (textInstance && typeof textInstance.enable === 'function') {
+            textInstance.enable();
+            return;
+        }
+    } else if (toolName === 'shape') {
+        var shapeInstance = window[`shapeInstance_${blockId}`];
+        if (shapeInstance && typeof shapeInstance.enable === 'function') {
+            shapeInstance.enable();
+            return;
+        }
+    } else if (toolName === 'note') {
+        var noteInstance = window[`noteInstance_${blockId}`];
+        if (noteInstance && typeof noteInstance.enable === 'function') {
+            noteInstance.enable();
+            return;
+        }
+    }
+
+    // For other tools, try to find a generic tool instance
+    var toolInstance = window[`${toolName}Instance_${blockId}`];
+    if (toolInstance) {
+        // Try to call enable or activate method if available
+        if (typeof toolInstance.enable === 'function') {
+            toolInstance.enable();
+        } else if (typeof toolInstance.activate === 'function') {
+            toolInstance.activate();
+        } else {
+            console.log(`[TOOL] No activation method found for ${toolName}`);
+        }
+    } else {
+        console.log(`[TOOL] Tool instance not found for ${toolName}`);
+
+        // Set appropriate cursor based on tool type
+        var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+        if (drawContainer) {
+            // Set tool-specific cursor styles
+            switch(toolName) {
+                case 'text':
+                    drawContainer.style.cursor = 'text';
+                    break;
+                case 'shape':
+                    drawContainer.style.cursor = 'crosshair';
+                    break;
+                case 'note':
+                    drawContainer.style.cursor = 'cell';
+                    break;
+                case 'select':
+                    drawContainer.style.cursor = 'pointer';
+                    break;
+                case 'eraser':
+                    // Special cursor for eraser (uses SVG in CSS)
+                    drawContainer.style.cursor = 'url(\'data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17a2.998 2.998 0 0 1 0-4.24l9.24-9.21c1.21-1.21 3.17-1.21 4.19.01z"/></svg>\') 12 12, auto';
+                    break;
+                default:
+                    drawContainer.style.cursor = 'default';
+            }
+
+            // Enable pointer events on container for any interactive tool
+            drawContainer.style.pointerEvents = 'auto';
+            drawContainer.classList.add('draw-mode');
+        }
+    }
+};
+
+// Generic function to deactivate a tool by name
+window.deactivateToolByName = function(toolName, blockId) {
+    console.log(`[TOOL] Deactivating tool: ${toolName} for block ${blockId}`);
+
+    // Handle specific tools first
+    if (toolName === 'marker' || toolName === 'scribble') {
+        var scribbleInstance = window[`scribbleInstance_${blockId}`];
+        if (scribbleInstance && typeof scribbleInstance.disable === 'function') {
+            scribbleInstance.disable();
+
+            // Extra cleanup to ensure everything is reset
+            var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+            var fabricCanvas = window[`fabricCanvas_${blockId}`];
+
+            if (drawContainer) {
+                // Ensure the draw container's pointer events are disabled
+                drawContainer.style.pointerEvents = 'none';
+                drawContainer.classList.remove('draw-mode');
+                drawContainer.removeAttribute('data-current-tool');
+                console.log(`[TOOL] Reset draw container for marker tool`);
+            }
+
+            if (fabricCanvas) {
+                // Disable drawing mode
+                fabricCanvas.isDrawingMode = false;
+
+                // Reset the drawing brush
+                if (fabricCanvas.freeDrawingBrush) {
+                    fabricCanvas.freeDrawingBrush.markerMode = false;
+                    fabricCanvas.freeDrawingBrush.scribbleMode = false;
+                }
+
+                // Ensure all canvas elements are disabled
+                if (fabricCanvas.upperCanvasEl) {
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+                }
+
+                if (fabricCanvas.lowerCanvasEl) {
+                    fabricCanvas.lowerCanvasEl.style.pointerEvents = 'none';
+                }
+
+                // Ensure canvas container is also disabled
+                var canvasContainer = document.querySelector(`#draw-container-${blockId} .canvas-container`);
+                if (canvasContainer) {
+                    canvasContainer.style.pointerEvents = 'none';
+                }
+
+                console.log(`[TOOL] Reset fabric canvas for marker tool`);
+            }
+
+            // Ensure tool buttons are still clickable
+            var toolButtons = document.querySelectorAll(`[id$="-tool-${blockId}"]`);
+            toolButtons.forEach(function(button) {
+                button.style.pointerEvents = 'auto';
+            });
+
+            // Force a small delay to ensure UI responsiveness
+            setTimeout(function() {
+                console.log(`[TOOL] Performing final cleanup for marker tool`);
+                // Double-check that the tool is fully deactivated
+                if (drawContainer) {
+                    drawContainer.style.pointerEvents = 'none';
+                }
+
+                // Ensure drawing mode is off
+                if (fabricCanvas) {
+                    fabricCanvas.isDrawingMode = false;
+                }
+
+                // Re-enable tool button interactivity
+                resetPointerEvents(blockId);
+            }, 100);
+
+            return;
+        }
+    } else if (toolName === 'highlight' || toolName === 'highlighter') {
+        var highlightInstance = window[`highlightInstance_${blockId}`];
+        try {
+            if (!highlightInstance) {
+                console.error(`[TOOL] Highlight instance not found for ${blockId} when trying to deactivate`);
+                console.log(`[TOOL] Available global variables:`, Object.keys(window).filter(k => k.includes(blockId)));
+
+                // Fallback: try to manually disable text highlighting
+                var textLayer = document.getElementById(`text-layer-${blockId}`);
+                if (textLayer) {
+                    textLayer.style.pointerEvents = 'none';
+                    $(textLayer).removeClass('active highlight-tool-active');
+                    console.log(`[TOOL] Used fallback to disable text layer`);
+                }
+                return;
+            }
+
+            if (typeof highlightInstance.disableTextHighlighting !== 'function') {
+                console.error(`[TOOL] Highlight instance exists but is missing disableTextHighlighting method for ${blockId}`);
+                console.log(`[TOOL] Highlight instance methods:`, Object.keys(highlightInstance).filter(k => typeof highlightInstance[k] === 'function'));
+
+                // Fallback: try to manually disable text highlighting
+                var textLayer = document.getElementById(`text-layer-${blockId}`);
+                if (textLayer) {
+                    textLayer.style.pointerEvents = 'none';
+                    $(textLayer).removeClass('active highlight-tool-active');
+                    console.log(`[TOOL] Used fallback to disable text layer`);
+                }
+                return;
+            }
+
+            console.log(`[TOOL] Found highlight instance for ${blockId}, disabling text highlighting`);
+
+            // Call disableTextHighlighting
+            var result = highlightInstance.disableTextHighlighting();
+
+            // Reset text layer properties even if the method fails
+            var textLayer = document.getElementById(`text-layer-${blockId}`);
+            if (textLayer) {
+                textLayer.style.pointerEvents = 'none';
+                console.log(`[TOOL] Reset text layer pointer events`);
+                $(textLayer).removeClass('highlight-tool-active');
+            }
+
+            return;
+        } catch (error) {
+            console.error(`[TOOL] Error deactivating highlight tool: ${error.message}`);
+
+            // Emergency fallback
+            try {
+                var textLayer = document.getElementById(`text-layer-${blockId}`);
+                if (textLayer) {
+                    textLayer.style.pointerEvents = 'none';
+                    textLayer.style.cursor = 'default';
+                    $(textLayer).removeClass('active highlight-tool-active');
+                }
+            } catch (e) {
+                console.error(`[TOOL] Emergency fallback also failed: ${e.message}`);
+            }
+        }
+    } else if (toolName === 'text') {
+        var textInstance = window[`textInstance_${blockId}`];
+        if (textInstance && typeof textInstance.disable === 'function') {
+            textInstance.disable();
+            return;
+        }
+    } else if (toolName === 'shape') {
+        var shapeInstance = window[`shapeInstance_${blockId}`];
+        if (shapeInstance && typeof shapeInstance.disable === 'function') {
+            shapeInstance.disable();
+            return;
+        }
+    } else if (toolName === 'note') {
+        var noteInstance = window[`noteInstance_${blockId}`];
+        if (noteInstance && typeof noteInstance.disable === 'function') {
+            noteInstance.disable();
+            return;
+        }
+    }
+
+    // For other tools, try to find a generic tool instance
+    var toolInstance = window[`${toolName}Instance_${blockId}`];
+    if (toolInstance) {
+        // Try to call disable or deactivate method if available
+        if (typeof toolInstance.disable === 'function') {
+            toolInstance.disable();
+        } else if (typeof toolInstance.deactivate === 'function') {
+            toolInstance.deactivate();
+        } else {
+            console.log(`[TOOL] No deactivation method found for ${toolName}`);
+        }
+    } else {
+        console.log(`[TOOL] Tool instance not found for ${toolName}`);
+
+        // Reset cursor and pointer events
+        var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+        if (drawContainer) {
+            drawContainer.style.cursor = 'default';
+            drawContainer.style.pointerEvents = 'none';
+            drawContainer.classList.remove('draw-mode');
+        }
+    }
+};
+
+// Expose the initScribbleInstance function globally for easier access
+window.initScribbleInstance = function(blockId, serverData) {
+    // If the function exists in the scribble_init.js script, use that
+    if (typeof initScribbleInstance === 'function') {
+        return initScribbleInstance(blockId, serverData || {});
+    }
+
+    // Fallback implementation if the function from scribble_init.js is not available
+    console.log(`[TOOL] Using fallback initScribbleInstance for ${blockId}`);
+
+    var block = document.getElementById(`pdfx-block-${blockId}`);
+    var drawContainer = document.getElementById(`draw-container-${blockId}`);
+    var pdfContainer = document.getElementById(`pdf-container-${blockId}`);
+    var dataElement = document.getElementById(`pdfx-data-${blockId}`);
+
+    if (!block || !drawContainer || !pdfContainer) {
+        console.error(`[TOOL] Required elements missing for block ${blockId}`);
+        return null;
+    }
+
+    // Create a canvas if it doesn't exist
+    var canvas = document.getElementById(`drawing-canvas-${blockId}`);
+    if (!canvas) {
+        canvas = document.createElement('canvas');
+        canvas.id = `drawing-canvas-${blockId}`;
+        canvas.width = pdfContainer.offsetWidth || 800;
+        canvas.height = pdfContainer.offsetHeight || 600;
+        drawContainer.innerHTML = '';
+        drawContainer.appendChild(canvas);
+    }
+
+    // Create fabric canvas
+    var fabricCanvas = null;
+    try {
+        fabricCanvas = new fabric.Canvas(canvas, {
+            isDrawingMode: false,
+            selection: false
+        });
+
+        fabricCanvas.setWidth(pdfContainer.offsetWidth);
+        fabricCanvas.setHeight(pdfContainer.offsetHeight);
+
+        // Store reference globally
+        window[`fabricCanvas_${blockId}`] = fabricCanvas;
+
+        // Initialize brush
+        if (!fabricCanvas.freeDrawingBrush) {
+            fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
+        }
+        fabricCanvas.freeDrawingBrush.width = 5;
+        fabricCanvas.freeDrawingBrush.color = '#FF0000';
+        fabricCanvas.freeDrawingBrush.scribbleMode = false;
+        fabricCanvas.freeDrawingBrush.markerMode = false;
+    } catch (error) {
+        console.error(`[TOOL] Error creating fabric canvas: ${error.message}`);
+        return null;
+    }
+
+    // Create scribble options
+    var scribbleOptions = {
+        blockId: blockId,
+        userId: block.getAttribute('data-user-id') || 'anonymous',
+        courseId: block.getAttribute('data-course-id') || '',
+        color: '#FF0000',
+        width: 5,
+        saveIntervalTime: 10000
+    };
+
+    // Try to create scribble instance
+    try {
+        if (typeof PdfxScribble === 'function') {
+            var scribbleInstance = new PdfxScribble(block, scribbleOptions);
+            scribbleInstance.init(fabricCanvas);
+
+            // Store globally
+            window[`scribbleInstance_${blockId}`] = scribbleInstance;
+            console.log(`[TOOL] Successfully created scribble instance for ${blockId}`);
+
+            return scribbleInstance;
+        } else {
+            console.error(`[TOOL] PdfxScribble constructor not found`);
+        }
+    } catch (error) {
+        console.error(`[TOOL] Error creating scribble instance: ${error.message}`);
+    }
+
+    return null;
+};
+
 (function() {
     'use strict';
 
@@ -12,14 +454,141 @@
     // Add a global event listener to check when DOM is ready
     document.addEventListener('DOMContentLoaded', function() {
         console.log('PDF XBlock DOM content loaded at: ' + new Date().toISOString());
-        // Find all marker tool buttons and attach console log on click
-        var markerButtons = document.querySelectorAll('[id^="marker-tool-"]');
-        console.log('Found ' + markerButtons.length + ' marker tool buttons');
 
-        markerButtons.forEach(function(button) {
-            console.log('Setting up click listener for: ' + button.id);
-            button.addEventListener('click', function() {
-                console.log('Marker tool button clicked: ' + this.id + ' at ' + new Date().toISOString());
+        // Define all tool button types to look for
+        var toolTypes = [
+            'marker', 'highlight', 'text', 'shape', 'note',
+            'select', 'eraser', 'clear', 'undo', 'redo'
+        ];
+
+        // Store all buttons in a single object for easy access
+        var toolButtons = {};
+
+        // Find all tool buttons and log counts in a single loop
+        toolTypes.forEach(function(toolType) {
+            var selector = `[id^="${toolType}-tool-"]`;
+            var buttons = document.querySelectorAll(selector);
+            toolButtons[toolType] = buttons;
+            console.log(`Found ${buttons.length} ${toolType} tool buttons`);
+
+            // Add click event listeners to each button
+            buttons.forEach(function(button) {
+                console.log(`Setting up click listener for: ${button.id}`);
+                button.addEventListener('click', function(event) {
+                    var toolName = this.id.split('-tool-')[0];
+                    var blockId = this.id.split('-tool-')[1];
+
+                    // Stop propagation immediately to prevent any interference
+                    event.stopPropagation();
+                    event.preventDefault();
+
+                    console.log(`%c[TOOL CLICK] ${toolName} button clicked`, 'background:#3498db;color:white;padding:3px;border-radius:3px;');
+
+                    // First, reset all pointer events to ensure buttons remain clickable
+                    resetPointerEvents(blockId);
+
+                    // Since the active class toggle hasn't happened yet, we need to
+                    // determine if the button will be activated or deactivated
+                    var willBeActive = !this.classList.contains('active');
+
+                    // Special handling for marker tool deactivation - more aggressive cleanup
+                    if ((toolName === 'marker' || toolName === 'scribble') && this.classList.contains('active')) {
+                        console.log(`[TOOL CLICK] Deactivating marker tool with special handling`);
+
+                        // Get the scribble instance
+                        var scribbleInstance = window[`scribbleInstance_${blockId}`];
+                        if (scribbleInstance && typeof scribbleInstance.disable === 'function') {
+                            // Force disable the scribble tool
+                            scribbleInstance.disable();
+                        }
+
+                        // Extra cleanup
+                        var fabricCanvas = window[`fabricCanvas_${blockId}`];
+                        if (fabricCanvas) {
+                            fabricCanvas.isDrawingMode = false;
+                            if (fabricCanvas.upperCanvasEl) {
+                                fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+                            }
+                        }
+
+                        // Reset draw container
+                        var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+                        if (drawContainer) {
+                            drawContainer.style.pointerEvents = 'none';
+                            drawContainer.classList.remove('draw-mode');
+                            drawContainer.removeAttribute('data-current-tool');
+                        }
+                    }
+
+                    // Ensure exclusive selection by first deactivating all tools
+                    var allToolButtons = document.querySelectorAll(`[id$="-tool-${blockId}"]`);
+                    console.log(`Found ${allToolButtons.length} tools to deactivate`);
+
+                    allToolButtons.forEach(function(otherBtn) {
+                        if (otherBtn.id !== button.id && otherBtn.classList.contains('active')) {
+                            console.log(`Deactivating other tool: ${otherBtn.id}`);
+                            otherBtn.classList.remove('active');
+
+                            // Also deactivate the tool functionality
+                            var otherToolName = otherBtn.id.split('-tool-')[0];
+
+                            // Clear the current tool attribute when another tool is activated
+                            var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+                            if (drawContainer) {
+                                drawContainer.removeAttribute('data-current-tool');
+                                console.log(`[TOOL] Cleared draw container data-current-tool when deactivating ${otherToolName}`);
+                            }
+
+                            // Deactivate the tool using a generic approach
+                            deactivateToolByName(otherToolName, blockId);
+                        }
+                    });
+
+                    // If activating, add active class to this button
+                    if (willBeActive) {
+                        this.classList.add('active');
+
+                        // Set the current tool attribute on the draw container for cursor styling
+                        var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+                        if (drawContainer) {
+                            drawContainer.setAttribute('data-current-tool', toolName);
+                            console.log(`[TOOL] Set draw container data-current-tool to ${toolName}`);
+                        }
+                    } else {
+                        this.classList.remove('active');
+
+                        // Clear the current tool attribute when deactivated
+                        var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+                        if (drawContainer) {
+                            drawContainer.removeAttribute('data-current-tool');
+                            console.log(`[TOOL] Cleared draw container data-current-tool`);
+                        }
+                    }
+
+                    // Log with the correct state information
+                    console.log(`${toolName} tool button ${willBeActive ? 'activated' : 'deactivated'}: ${this.id} at ${new Date().toISOString()}`);
+
+                    // Log more detailed information about the click
+                    console.log(`Tool interaction: type=${toolName}, blockId=${blockId}, willBeActive=${willBeActive}, currentActive=${this.classList.contains('active')}, timeStamp=${event.timeStamp}`);
+
+                    // For debugging, listen for after the event has been processed
+                    setTimeout(() => {
+                        console.log(`Tool state after click: ${this.id}, active=${this.classList.contains('active')}`);
+
+                        // Handle tool activation/deactivation using the global functions
+                        if (willBeActive) {
+                            window.activateToolByName(toolName, blockId);
+                        } else {
+                            window.deactivateToolByName(toolName, blockId);
+                        }
+
+                        // Make sure tool buttons remain clickable after tool activation/deactivation
+                        var toolButtons = document.querySelectorAll(`[id$="-tool-${blockId}"]`);
+                        toolButtons.forEach(function(btn) {
+                            btn.style.pointerEvents = 'auto';
+                        });
+                    }, 0);
+                });
             });
         });
     });
@@ -37,21 +606,52 @@
     }
 
     function initPDFJS() {
-        console.log('PDF XBlock: Initializing PDF.js library');
+        console.log('PDF XBlock: Initializing PDF.js');
 
-        if (typeof pdfjsLib === 'undefined') {
-            console.error('PDF XBlock: PDF.js library not loaded! Attempting to reload...');
-
-            // Try all possible locations for PDF.js
-            tryLoadScript('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.min.js', function() {
-                console.log('PDF XBlock: Successfully loaded PDF.js from CDN');
-                if (typeof pdfjsLib !== 'undefined') {
-                    setupPDFJSWorker();
-                }
-            });
-            return;
+        // If PDF.js is already loaded, we're done
+        if (typeof pdfjsLib !== 'undefined') {
+            console.log('PDF XBlock: PDF.js already loaded');
+            return Promise.resolve();
         }
-        setupPDFJSWorker();
+
+        return new Promise(function(resolve, reject) {
+            // Wait a short time to ensure pdfjsLib has loaded (it might be loading asynchronously)
+            setTimeout(function() {
+                if (typeof pdfjsLib !== 'undefined') {
+                    console.log('PDF XBlock: PDF.js loaded after short delay');
+                    resolve();
+                    return;
+                }
+
+                // If PDF.js is still not loaded, try to load it
+                if (typeof pdfjsLib === 'undefined') {
+                    console.log('PDF XBlock: PDF.js not found, loading from CDN');
+
+                    // Use the new version that's compatible with the text layer rendering
+                    var script = document.createElement('script');
+                    script.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs';
+                    script.type = 'module';
+                    script.onload = function() {
+                        if (typeof pdfjsLib !== 'undefined') {
+                            console.log('PDF XBlock: PDF.js loaded from CDN');
+                            setupPDFJSWorker();
+                            resolve();
+                        } else {
+                            console.error('PDF XBlock: Failed to load PDF.js from CDN');
+                            reject(new Error('Failed to load PDF.js'));
+                        }
+                    };
+                    script.onerror = function() {
+                        console.error('PDF XBlock: Failed to load PDF.js from CDN');
+                        reject(new Error('Failed to load PDF.js'));
+                    };
+                    document.head.appendChild(script);
+                } else {
+                    console.log('PDF XBlock: PDF.js already loaded');
+                    resolve();
+                }
+            }, 500);
+        });
     }
 
     function tryLoadScript(url, callback) {
@@ -61,6 +661,10 @@
         script.onerror = function() {
             console.error('PDF XBlock: Failed to load script from: ' + url);
         };
+        // If loading an MJS file, set type to module
+        if (url.endsWith('.mjs')) {
+            script.type = 'module';
+        }
         document.head.appendChild(script);
     }
 
@@ -96,7 +700,7 @@
 
             // Find the pdf.min.js script tag
             for (var i = 0; i < scripts.length; i++) {
-                if (scripts[i].src && scripts[i].src.indexOf('pdf.min.js') !== -1) {
+                if (scripts[i].src && (scripts[i].src.indexOf('pdf.min.js') !== -1 || scripts[i].src.indexOf('pdf.min.mjs') !== -1)) {
                     pdfJsScript = scripts[i];
                     break;
                 }
@@ -105,7 +709,7 @@
             if (pdfJsScript) {
                 // If we found the script, try to figure out if it's local or CDN
                 var scriptSrc = pdfJsScript.src;
-                var workerSrc = scriptSrc.replace('pdf.min.js', 'pdf.worker.min.js');
+                var workerSrc = scriptSrc.replace('pdf.min.js', 'pdf.worker.min.js').replace('pdf.min.mjs', 'pdf.worker.min.js');
 
                 console.log('PDF XBlock: Setting worker from script path: ' + workerSrc);
                 pdfjsLib.GlobalWorkerOptions.workerSrc = workerSrc;
@@ -117,7 +721,7 @@
 
         // 3. Default fallback to CDN
         console.log('PDF XBlock: Using fallback CDN worker');
-        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
     }
 
     // Also expose this function globally to allow manual initialization
@@ -216,6 +820,9 @@ function PdfxInit(runtime, element, options) {
         documentInfo: documentInfo
     });
 
+    // Store highlighter in global scope for tool activation
+    window[`highlightInstance_${blockId}`] = highlighter;
+
     var marker = new PdfxScribble(element, {
         blockId: blockId,
         userId: userId,
@@ -227,6 +834,70 @@ function PdfxInit(runtime, element, options) {
         documentInfo: documentInfo,
         saveIntervalTime: 10000 // Save to server every 10 seconds
     });
+
+    // Store marker in global scope under both naming conventions for tool activation
+    window[`markerInstance_${blockId}`] = marker;
+    window[`scribbleInstance_${blockId}`] = marker; // This might be redundant but ensures both names work
+
+    // Initialize text tool
+    var textTool = null;
+    try {
+        if (typeof PdfxText === 'function') {
+            textTool = new PdfxText(element, {
+                blockId: blockId,
+                userId: userId,
+                debugCallback: debugLog,
+                saveCallback: saveAnnotations,
+                courseId: courseId,
+                documentInfo: documentInfo
+            });
+
+            // Store text tool in global scope for tool activation
+            window[`textInstance_${blockId}`] = textTool;
+        }
+    } catch (e) {
+        console.warn('[PDFX INIT] Could not initialize text tool:', e);
+    }
+
+    // Initialize shape tool
+    var shapeTool = null;
+    try {
+        if (typeof PdfxShape === 'function') {
+            shapeTool = new PdfxShape(element, {
+                blockId: blockId,
+                userId: userId,
+                debugCallback: debugLog,
+                saveCallback: saveAnnotations,
+                courseId: courseId,
+                documentInfo: documentInfo
+            });
+
+            // Store shape tool in global scope for tool activation
+            window[`shapeInstance_${blockId}`] = shapeTool;
+        }
+    } catch (e) {
+        console.warn('[PDFX INIT] Could not initialize shape tool:', e);
+    }
+
+    // Initialize note tool
+    var noteTool = null;
+    try {
+        if (typeof PdfxNote === 'function') {
+            noteTool = new PdfxNote(element, {
+                blockId: blockId,
+                userId: userId,
+                debugCallback: debugLog,
+                saveCallback: saveAnnotations,
+                courseId: courseId,
+                documentInfo: documentInfo
+            });
+
+            // Store note tool in global scope for tool activation
+            window[`noteInstance_${blockId}`] = noteTool;
+        }
+    } catch (e) {
+        console.warn('[PDFX INIT] Could not initialize note tool:', e);
+    }
 
     // Text highlighting is disabled by default until user selects highlighter tool
     var highlightingEnabled = false;
@@ -248,40 +919,32 @@ function PdfxInit(runtime, element, options) {
             var drawContainer = $(element).find(`#draw-container-${options.blockId || 'default'}`)[0];
             if (drawContainer) {
                 console.log("Draw container pointer events:", drawContainer.style.pointerEvents);
-                console.log("Draw container classes:", drawContainer.className);
-                console.log("Current tool:", drawContainer.dataset.currentTool);
+                console.log("Draw container class list:", drawContainer.classList);
             }
 
-            console.log("Current tool UI state:", $(".tool-btn.active").attr('id'));
-            return "Debug check complete - see console for details";
+            return "Debug info logged to console";
         },
 
-        fixMarker: function() {
-            console.log("Attempting to fix marker tool...");
-            if (!fabricCanvas) {
-                console.error("FabricCanvas not available!");
-                return "ERROR: Canvas not available";
+        checkIndexedDB: function() {
+            console.log("=== CHECKING INDEXEDDB STORAGE ===");
+            if (marker && typeof marker.checkIndexedDBStorage === 'function') {
+                return marker.checkIndexedDBStorage()
+                    .then(function(result) {
+                        console.log("IndexedDB check complete");
+                        return result;
+                    })
+                    .catch(function(error) {
+                        console.error("IndexedDB check failed:", error);
+                        return {error: error.message};
+                    });
+            } else {
+                console.log("Marker or IndexedDB check function not available");
+                return Promise.resolve({error: "Function not available"});
             }
+        },
 
-            fabricCanvas.isDrawingMode = true;
-            fabricCanvas.freeDrawingBrush.markerMode = true;
-            fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
-
-            var drawContainer = $(element).find(`#draw-container-${options.blockId || 'default'}`)[0];
-            if (drawContainer) {
-                drawContainer.style.pointerEvents = 'auto';
-                drawContainer.classList.add('draw-mode');
-                drawContainer.dataset.currentTool = 'marker';
-            }
-
-            $(element).find(`#marker-tool-${options.blockId || 'default'}`).addClass('active');
-
-            if (marker && typeof marker.enable === 'function') {
-                marker.enable();
-            }
-
-            return "Marker fixed - tool should now work";
-        }
+        marker: marker, // Expose marker object for direct debugging
+        fabricCanvas: function() { return fabricCanvas; }
     };
 
     console.log("Global debug functions added to window.pdfxDebug['" + (options.blockId || 'default') + "']");
@@ -555,8 +1218,8 @@ function PdfxInit(runtime, element, options) {
         console.log(`PDF XBlock (${blockId}): ${message}`);
     }
 
-    // Save annotations including user highlights
-    function saveAnnotations(data) {
+    // Save annotations including user highlights (local implementation)
+    function _saveAnnotations(data) {
         // If no specific data is provided, collect all annotations
         if (!data) {
             data = {
@@ -565,9 +1228,20 @@ function PdfxInit(runtime, element, options) {
                 highlights: highlighter ? highlighter.getAllHighlights() : {},
                 userHighlights: highlighter ? highlighter.getUserHighlightsForStorage() : {},
                 markerStrokes: marker ? marker.getAllMarkerStrokes() : {},
+                textAnnotations: textTool ? textTool.getAllAnnotations() : {},
+                shapeAnnotations: shapeTool ? shapeTool.getAllShapeAnnotations() : {},
+                noteAnnotations: noteTool ? noteTool.getAllNoteAnnotations() : {},
                 brightness: brightness,
                 isGrayscale: isGrayscale
             };
+        }
+
+        // If this is a force save request, make sure marker saves to browser storage
+        if (data.forceSave && marker) {
+            console.log('[DEBUG] Force save requested, saving to browser storage first');
+            if (typeof marker.saveScribbleStrokesToBrowser === 'function') {
+                marker.saveScribbleStrokesToBrowser();
+            }
         }
 
         // Send annotations to server via XBlock handler
@@ -578,12 +1252,77 @@ function PdfxInit(runtime, element, options) {
             success: function(response) {
                 if (response.result !== 'success') {
                     debugLog('Error saving annotations: ' + (response.message || 'Unknown error'));
+                } else {
+                    console.log('[DEBUG] Annotations saved successfully to server');
                 }
             },
             error: function(jqXHR) {
                 debugLog('Error saving annotations: ' + jqXHR.responseText);
             }
         });
+    }
+
+    // Make a global saveAnnotations function available
+    window.saveAnnotations = function(callerBlockId, data) {
+        // If called from external tool with a blockId, make sure it matches this instance
+        if (callerBlockId && callerBlockId !== blockId) {
+            console.log(`[SAVE ANNOTATIONS] Called with mismatched blockId: ${callerBlockId}, this instance: ${blockId}`);
+            return; // Don't save for a different block
+        }
+
+        // Call the internal implementation
+        _saveAnnotations(data);
+    };
+
+    // Create a local reference to the saveAnnotations function for use in this file
+    var saveAnnotations = _saveAnnotations;
+
+    // Setup tool buttons in left sidebar
+    function setupToolButtons() {
+        console.log(`[PDFX INIT] Setting up tool buttons for block ${blockId}`);
+
+        // We no longer need to add click handlers here since they're handled globally
+        // Just ensure the color picker functionality is available
+
+        // Set up real-time color picker interaction
+        var colorInput = $(`#color-input-${blockId}`);
+        if (colorInput.length) {
+            console.log(`[PDFX INIT] Set up color picker for block ${blockId}`);
+
+            // Remove existing handlers to avoid duplicates
+            colorInput.off('change input');
+
+            colorInput.on('change input', function(e) {
+                var newColor = $(this).val();
+                console.log(`[PDFX INIT] Color changed to ${newColor}`);
+
+                // Update active tool with new color
+                var activeToolBtn = $('.tool-btn.active');
+                if (activeToolBtn.length) {
+                    var toolId = activeToolBtn.attr('id');
+                    console.log(`[PDFX INIT] Updating color for active tool: ${toolId}`);
+
+                    if (toolId.includes('marker') || toolId.includes('scribble')) {
+                        var scribbleInstance = window[`scribbleInstance_${blockId}`];
+                        if (scribbleInstance) {
+                            console.log(`[PDFX INIT] Updating scribble tool color to ${newColor}`);
+                            scribbleInstance.setColor(newColor);
+                        }
+                    } else if (toolId.includes('highlight')) {
+                        var highlightInstance = window[`highlightInstance_${blockId}`];
+                        if (highlightInstance) {
+                            // Add 50% transparency for highlights
+                            var newColorWithTransparency = newColor + '80';
+                            console.log(`[PDFX INIT] Updating highlight tool color to ${newColorWithTransparency}`);
+                            highlightInstance.setHighlightColor(newColorWithTransparency);
+                        }
+                    }
+                }
+            });
+        }
+
+        // Just to be sure, deactivate all tools at initialization
+        $('.tool-btn').removeClass('active');
     }
 
     // Wait for PDF.js to be loaded
@@ -615,243 +1354,43 @@ function PdfxInit(runtime, element, options) {
 
             // Text highlighting is disabled by default - user must select highlighter tool
             highlighter.disableTextHighlighting();
-            highlightingEnabled = false;
         }
 
         // After page is loaded, we should restore user highlights for viewing (but not enable highlighting)
         loadUserHighlights();
 
-        // Add this inside the initializeWhenReady function, after fabric canvas initialization
-        // Direct binding for marker tool button
-        $(element).find(`#marker-tool-${blockId}`).off('click.pdfx').on('click.pdfx', function() {
-            console.log("%c[DIRECT EVENT] Marker tool button clicked through direct binding", "background:#2980b9;color:white;padding:3px;border-radius:3px;");
+        // Ensure all tool instances are globally accessible for the tool activation functions
+        console.log(`[PDFX INIT] Making all tool instances globally accessible for block ${blockId}`);
 
-            // Force drawing mode
-            if (fabricCanvas) {
-                fabricCanvas.isDrawingMode = true;
-                fabricCanvas.freeDrawingBrush.color = $(element).find(`#color-input-${blockId}`).val() || '#FF0000';
-                fabricCanvas.freeDrawingBrush.width = parseInt($(element).find(`#width-input-${blockId}`).val() || 5);
-                fabricCanvas.freeDrawingBrush.markerMode = true;
-                fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
-
-                // Add active class to button
-                $(this).addClass('active');
-
-                // Make sure draw container is in drawing mode
-                var drawContainer = $(element).find(`#draw-container-${blockId}`)[0];
-                if (drawContainer) {
-                    drawContainer.style.pointerEvents = 'auto';
-                    drawContainer.classList.add('draw-mode');
-                    drawContainer.dataset.currentTool = 'marker';
-                }
-
-                // Enable marker in the marker object
-                if (marker && typeof marker.enable === 'function') {
-                    marker.enable();
-                    console.log("[DIRECT EVENT] Marker tool enabled through direct call to marker.enable()");
-                }
-            } else {
-                console.error("[DIRECT EVENT] Fabric canvas not available!");
-            }
-
-            return true;
-        });
-    }
-
-    // Setup tool buttons in left sidebar
-    function setupToolButtons() {
-        // Tool selection
-        $(element).find(`#marker-tool-${blockId}`).click(function() {
-            setActiveTool('marker');
-        });
-
-        $(element).find(`#highlight-tool-${blockId}`).click(function() {
-            setActiveTool('highlight');
-        });
-
-        // Text tool
-        $(element).find('#text-tool-' + blockId).click(function() {
-            setActiveTool('text');
-        });
-
-        // Shape tool
-        $(element).find('#shape-tool-' + blockId).click(function() {
-            setActiveTool('shape');
-        });
-
-        // Note tool
-        $(element).find('#note-tool-' + blockId).click(function() {
-            setActiveTool('note');
-        });
-
-        // Comment tool
-        $(element).find('#comment-tool-' + blockId).click(function() {
-            setActiveTool('comment');
-        });
-
-        // Select tool
-        $(element).find('#select-tool-' + blockId).click(function() {
-            setActiveTool('select');
-        });
-
-        // Eraser tool
-        $(element).find('#eraser-tool-' + blockId).click(function() {
-            setActiveTool('eraser');
-        });
-
-        // Undo button
-        $(element).find('#undo-btn-' + blockId).click(function() {
-            undoAction();
-        });
-
-        // Redo button
-        $(element).find('#redo-btn-' + blockId).click(function() {
-            redoAction();
-        });
-    }
-
-    // Update the setActiveTool function to include more detailed logging
-    function setActiveTool(tool) {
-        console.log(`%c[TOOL EVENT] Setting active tool: ${tool}`, 'background:#3498db;color:white;padding:3px;border-radius:3px;');
-        debugLog(`Setting active tool: ${tool}`);
-
-        // First, disable active tools across all PDF blocks to prevent cross-block interference
-        $('.draw-container').each(function() {
-            if (this.id !== `draw-container-${blockId}`) {
-                $(this).removeClass('draw-mode');
-                $(this).css('pointerEvents', 'none');
-
-                // Also disable any fabric canvas for this container
-                if (this._fabricCanvas) {
-                    this._fabricCanvas.isDrawingMode = false;
-                    this._fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
-                }
-            }
-        });
-
-        // Remove active class from all tool buttons
-        $(element).find('.tool-btn').removeClass('active');
-
-        // Disable text highlighting by default
-        highlightingEnabled = false;
-        highlighter.disableTextHighlighting();
-
-        // Reset drawing container and canvas pointer events
-        var drawContainer = $(element).find(`#draw-container-${blockId}`)[0];
-        if (drawContainer) {
-            drawContainer.classList.remove('draw-mode');
+        // Most tools already store themselves globally during construction,
+        // but we'll ensure they're all properly registered here for consistency
+        if (highlighter) {
+            window[`highlightInstance_${blockId}`] = highlighter;
         }
 
-        // Now set up the specific tool
-        switch (tool) {
-            case 'marker':
-                console.log("%c[SCRIBBLE] Activating scribble tool", "background:#f39c12;color:white;padding:3px;border-radius:3px;");
-                // Set active class on marker tool button
-                $(element).find(`#marker-tool-${blockId}`).addClass('active');
-
-                // Enable drawing mode with proper settings
-                if (fabricCanvas) {
-                    // Set up the drawing brush for marker
-                    fabricCanvas.isDrawingMode = true;
-                    fabricCanvas.freeDrawingBrush.color = $(element).find(`#color-input-${blockId}`).val() || '#FF0000';
-                    fabricCanvas.freeDrawingBrush.width = parseInt($(element).find(`#width-input-${blockId}`).val() || 5);
-                    fabricCanvas.freeDrawingBrush.markerMode = true;
-
-                    // Make sure drawing container is interactive
-                    if (drawContainer) {
-                        drawContainer.classList.add('draw-mode');
-                        drawContainer.style.pointerEvents = 'auto';
-                        drawContainer.dataset.currentTool = 'marker';
-                        drawContainer.dataset.blockId = blockId; // Add block ID to container for reference
-                    }
-
-                    // Make sure canvas elements have proper pointer events
-                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
-
-                    // Call marker's enable function to ensure all settings are applied
-                    marker.enable();
-
-                    console.log("%c[SCRIBBLE] Tool activated successfully", "background:#2ecc71;color:white;padding:3px;border-radius:3px;");
-                    debugLog('Scribble tool activated with proper pointer events settings');
-                } else {
-                    console.error("[SCRIBBLE] Fabric canvas not available");
-                    debugLog('ERROR: Fabric canvas not available for scribble tool');
-                }
-                break;
-
-            case 'highlight':
-                $(element).find(`#highlight-tool-${blockId}`).addClass('active');
-                highlightingEnabled = true;
-                highlighter.setHighlightColor($(element).find(`#color-input-${blockId}`).val() + '80'); // Add 50% transparency
-                highlighter.enableTextHighlighting();
-
-                // Disable drawing mode
-                if (fabricCanvas) {
-                    fabricCanvas.isDrawingMode = false;
-                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
-                }
-                break;
-
-            case 'text':
-            case 'shape':
-            case 'sticky-note':
-            case 'comment':
-            case 'select':
-            case 'eraser':
-                // Add active class to the appropriate tool button
-                $(element).find(`#${tool}-tool-${blockId}`).addClass('active');
-
-                // Set appropriate drawing mode for each tool
-                if (fabricCanvas) {
-                    fabricCanvas.isDrawingMode = (tool === 'eraser');
-
-                    if (tool === 'eraser') {
-                        // Set up eraser
-                        fabricCanvas.freeDrawingBrush.color = '#FFFFFF';
-                        fabricCanvas.freeDrawingBrush.width = 20;
-                        fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
-                        if (drawContainer) {
-                            drawContainer.classList.add('draw-mode');
-                            drawContainer.style.pointerEvents = 'auto';
-                            drawContainer.dataset.blockId = blockId; // Add block ID to container for reference
-                        }
-                    } else if (tool === 'select') {
-                        // Enable selection mode
-                        fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
-                        fabricCanvas.selection = true;
-                        fabricCanvas.forEachObject(function(o) {
-                            o.selectable = true;
-                        });
-                    } else {
-                        // Default handling for other tools
-                        fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
-                    }
-                }
-                break;
-
-            default:
-                debugLog(`Unknown tool: ${tool}`);
-                break;
+        if (marker) {
+            window[`markerInstance_${blockId}`] = marker;
+            window[`scribbleInstance_${blockId}`] = marker;
         }
 
-        // Save the current tool state
-        saveAnnotations({
-            currentTool: tool
-        });
+        if (textTool) {
+            window[`textInstance_${blockId}`] = textTool;
+        }
 
-        return true;
-    }
+        if (shapeTool) {
+            window[`shapeInstance_${blockId}`] = shapeTool;
+        }
 
-    // Undo last action
-    function undoAction() {
-        // Implement undo logic here
-        debugLog('Undo action');
-    }
+        if (noteTool) {
+            window[`noteInstance_${blockId}`] = noteTool;
+        }
 
-    // Redo last undone action
-    function redoAction() {
-        // Implement redo logic here
-        debugLog('Redo action');
+        // Create data element with necessary URLs
+        var dataElement = document.getElementById(`pdfx-data-${blockId}`);
+        if (dataElement && runtime && typeof runtime.handlerUrl === 'function') {
+            dataElement.dataset.handlerUrl = runtime.handlerUrl(element, 'save_annotations');
+            console.log(`[PDFX INIT] Set handler URL in data element for block ${blockId}`);
+        }
     }
 
     // Load the PDF document
@@ -892,6 +1431,19 @@ function PdfxInit(runtime, element, options) {
 
         // Update marker's current page
         marker.setCurrentPage(pageNum);
+
+        // Update other tools' current page
+        if (textTool && typeof textTool.setCurrentPage === 'function') {
+            textTool.setCurrentPage(pageNum);
+        }
+
+        if (shapeTool && typeof shapeTool.setCurrentPage === 'function') {
+            shapeTool.setCurrentPage(pageNum);
+        }
+
+        if (noteTool && typeof noteTool.setCurrentPage === 'function') {
+            noteTool.setCurrentPage(pageNum);
+        }
 
         // Update navigation display
         $(element).find(`#page-num-${blockId}`).text(pageNum);
@@ -937,6 +1489,50 @@ function PdfxInit(runtime, element, options) {
         });
     }
 
+    // Add this function to fix any text layer styling issues
+    function applyTextLayerFixes() {
+        var textLayer = $(element).find(`#text-layer-${blockId}`)[0];
+        if (!textLayer) {
+            debugLog('Text layer not found for fixing');
+            return;
+        }
+        textLayer.innerHTML = '';
+        textLayer.style.width = `${viewport.width}px`;
+        textLayer.style.height = `${viewport.height}px`;
+        textLayer.style.setProperty('--scale-factor', currentZoom);
+
+        // Apply styles to all spans in the text layer
+        var textSpans = textLayer.querySelectorAll('span');
+        debugLog(`Applying fixes to ${textSpans.length} text spans`);
+
+        textSpans.forEach(function(span) {
+            // Ensure spans are transparent but selectable
+            span.style.color = 'transparent';
+            span.style.userSelect = 'text';
+            span.style.webkitUserSelect = 'text';
+            span.style.MozUserSelect = 'text';
+            span.style.msUserSelect = 'text';
+            span.style.cursor = 'text';
+            span.style.pointerEvents = 'all';
+
+            // Keep original transform settings but ensure line height is correct
+            if (!span.style.lineHeight) {
+                span.style.lineHeight = '1.0';
+            }
+
+            // Fix font issues - ensure proper font rendering
+            if (span.style.fontFamily) {
+                // Keep original font family but add fallbacks
+                var currentFont = span.style.fontFamily;
+                if (!currentFont.includes(',')) {
+                    span.style.fontFamily = `${currentFont}, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif`;
+                }
+            }
+        });
+
+        debugLog('Text layer fixes applied');
+    }
+
     // Update text layer for highlighting
     function updateTextLayer(page, viewport) {
         var textLayer = $(element).find(`#text-layer-${blockId}`);
@@ -949,27 +1545,93 @@ function PdfxInit(runtime, element, options) {
                 height: viewport.height + 'px'
             });
 
-            // Create text spans
-            textContent.items.forEach(function(item) {
-                var tx = pdfjsLib.Util.transform(
-                    viewport.transform,
-                    [1, 0, 0, -1, item.transform[4], item.transform[5]]
-                );
+            // Set scale factor CSS variable for proper text sizing
+            textLayer[0].style.setProperty('--scale-factor', viewport.scale);
 
-                var style = textContent.styles[item.fontName];
+            // Check if we have the newer version of PDF.js with the renderTextLayer function
+            if (typeof pdfjsLib.renderTextLayer === 'function') {
+                // Newer PDF.js (3.x versions)
+                debugLog('Using PDF.js 3.x text layer renderer');
 
-                // Create text span
-                var span = document.createElement('span');
-                span.textContent = item.str;
-                span.style.fontFamily = style.fontFamily;
-                span.style.fontSize = Math.floor(item.height) + 'px';
-                span.style.position = 'absolute';
-                span.style.left = Math.floor(tx[0]) + 'px';
-                span.style.top = Math.floor(tx[1]) + 'px';
-                span.style.transform = 'scaleY(-1)';
+                const renderTextLayerTask = pdfjsLib.renderTextLayer({
+                    textContentSource: textContent,
+                    container: textLayer[0],
+                    viewport: viewport,
+                    textDivs: []
+                });
 
-                textLayer.append(span);
-            });
+                renderTextLayerTask.promise.then(function() {
+                    debugLog('Text layer rendered successfully');
+
+                    // Make text spans selectable but invisible
+                    const textSpans = textLayer[0].querySelectorAll('span');
+                    debugLog(`Found ${textSpans.length} text spans to make selectable`);
+
+                    // Apply text layer fixes for consistency
+                    applyTextLayerFixes();
+
+                    // Apply text cursors to ensure mouse pointer shows I-beam on text
+                    if (highlighter && typeof highlighter.applyTextCursors === 'function') {
+                        highlighter.applyTextCursors();
+                        debugLog('Applied text selection cursors to text layer');
+                    }
+                }).catch(function(error) {
+                    debugLog('Error rendering text layer: ' + error);
+                });
+            } else {
+                // Older PDF.js (2.x versions) or custom implementation
+                debugLog('Using older/custom text layer rendering');
+
+                // Render text spans manually
+                textContent.items.forEach(function(item) {
+                    try {
+                        var tx = pdfjsLib.Util.transform(
+                            viewport.transform,
+                            [1, 0, 0, -1, item.transform[4], item.transform[5]]
+                        );
+
+                        var style = textContent.styles[item.fontName];
+
+                        // Create text span
+                        var span = document.createElement('span');
+                        span.textContent = item.str;
+
+                        // Apply font styling with fallbacks to ensure consistent rendering
+                        if (style && style.fontFamily) {
+                            span.style.fontFamily = style.fontFamily + ', -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif';
+                        }
+
+                        span.style.fontSize = Math.floor(item.height) + 'px';
+                        span.style.position = 'absolute';
+                        span.style.left = Math.floor(tx[0]) + 'px';
+                        span.style.top = Math.floor(tx[1]) + 'px';
+                        span.style.transform = 'scaleY(-1)';
+                        span.style.color = 'transparent';
+                        span.style.lineHeight = '1.0';
+                        span.style.whiteSpace = 'pre';
+                        span.style.pointerEvents = 'all';
+                        span.style.userSelect = 'text';
+                        span.style.webkitUserSelect = 'text';
+                        span.style.MozUserSelect = 'text';
+                        span.style.msUserSelect = 'text';
+                        span.style.cursor = 'text';
+
+                        textLayer.append(span);
+                    } catch (e) {
+                        debugLog(`Error rendering text span: ${e.message}`);
+                    }
+                });
+
+                debugLog(`Rendered ${textContent.items.length} text spans manually`);
+
+                // Apply text cursors to ensure mouse pointer shows I-beam on text
+                if (highlighter && typeof highlighter.applyTextCursors === 'function') {
+                    highlighter.applyTextCursors();
+                    debugLog('Applied text selection cursors to text layer');
+                }
+            }
+        }).catch(function(error) {
+            debugLog('Error getting text content: ' + error);
         });
     }
 
@@ -981,13 +1643,34 @@ function PdfxInit(runtime, element, options) {
             data: JSON.stringify({includeAll: options.isStaff}),
             success: function(response) {
                 if (response.result === 'success') {
-                    highlighter.setAllHighlights(response.highlights || {});
-                    debugLog('Loaded user highlights');
+                    // Load highlight annotations
+                    if (highlighter && response.highlights) {
+                        highlighter.setAllHighlights(response.highlights || {});
+                        debugLog('Loaded user highlights');
+                    }
 
                     // If we have marker strokes, load them
-                    if (options.markerStrokes) {
-                        marker.loadMarkerStrokes(options.markerStrokes);
+                    if (marker && response.markerStrokes) {
+                        marker.loadMarkerStrokes(response.markerStrokes);
                         debugLog('Loaded marker strokes');
+                    }
+
+                    // Load text annotations if available
+                    if (textTool && response.textAnnotations) {
+                        textTool.setAnnotations(response.textAnnotations);
+                        debugLog('Loaded text annotations');
+                    }
+
+                    // Load shape annotations if available
+                    if (shapeTool && response.shapeAnnotations) {
+                        shapeTool.setShapeAnnotations(response.shapeAnnotations);
+                        debugLog('Loaded shape annotations');
+                    }
+
+                    // Load note annotations if available
+                    if (noteTool && response.noteAnnotations) {
+                        noteTool.setNoteAnnotations(response.noteAnnotations);
+                        debugLog('Loaded note annotations');
                     }
                 } else {
                     debugLog('Error loading highlights: ' + (response.message || 'Unknown error'));
@@ -1080,6 +1763,24 @@ function PdfxInit(runtime, element, options) {
                 marker.init(fabricCanvas);
             } else {
                 console.error("%c[FABRIC] Marker object not available or init method missing!", "background:red;color:white;padding:3px;border-radius:3px;");
+            }
+
+            // Initialize the text tool with fabric canvas if available
+            if (textTool && typeof textTool.init === 'function') {
+                console.log("[FABRIC] Initializing text tool with fabric canvas");
+                textTool.init(fabricCanvas);
+            }
+
+            // Initialize the shape tool with fabric canvas if available
+            if (shapeTool && typeof shapeTool.init === 'function') {
+                console.log("[FABRIC] Initializing shape tool with fabric canvas");
+                shapeTool.init(fabricCanvas);
+            }
+
+            // Initialize the note tool with fabric canvas if available
+            if (noteTool && typeof noteTool.init === 'function') {
+                console.log("[FABRIC] Initializing note tool with fabric canvas");
+                noteTool.init(fabricCanvas);
             }
 
             // Set up brush
@@ -1212,8 +1913,20 @@ function PdfxInit(runtime, element, options) {
 
         // Resize fabric canvas if it exists
         if (fabricCanvas) {
+            // Completely resize the canvas to match the PDF dimensions exactly
             fabricCanvas.setWidth(width);
             fabricCanvas.setHeight(height);
+
+            // Also update the canvas-container wrapper to match
+            var canvasWrapper = $(drawContainer).find('.canvas-container');
+            if (canvasWrapper.length) {
+                canvasWrapper.css({
+                    width: width + 'px',
+                    height: height + 'px'
+                });
+            }
+
+            // Force re-render
             fabricCanvas.calcOffset();
             fabricCanvas.renderAll();
 
@@ -1354,10 +2067,12 @@ function PdfxInit(runtime, element, options) {
                 // Update text layer for highlighting
                 updateTextLayer(page, viewport);
 
-                // Restore highlights after rendering
-                if (highlighter) {
-                    highlighter.restoreHighlights();
-                }
+                // Restore highlights after rendering but after a short delay to ensure text layer is ready
+                setTimeout(function() {
+                    if (highlighter) {
+                        highlighter.restoreHighlights();
+                    }
+                }, 100);
             }).catch(function(error) {
                 debug('Error rendering page: ' + error);
             });
@@ -1544,7 +2259,8 @@ function PdfxInit(runtime, element, options) {
                     position: drawContainer.style.position,
                     zIndex: drawContainer.style.zIndex,
                     pointerEvents: drawContainer.style.pointerEvents,
-                    className: drawContainer.className
+                    className: drawContainer.className,
+                    currentTool: drawContainer.getAttribute('data-current-tool')
                 });
             }
 
@@ -1557,11 +2273,818 @@ function PdfxInit(runtime, element, options) {
 
             // Check debug functions
             console.log("Debug functions available:", !!window.pdfxDebug[blockId]);
+
+            // Check scribble instance
+            var scribbleInstance = window[`scribbleInstance_${blockId}`];
+            console.log("Scribble instance available:", !!scribbleInstance);
+            if (scribbleInstance && typeof scribbleInstance.checkStatus === 'function') {
+                var status = scribbleInstance.checkStatus();
+                console.log("Scribble status:", status);
+            }
+
+            // Check fabric canvas
+            var fabricCanvas = window[`fabricCanvas_${blockId}`];
+            console.log("Fabric canvas available:", !!fabricCanvas);
+            if (fabricCanvas) {
+                console.log("Canvas properties:", {
+                    isDrawingMode: fabricCanvas.isDrawingMode,
+                    width: fabricCanvas.width,
+                    height: fabricCanvas.height,
+                    objectCount: fabricCanvas.getObjects().length,
+                    hasMarkerBrush: fabricCanvas.freeDrawingBrush &&
+                                  (fabricCanvas.freeDrawingBrush.markerMode !== undefined ||
+                                   fabricCanvas.freeDrawingBrush.scribbleMode !== undefined)
+                });
+            }
         });
 
         return "Check complete - see console for details";
     };
 
+    // New function to test and fix marker tool
+    window.testMarkerTool = function(blockId) {
+        console.log("%c[MARKER TEST] Testing marker tool for block " + blockId, "background:#e74c3c;color:white;padding:3px;border-radius:3px;");
+
+        if (!blockId) {
+            // Find the first PDF XBlock if none specified
+            var blocks = document.querySelectorAll('.pdfx_block');
+            if (blocks.length > 0) {
+                blockId = blocks[0].id.replace('pdfx-block-', '');
+            } else {
+                console.error("[MARKER TEST] No PDF XBlocks found in the document");
+                return false;
+            }
+        }
+
+        // Get the marker button
+        var markerBtn = document.getElementById('marker-tool-' + blockId);
+        if (!markerBtn) {
+            console.error("[MARKER TEST] Marker button not found for block " + blockId);
+            return false;
+        }
+
+        // Get the scribble instance
+        var scribbleInstance = window[`scribbleInstance_${blockId}`];
+        if (!scribbleInstance) {
+            console.error("[MARKER TEST] Scribble instance not found for block " + blockId);
+            return false;
+        }
+
+        // Get the fabric canvas
+        var fabricCanvas = window[`fabricCanvas_${blockId}`];
+        if (!fabricCanvas) {
+            console.error("[MARKER TEST] Fabric canvas not found for block " + blockId);
+            return false;
+        }
+
+        console.log("[MARKER TEST] Initial state:", {
+            markerActive: markerBtn.classList.contains('active'),
+            scribbleActive: scribbleInstance.checkStatus ? scribbleInstance.checkStatus().isActive : false,
+            canvasDrawMode: fabricCanvas.isDrawingMode
+        });
+
+        // Click the marker button to activate/deactivate
+        console.log("[MARKER TEST] Clicking marker button");
+        markerBtn.click();
+
+        // Check the state after clicking
+        setTimeout(function() {
+            console.log("[MARKER TEST] State after click:", {
+                markerActive: markerBtn.classList.contains('active'),
+                scribbleActive: scribbleInstance.checkStatus ? scribbleInstance.checkStatus().isActive : false,
+                canvasDrawMode: fabricCanvas.isDrawingMode
+            });
+
+            var drawContainer = document.getElementById('draw-container-' + blockId);
+            console.log("[MARKER TEST] Draw container state:", {
+                pointerEvents: drawContainer.style.pointerEvents,
+                drawMode: drawContainer.classList.contains('draw-mode'),
+                currentTool: drawContainer.getAttribute('data-current-tool')
+            });
+
+            // Log canvas state
+            console.log("[MARKER TEST] Canvas element state:", {
+                upperCanvasPointerEvents: fabricCanvas.upperCanvasEl ? fabricCanvas.upperCanvasEl.style.pointerEvents : 'unknown'
+            });
+
+            // Also test explicitly enabling via the instance
+            if (typeof scribbleInstance.enable === 'function') {
+                console.log("[MARKER TEST] Explicitly enabling via scribbleInstance.enable()");
+                scribbleInstance.enable();
+
+                setTimeout(function() {
+                    console.log("[MARKER TEST] State after explicit enable:", {
+                        markerActive: markerBtn.classList.contains('active'),
+                        scribbleActive: scribbleInstance.checkStatus ? scribbleInstance.checkStatus().isActive : false,
+                        canvasDrawMode: fabricCanvas.isDrawingMode,
+                        upperCanvasPointerEvents: fabricCanvas.upperCanvasEl ? fabricCanvas.upperCanvasEl.style.pointerEvents : 'unknown',
+                        drawContainerPointerEvents: drawContainer.style.pointerEvents
+                    });
+                }, 100);
+            }
+        }, 100);
+
+        return "Test running, check console for details";
+    };
+
+    // Function to add debug button to the debug panel
+    function addDebugButtons() {
+        // Add a button to check IndexedDB
+        var debugPanel = $(element).find(`#pdf-debug-${blockId}`);
+        if (debugPanel.length) {
+            var btnContainer = debugPanel.find('div').last();
+            if (btnContainer.length) {
+                // Add a "Fix Strokes Array" button
+                var fixStrokesArrayBtn = $('<button id="fix-strokes-array-' + blockId + '" class="debug-btn fix-strokes-array">Fix Strokes Array</button>');
+                fixStrokesArrayBtn.click(function() {
+                    console.log('[DEBUG] Attempting to fix strokes array structure...');
+                    if (marker) {
+                        try {
+                            // Get the current strokes
+                            var currentStrokes = marker.getAllMarkerStrokes ? marker.getAllMarkerStrokes() : [];
+                            console.log('[DEBUG] Current strokes structure:', {
+                                type: typeof currentStrokes,
+                                isArray: Array.isArray(currentStrokes),
+                                length: Array.isArray(currentStrokes) ? currentStrokes.length : Object.keys(currentStrokes).length
+                            });
+
+                            // Create a new fixed array
+                            var fixedStrokesArray = [];
+
+                            // If it's already an array, make sure each page has an array
+                            if (Array.isArray(currentStrokes)) {
+                                // Copy the array but ensure each page has a proper array
+                                for (var i = 0; i < currentStrokes.length; i++) {
+                                    if (currentStrokes[i] && currentStrokes[i].length > 0) {
+                                        // Copy existing strokes at this index
+                                        fixedStrokesArray[i] = [...currentStrokes[i]];
+                                    } else {
+                                        // Initialize an empty array at this index
+                                        fixedStrokesArray[i] = [];
+                                    }
+                                }
+                            } else if (typeof currentStrokes === 'object') {
+                                // Convert from object to array
+                                var maxPage = 0;
+                                for (var pageKey in currentStrokes) {
+                                    var pageNum = parseInt(pageKey, 10);
+                                    if (!isNaN(pageNum) && pageNum > maxPage) {
+                                        maxPage = pageNum;
+                                    }
+                                }
+
+                                // Create array of right size
+                                fixedStrokesArray = new Array(maxPage + 1);
+
+                                // Initialize all pages with empty arrays
+                                for (var i = 0; i <= maxPage; i++) {
+                                    fixedStrokesArray[i] = [];
+                                }
+
+                                // Copy strokes from object to array
+                                for (var pageKey in currentStrokes) {
+                                    var pageNum = parseInt(pageKey, 10);
+                                    if (!isNaN(pageNum) && currentStrokes[pageKey] && currentStrokes[pageKey].length > 0) {
+                                        fixedStrokesArray[pageNum] = [...currentStrokes[pageKey]];
+                                    }
+                                }
+                            }
+
+                            console.log('[DEBUG] Fixed strokes array:', {
+                                isArray: Array.isArray(fixedStrokesArray),
+                                length: fixedStrokesArray.length,
+                                nonEmptyPages: fixedStrokesArray.filter(page => page && page.length > 0).length
+                            });
+
+                            // Replace the strokes in the marker
+                            if (marker._setScribbleStrokes) {
+                                marker._setScribbleStrokes(fixedStrokesArray);
+                                console.log('[DEBUG] Replaced strokes with fixed array');
+
+                                // Force save to IndexedDB
+                                if (marker.saveScribbleStrokesToBrowser) {
+                                    marker.saveScribbleStrokesToBrowser();
+                                    console.log('[DEBUG] Saved fixed array to browser storage');
+                                }
+
+                                alert('Fixed strokes array structure. Check console for details.');
+                            } else {
+                                console.error('[DEBUG] Cannot replace strokes, _setScribbleStrokes not available');
+                                alert('Could not replace strokes, method not available');
+                            }
+                        } catch (error) {
+                            console.error('[DEBUG] Error fixing strokes array:', error);
+                            alert('Error fixing strokes array: ' + error.message);
+                        }
+                    } else {
+                        alert('Marker object not available');
+                    }
+                });
+                btnContainer.append(fixStrokesArrayBtn);
+
+                // Other buttons...
+                var checkIndexedDBBtn = $('<button id="check-indexeddb-' + blockId + '" class="debug-btn check-indexeddb">Check IndexedDB Storage</button>');
+                checkIndexedDBBtn.click(function() {
+                    console.log('[DEBUG] Checking IndexedDB storage...');
+                    if (marker && typeof marker.checkIndexedDBStorage === 'function') {
+                        marker.checkIndexedDBStorage()
+                            .then(function(result) {
+                                alert('IndexedDB check complete. See console for details.');
+                            })
+                            .catch(function(error) {
+                                alert('Error checking IndexedDB: ' + error.message);
+                            });
+                    } else {
+                        alert('Marker or IndexedDB check function not available');
+                    }
+                });
+                btnContainer.append(checkIndexedDBBtn);
+
+                // Add force save button
+                var forceSaveBtn = $('<button id="force-save-' + blockId + '" class="debug-btn force-save">Force Save Drawings</button>');
+                forceSaveBtn.click(function() {
+                    console.log('[DEBUG] Forcing save of drawings...');
+                    if (marker) {
+                        // Set pending changes flag to true to force save
+                        marker._pendingChanges = true;
+                        // Call saveScribbleStrokesToBrowser directly
+                        if (typeof marker.saveScribbleStrokesToBrowser === 'function') {
+                            marker.saveScribbleStrokesToBrowser();
+                            alert('Forced save of drawings to browser storage');
+                        } else {
+                            // Try to trigger save through public API
+                            saveAnnotations({
+                                forceSave: true
+                            });
+                            alert('Forced save through annotations API');
+                        }
+                    } else {
+                        alert('Marker object not available');
+                    }
+                });
+                btnContainer.append(forceSaveBtn);
+            }
+        }
+    }
+
+    // Add this function to override any automatic marker tool activations
+    function setupAntiMarkerInit() {
+        debugLog('Setting up anti-marker initialization protection');
+
+        // First run immediately - but only disable marker, not other tools
+        disableMarkerTool();
+
+        // Continue to run periodically to counteract any auto-init scripts, but less frequently
+        // to reduce potential interference with other tools
+        var antiMarkerInterval = setInterval(disableMarkerTool, 5000);
+
+        // Watch for DOM changes that might re-add active class ONLY to marker button
+        var observer = new MutationObserver(function(mutations) {
+            mutations.forEach(function(mutation) {
+                // Only process class attribute changes on marker/scribble tools
+                if (mutation.type === 'attributes' &&
+                    mutation.attributeName === 'class' &&
+                    mutation.target.id &&
+                    (mutation.target.id.includes('marker-tool') ||
+                     mutation.target.id.includes('scribble-tool'))) {
+
+                    // If marker button gets 'active' class, remove it
+                    if (mutation.target.classList.contains('active')) {
+                        debugLog('Detected marker tool activation, disabling it');
+
+                        // Don't call full disableMarkerTool to avoid affecting other tools
+                        // Just remove active class from the specific button
+                        mutation.target.classList.remove('active');
+
+                        // Ensure marker is disabled only if it was auto-activated
+                        if (marker && typeof marker.disable === 'function') {
+                            marker.disable();
+                        }
+                    }
+                }
+            });
+        });
+
+        // Set up observers ONLY for marker/scribble tool buttons
+        var markerButtons = document.querySelectorAll(
+            `#marker-tool-${blockId}, #scribble-tool-${blockId}`
+        );
+
+        markerButtons.forEach(function(button) {
+            observer.observe(button, { attributes: true });
+        });
+
+        // Override direct marker fix functions to prevent them from running
+        if (window['directMarkerFix_' + blockId]) {
+            var originalFix = window['directMarkerFix_' + blockId];
+            window['directMarkerFix_' + blockId] = function() {
+                console.log('Prevented automatic marker fix for ' + blockId);
+
+                // Just ensure the marker button isn't active, don't affect other tools
+                var markerButton = document.getElementById(`marker-tool-${blockId}`);
+                if (markerButton) {
+                    markerButton.classList.remove('active');
+                }
+
+                var scribbleButton = document.getElementById(`scribble-tool-${blockId}`);
+                if (scribbleButton) {
+                    scribbleButton.classList.remove('active');
+                }
+
+                return false;
+            };
+            debugLog('Overrode directMarkerFix function');
+        }
+
+        // Store interval ID in window so it can be cleared if needed
+        window['antiMarkerInterval_' + blockId] = antiMarkerInterval;
+
+        debugLog('Anti-marker initialization setup complete');
+    }
+
+    // Function to forcibly disable the marker tool
+    function disableMarkerTool() {
+        debugLog('Disabling marker tool');
+
+        // Make sure the marker button is not active
+        $(element).find(`#marker-tool-${blockId}, #scribble-tool-${blockId}`).removeClass('active');
+
+        // Make sure drawing mode is disabled only if no other tool needs drawing mode
+        var activeTools = $(element).find('.tool-btn.active').map(function() {
+            return this.id.replace(`-${blockId}`, '');
+        }).get();
+
+        var hasOtherDrawingTools = activeTools.some(function(toolId) {
+            return toolId !== 'marker-tool' && toolId !== 'scribble-tool';
+        });
+
+        if (!hasOtherDrawingTools && fabricCanvas) {
+            fabricCanvas.isDrawingMode = false;
+            if (fabricCanvas.upperCanvasEl) {
+                fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+            }
+        }
+
+        // Make sure the draw container is not in draw mode when appropriate
+        var drawContainer = $(element).find(`#draw-container-${blockId}`)[0];
+        if (drawContainer) {
+            // Only modify the container if its current tool is marker/scribble
+            if (drawContainer.dataset.currentTool === 'marker' ||
+                drawContainer.dataset.currentTool === 'scribble') {
+
+                // Remove draw mode only if no other drawing tool is active
+                if (!hasOtherDrawingTools) {
+                    drawContainer.classList.remove('draw-mode');
+                    drawContainer.style.pointerEvents = 'none';
+                }
+
+                // Clear the current tool attribute
+                drawContainer.dataset.currentTool = '';
+            }
+        }
+
+        // Disable the marker object
+        if (marker && typeof marker.disable === 'function') {
+            marker.disable();
+        }
+
+        // Only activate the select tool if no other tools are active and select tool exists
+        if ($(element).find('.tool-btn.active').length === 0 &&
+            $(element).find(`#select-tool-${blockId}`).length > 0) {
+            $(element).find(`#select-tool-${blockId}`).addClass('active');
+        }
+    }
+
     // Start initialization
     initializeWhenReady();
 }
+
+// Add this function at the end of the file
+window.fixMarkerTool = function(blockId) {
+    console.log("%c[MARKER FIX] Attempting to fix marker tool", "background:#e67e22;color:white;padding:3px;border-radius:3px;");
+
+    if (!blockId) {
+        // Find the first PDF XBlock if none specified
+        var blocks = document.querySelectorAll('.pdfx_block');
+        if (blocks.length > 0) {
+            blockId = blocks[0].id.replace('pdfx-block-', '');
+        } else {
+            console.error("[MARKER FIX] No PDF XBlocks found in the document");
+            return false;
+        }
+    }
+
+    // Get components
+    var markerBtn = document.getElementById('marker-tool-' + blockId);
+    var scribbleInstance = window[`scribbleInstance_${blockId}`];
+    var fabricCanvas = window[`fabricCanvas_${blockId}`];
+    var drawContainer = document.getElementById('draw-container-' + blockId);
+    var pdfContainer = document.getElementById('pdf-container-' + blockId);
+
+    if (!markerBtn || !scribbleInstance || !fabricCanvas || !drawContainer) {
+        console.error("[MARKER FIX] One or more required components not found");
+        return false;
+    }
+
+    console.log("[MARKER FIX] Starting with state:", {
+        markerActive: markerBtn.classList.contains('active'),
+        drawContainerMode: drawContainer.classList.contains('draw-mode'),
+        drawContainerPointerEvents: drawContainer.style.pointerEvents,
+        currentTool: drawContainer.getAttribute('data-current-tool'),
+        fabricDrawingMode: fabricCanvas.isDrawingMode,
+        upperCanvasPointerEvents: fabricCanvas.upperCanvasEl ? fabricCanvas.upperCanvasEl.style.pointerEvents : 'unknown'
+    });
+
+    // First, ensure marker button is active
+    markerBtn.classList.add('active');
+
+    // Set draw container properties
+    drawContainer.style.pointerEvents = 'auto';
+    drawContainer.classList.add('draw-mode');
+    drawContainer.setAttribute('data-current-tool', 'marker');
+    drawContainer.style.cursor = 'crosshair';
+
+    // Configure fabric canvas
+    fabricCanvas.isDrawingMode = true;
+    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+
+    // Configure brush
+    if (fabricCanvas.freeDrawingBrush) {
+        fabricCanvas.freeDrawingBrush.color = document.getElementById(`color-input-${blockId}`) ?
+            document.getElementById(`color-input-${blockId}`).value : '#FF0000';
+        fabricCanvas.freeDrawingBrush.width = 5;
+        fabricCanvas.freeDrawingBrush.markerMode = true;
+        fabricCanvas.freeDrawingBrush.scribbleMode = true;
+    }
+
+    // Directly activate the scribble instance
+    if (typeof scribbleInstance.enable === 'function') {
+        scribbleInstance.enable();
+    }
+
+    // Fix canvas size issues
+    if (pdfContainer && fabricCanvas) {
+        // Get the actual PDF container dimensions
+        var pdfWidth = pdfContainer.offsetWidth;
+        var pdfHeight = pdfContainer.offsetHeight;
+
+        console.log(`[MARKER FIX] PDF container dimensions: ${pdfWidth}x${pdfHeight}`);
+        console.log(`[MARKER FIX] Current canvas dimensions: ${fabricCanvas.width}x${fabricCanvas.height}`);
+
+        // Resize canvas to match PDF container exactly
+        fabricCanvas.setWidth(pdfWidth);
+        fabricCanvas.setHeight(pdfHeight);
+
+        // Also update the canvas-container wrapper
+        var canvasWrapper = document.querySelector(`#draw-container-${blockId} .canvas-container`);
+        if (canvasWrapper) {
+            canvasWrapper.style.width = pdfWidth + 'px';
+            canvasWrapper.style.height = pdfHeight + 'px';
+        }
+
+        // Force re-render
+        fabricCanvas.calcOffset();
+        fabricCanvas.renderAll();
+
+        console.log(`[MARKER FIX] Resized canvas to: ${fabricCanvas.width}x${fabricCanvas.height}`);
+    }
+
+    console.log("[MARKER FIX] Fix applied. New state:", {
+        markerActive: markerBtn.classList.contains('active'),
+        drawContainerMode: drawContainer.classList.contains('draw-mode'),
+        drawContainerPointerEvents: drawContainer.style.pointerEvents,
+        currentTool: drawContainer.getAttribute('data-current-tool'),
+        fabricDrawingMode: fabricCanvas.isDrawingMode,
+        upperCanvasPointerEvents: fabricCanvas.upperCanvasEl ? fabricCanvas.upperCanvasEl.style.pointerEvents : 'unknown',
+        canvasDimensions: fabricCanvas ? `${fabricCanvas.width}x${fabricCanvas.height}` : 'unknown'
+    });
+
+    return "Marker tool fix applied, check console for details";
+};
+
+// Global function to check the status of the marker tool
+window.checkMarkerToolStatus = function(blockId) {
+    if (!blockId) {
+        // Find the first PDF XBlock if none specified
+        var blocks = document.querySelectorAll('.pdfx_block');
+        if (blocks.length > 0) {
+            blockId = blocks[0].id.replace('pdfx-block-', '');
+        } else {
+            console.error("No PDF XBlocks found in the document");
+            return { error: "No PDF XBlocks found" };
+        }
+    }
+
+    // Get required components
+    var scribbleInstance = window[`scribbleInstance_${blockId}`];
+    var fabricCanvas = window[`fabricCanvas_${blockId}`];
+    var drawContainer = document.getElementById(`draw-container-${blockId}`);
+    var pdfContainer = document.getElementById(`pdf-container-${blockId}`);
+    var canvasWrapper = drawContainer ? drawContainer.querySelector('.canvas-container') : null;
+
+    var status = {
+        components: {
+            scribbleInstance: !!scribbleInstance,
+            fabricCanvas: !!fabricCanvas,
+            drawContainer: !!drawContainer,
+            pdfContainer: !!pdfContainer,
+            canvasWrapper: !!canvasWrapper
+        },
+        dimensions: {
+            pdfContainer: pdfContainer ? {
+                width: pdfContainer.offsetWidth,
+                height: pdfContainer.offsetHeight
+            } : null,
+            fabricCanvas: fabricCanvas ? {
+                width: fabricCanvas.width,
+                height: fabricCanvas.height
+            } : null,
+            canvasWrapper: canvasWrapper ? {
+                width: canvasWrapper.offsetWidth,
+                height: canvasWrapper.offsetHeight
+            } : null
+        },
+        state: {
+            markerActive: document.getElementById(`marker-tool-${blockId}`) ?
+                document.getElementById(`marker-tool-${blockId}`).classList.contains('active') : false,
+            drawContainerMode: drawContainer ? drawContainer.classList.contains('draw-mode') : false,
+            currentTool: drawContainer ? drawContainer.getAttribute('data-current-tool') : null,
+            isDrawingMode: fabricCanvas ? fabricCanvas.isDrawingMode : false,
+            pointerEvents: {
+                drawContainer: drawContainer ? drawContainer.style.pointerEvents : null,
+                upperCanvas: fabricCanvas && fabricCanvas.upperCanvasEl ?
+                    fabricCanvas.upperCanvasEl.style.pointerEvents : null
+            }
+        },
+        scribbleStatus: scribbleInstance && typeof scribbleInstance.checkStatus === 'function' ?
+            scribbleInstance.checkStatus() : null
+    };
+
+    console.log("%c[MARKER STATUS] Tool status:", "background:#3498db;color:white;padding:3px;border-radius:3px;", status);
+    return status;
+};
+
+// Utility function to test the marker tool
+window.testMarkerTool = function(blockId) {
+    console.log("%c[MARKER TEST] Testing marker tool", "background:#e74c3c;color:white;padding:3px;border-radius:3px;");
+
+    if (!blockId) {
+        // Find the first PDF XBlock if none specified
+        var blocks = document.querySelectorAll('.pdfx_block');
+        if (blocks.length > 0) {
+            blockId = blocks[0].id.replace('pdfx-block-', '');
+        } else {
+            console.error("No PDF XBlocks found in the document");
+            return false;
+        }
+    }
+
+    // Check before
+    var beforeStatus = window.checkMarkerToolStatus(blockId);
+    console.log("[MARKER TEST] Status before activating:", beforeStatus);
+
+    // Try to activate the marker
+    var markerBtn = document.getElementById(`marker-tool-${blockId}`);
+    if (markerBtn) {
+        console.log("[MARKER TEST] Clicking marker button");
+        markerBtn.click();
+
+        // Check after
+        setTimeout(function() {
+            var afterStatus = window.checkMarkerToolStatus(blockId);
+            console.log("[MARKER TEST] Status after activating:", afterStatus);
+
+            // If still not drawing properly, try fixing
+            if (!afterStatus.state.isDrawingMode || !afterStatus.state.drawContainerMode) {
+                console.log("[MARKER TEST] Tool not properly activated, trying fix");
+                window.fixMarkerTool(blockId);
+            }
+        }, 100);
+
+        return true;
+    } else {
+        console.error("[MARKER TEST] Marker button not found");
+        return false;
+    }
+};
+
+// Function to fix the marker tool dimensions
+window.fixMarkerToolDimensions = function(blockId) {
+    if (!blockId) {
+        var blocks = document.querySelectorAll('.pdfx_block');
+        if (blocks.length > 0) {
+            blockId = blocks[0].id.replace('pdfx-block-', '');
+        } else {
+            console.error("No PDF XBlocks found in the document");
+            return false;
+        }
+    }
+
+    var fabricCanvas = window[`fabricCanvas_${blockId}`];
+    var pdfContainer = document.getElementById(`pdf-container-${blockId}`);
+    var drawContainer = document.getElementById(`draw-container-${blockId}`);
+
+    if (!fabricCanvas || !pdfContainer || !drawContainer) {
+        console.error("[DIMENSION FIX] Required components not found");
+        return false;
+    }
+
+    // Get PDF container dimensions
+    var containerWidth = pdfContainer.offsetWidth;
+    var containerHeight = pdfContainer.offsetHeight;
+
+    console.log(`[DIMENSION FIX] Setting canvas dimensions to match PDF: ${containerWidth}x${containerHeight}`);
+
+    // Resize fabric canvas
+    fabricCanvas.setWidth(containerWidth);
+    fabricCanvas.setHeight(containerHeight);
+
+    // Resize canvas wrapper
+    var canvasWrapper = drawContainer.querySelector('.canvas-container');
+    if (canvasWrapper) {
+        canvasWrapper.style.width = containerWidth + 'px';
+        canvasWrapper.style.height = containerHeight + 'px';
+    }
+
+    // Make sure draw container covers the entire PDF area
+    drawContainer.style.width = containerWidth + 'px';
+    drawContainer.style.height = containerHeight + 'px';
+
+    // Force render
+    fabricCanvas.calcOffset();
+    fabricCanvas.renderAll();
+
+    console.log("[DIMENSION FIX] Canvas dimensions fixed");
+    return true;
+};
+
+// For easy access from browser console
+window.fixPdfMarker = function() {
+    console.log("%c[PDF MARKER FIX] Starting quick fix for PDF marker tool", "background:#2ecc71;color:white;padding:3px;border-radius:3px;");
+
+    // Find all PDF XBlocks
+    var blocks = document.querySelectorAll('.pdfx_block');
+    var results = {};
+
+    blocks.forEach(function(block) {
+        var blockId = block.id.replace('pdfx-block-', '');
+        console.log(`Fixing marker for block: ${blockId}`);
+
+        try {
+            // 1. Fix dimensions first
+            window.fixMarkerToolDimensions(blockId);
+
+            // 2. Fix marker tool state
+            window.fixMarkerTool(blockId);
+
+            results[blockId] = 'Fixed successfully';
+        } catch (error) {
+            console.error(`Error fixing block ${blockId}:`, error);
+            results[blockId] = `Error: ${error.message}`;
+        }
+    });
+
+    console.log("%c[PDF MARKER FIX] Fix attempt completed", "background:#2ecc71;color:white;padding:3px;border-radius:3px;", results);
+    return "Fix attempted for " + blocks.length + " PDF blocks. Check console for details.";
+};
+
+// Function to help users activate marker tool from console
+window.activateMarker = function() {
+    var blocks = document.querySelectorAll('.pdfx_block');
+    if (blocks.length === 0) {
+        console.error("No PDF blocks found on page");
+        return "No PDF blocks found";
+    }
+
+    var blockId = blocks[0].id.replace('pdfx-block-', '');
+    var markerBtn = document.getElementById(`marker-tool-${blockId}`);
+
+    if (!markerBtn) {
+        console.error("Marker tool button not found");
+        return "Marker button not found";
+    }
+
+    console.log("Activating marker tool for block:", blockId);
+    markerBtn.click();
+
+    // Run a check after activation
+    setTimeout(function() {
+        var status = window.checkMarkerToolStatus(blockId);
+
+        // If not properly activated, try the fix
+        if (!status.state.isDrawingMode) {
+            console.log("Tool not properly activated, running fix");
+            window.fixPdfMarker();
+        }
+    }, 100);
+
+    return "Marker tool activated";
+};
+
+// Function to reset pointer events when switching tools
+function resetPointerEvents(blockId) {
+    console.log(`[TOOL] Resetting pointer events for block ${blockId}`);
+
+    try {
+        // Get the draw container
+        var drawContainer = document.querySelector(`#draw-container-${blockId}`);
+        if (drawContainer) {
+            // Temporarily disable pointer events on the draw container
+            // This prevents it from capturing clicks meant for tool buttons
+            drawContainer.style.pointerEvents = 'none';
+
+            // Check if the draw container has a canvas-container
+            var canvasContainer = drawContainer.querySelector('.canvas-container');
+            if (canvasContainer) {
+                // Temporarily disable pointer events on the canvas container
+                canvasContainer.style.pointerEvents = 'none';
+
+                // Also disable all canvas elements inside
+                var canvasElements = canvasContainer.querySelectorAll('canvas');
+                canvasElements.forEach(function(canvas) {
+                    canvas.style.pointerEvents = 'none';
+                });
+            }
+
+            // Check for fabricCanvas
+            var fabricCanvas = window[`fabricCanvas_${blockId}`];
+            if (fabricCanvas) {
+                // Temporarily disable drawing mode to prevent interference
+                var wasDrawingMode = fabricCanvas.isDrawingMode;
+                fabricCanvas.isDrawingMode = false;
+
+                // Temporarily disable pointer events on the upper canvas
+                if (fabricCanvas.upperCanvasEl) {
+                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+                }
+
+                // Schedule restoration of drawing mode if necessary
+                if (wasDrawingMode) {
+                    setTimeout(function() {
+                        // Get currently active tool
+                        var activeToolBtn = document.querySelector(`.tool-btn.active[id$="-tool-${blockId}"]`);
+                        if (activeToolBtn && (activeToolBtn.id.includes('marker') || activeToolBtn.id.includes('scribble'))) {
+                            fabricCanvas.isDrawingMode = true;
+                            if (fabricCanvas.upperCanvasEl) {
+                                fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
+                            }
+                            drawContainer.style.pointerEvents = 'auto';
+                        }
+                    }, 100);
+                }
+            }
+
+            // Make sure tool buttons are always clickable
+            var toolButtons = document.querySelectorAll(`[id$="-tool-${blockId}"]`);
+            toolButtons.forEach(function(button) {
+                button.style.pointerEvents = 'auto';
+            });
+
+            // Allow the document to handle the click events
+            document.body.style.pointerEvents = 'auto';
+
+            // Log the reset
+            console.log(`[TOOL] Successfully reset pointer events for block ${blockId}`);
+        } else {
+            console.log(`[TOOL] Draw container not found for block ${blockId}`);
+        }
+    } catch (error) {
+        console.error(`[TOOL] Error resetting pointer events: ${error.message}`);
+    }
+}
+
+// Add a global click handler to ensure UI can always be recovered
+// if pointer events get stuck
+document.addEventListener('click', function(event) {
+    // Don't handle clicks on tool buttons - they have their own handlers
+    if (event.target.closest('[id$="-tool-"]')) {
+        return;
+    }
+
+    // Find any active PDF blocks
+    var pdfxBlocks = document.querySelectorAll('.pdfx_block');
+    if (pdfxBlocks.length === 0) {
+        return;
+    }
+
+    // Reset pointer events for all blocks to ensure UI remains responsive
+    pdfxBlocks.forEach(function(block) {
+        var blockId = block.id.replace('pdfx-block-', '');
+
+        // Check if any tool is active
+        var activeToolBtn = block.querySelector('.tool-btn.active');
+        if (!activeToolBtn) {
+            // If no tool is active, ensure draw container has pointer-events:none
+            var drawContainer = document.getElementById(`draw-container-${blockId}`);
+            if (drawContainer) {
+                drawContainer.style.pointerEvents = 'none';
+            }
+
+            // Also ensure canvas has pointer-events:none
+            var fabricCanvas = window[`fabricCanvas_${blockId}`];
+            if (fabricCanvas && fabricCanvas.upperCanvasEl) {
+                fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
+            }
+        }
+    });
+});

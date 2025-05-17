@@ -248,10 +248,299 @@
             console.log('Fabric canvas initialized successfully');
             return 'Canvas fixed successfully';
         } catch (err) {
-            console.error('Error initializing fabric canvas:', err);
+            console.error('Error fixing canvas:', err);
             return 'Error fixing canvas: ' + err.message;
         }
     };
+
+    /**
+     * Check and display IndexedDB storage status for PDF XBlock
+     * @param {string} [blockId] - The block ID to check storage for (optional)
+     * @returns {Promise<string>} Status message
+     */
+    window.pdfxDebug.checkStorage = async function(blockId) {
+        blockId = blockId || findBlockId();
+
+        if (!blockId) {
+            console.error('No PDF XBlock found on the page');
+            return 'No PDF XBlock found';
+        }
+
+        console.log('%c[PDF DEBUG] Checking IndexedDB storage for block: ' + blockId,
+                   'background:#2ecc71;color:white;padding:3px;border-radius:3px;');
+
+        // Check if PdfxStorage is available
+        if (typeof window.PdfxStorage === 'undefined') {
+            console.error('PdfxStorage module not loaded!');
+            return 'PdfxStorage module not available';
+        }
+
+        try {
+            // Get storage statistics
+            const stats = await window.PdfxStorage.getStorageStats();
+            console.log('Storage statistics:', stats);
+
+            // Format the statistics for display
+            let statsHtml = `
+                <div>
+                    <strong>Total PDFs stored:</strong> ${stats.totalPdfs}<br>
+                    <strong>Total storage used:</strong> ${stats.totalSizeFormatted}<br>
+                    ${stats.newestAccess ? '<strong>Last accessed:</strong> ' + new Date(stats.newestAccess).toLocaleString() + '<br>' : ''}
+                    ${stats.oldestAccess ? '<strong>Oldest access:</strong> ' + new Date(stats.oldestAccess).toLocaleString() : ''}
+                </div>
+            `;
+
+            // Display in the UI if available
+            const statsElement = document.getElementById('storage-stats-' + blockId);
+            if (statsElement) {
+                statsElement.innerHTML = statsHtml;
+            }
+
+            return 'Storage check complete: ' + stats.totalPdfs + ' PDFs using ' + stats.totalSizeFormatted;
+        } catch (error) {
+            console.error('Error checking storage:', error);
+            return 'Error checking storage: ' + error.message;
+        }
+    };
+
+    /**
+     * Clear all PDF data from IndexedDB storage
+     * @param {string} [blockId] - The block ID (optional, just for logging)
+     * @returns {Promise<string>} Status message
+     */
+    window.pdfxDebug.clearAllStorage = async function(blockId) {
+        blockId = blockId || findBlockId();
+
+        console.log('%c[PDF DEBUG] Clearing all PDF storage',
+                   'background:#e74c3c;color:white;padding:3px;border-radius:3px;');
+
+        // Check if PdfxStorage is available
+        if (typeof window.PdfxStorage === 'undefined') {
+            console.error('PdfxStorage module not loaded!');
+            return 'PdfxStorage module not available';
+        }
+
+        try {
+            await window.PdfxStorage.clearPdfs();
+            console.log('All PDF storage cleared');
+
+            // Update stats display
+            await window.pdfxDebug.checkStorage(blockId);
+
+            return 'All PDF storage cleared successfully';
+        } catch (error) {
+            console.error('Error clearing storage:', error);
+            return 'Error clearing storage: ' + error.message;
+        }
+    };
+
+    /**
+     * Clear only the current PDF from IndexedDB storage
+     * @param {string} [blockId] - The block ID (optional)
+     * @returns {Promise<string>} Status message
+     */
+    window.pdfxDebug.clearCurrentPdf = async function(blockId) {
+        blockId = blockId || findBlockId();
+
+        if (!blockId) {
+            console.error('No PDF XBlock found on the page');
+            return 'No PDF XBlock found';
+        }
+
+        console.log('%c[PDF DEBUG] Clearing current PDF from storage for block: ' + blockId,
+                   'background:#f39c12;color:white;padding:3px;border-radius:3px;');
+
+        // Check if PdfxStorage is available
+        if (typeof window.PdfxStorage === 'undefined') {
+            console.error('PdfxStorage module not loaded!');
+            return 'PdfxStorage module not available';
+        }
+
+        try {
+            // Get current PDF URL
+            const url = document.querySelector('.pdf-url-debug')?.textContent;
+            if (!url) {
+                return 'Could not find current PDF URL';
+            }
+
+            // Get metadata for current PDF
+            const element = document.getElementById('pdfx-block-' + blockId);
+            const metadata = {
+                courseId: '',
+                blockId: blockId,
+                filename: url.split('/').pop() || '',
+            };
+
+            // Try to safely get the courseId
+            try {
+                if (element && element.dataset && element.dataset.courseId) {
+                    metadata.courseId = element.dataset.courseId;
+                } else {
+                    // Try from a directly accessible data element
+                    const dataElement = document.getElementById('pdfx-data-' + blockId);
+                    if (dataElement && dataElement.dataset && dataElement.dataset.courseId) {
+                        metadata.courseId = dataElement.dataset.courseId;
+                    }
+                }
+            } catch (e) {
+                console.error('Error getting courseId:', e);
+                // Continue without courseId
+            }
+
+            // Clear by courseId and blockId to ensure we get all versions
+            await window.PdfxStorage.clearPdfs({
+                courseId: metadata.courseId,
+                blockId: blockId
+            });
+
+            console.log('Current PDF cleared from storage');
+
+            // Update stats display
+            await window.pdfxDebug.checkStorage(blockId);
+
+            return 'Current PDF cleared from storage';
+        } catch (error) {
+            console.error('Error clearing current PDF:', error);
+            return 'Error clearing current PDF: ' + error.message;
+        }
+    };
+
+    /**
+     * Force refresh the current PDF from the server
+     * @param {string} [blockId] - The block ID (optional)
+     * @returns {Promise<string>} Status message
+     */
+    window.pdfxDebug.forceRefreshPdf = async function(blockId) {
+        blockId = blockId || findBlockId();
+
+        if (!blockId) {
+            console.error('No PDF XBlock found on the page');
+            return 'No PDF XBlock found';
+        }
+
+        console.log('%c[PDF DEBUG] Forcing refresh of current PDF for block: ' + blockId,
+                   'background:#3498db;color:white;padding:3px;border-radius:3px;');
+
+        try {
+            // Get current PDF URL
+            const url = document.querySelector('.pdf-url-debug')?.textContent;
+            if (!url) {
+                return 'Could not find current PDF URL';
+            }
+
+            // Get metadata for current PDF
+            const element = document.getElementById('pdfx-block-' + blockId);
+            const metadata = {
+                courseId: '',
+                blockId: blockId,
+                filename: url.split('/').pop() || '',
+            };
+
+            // Try to safely get the courseId
+            try {
+                if (element && element.dataset && element.dataset.courseId) {
+                    metadata.courseId = element.dataset.courseId;
+                } else {
+                    // Try from a directly accessible data element
+                    const dataElement = document.getElementById('pdfx-data-' + blockId);
+                    if (dataElement && dataElement.dataset && dataElement.dataset.courseId) {
+                        metadata.courseId = dataElement.dataset.courseId;
+                    }
+                }
+            } catch (e) {
+                console.error('Error getting courseId:', e);
+                // Continue without courseId
+            }
+
+            // First clear the current PDF from storage
+            if (typeof window.PdfxStorage !== 'undefined') {
+                await window.PdfxStorage.clearPdfs({
+                    blockId: blockId
+                });
+                console.log('Cleared cached PDF for block:', blockId);
+            }
+
+            // Then trigger a force reload using the existing button
+            const reloadBtn = document.getElementById('force-reload-' + blockId);
+            if (reloadBtn) {
+                console.log('Triggering force reload...');
+                reloadBtn.click();
+                return 'PDF refresh initiated - forced server reload';
+            } else {
+                // If button not found, try to reload manually
+                console.log('Reload button not found, trying direct reload via loadPDF function');
+
+                // Try to access the loadPDF function from the window object
+                if (typeof window['loadPDF_' + blockId] === 'function') {
+                    window['loadPDF_' + blockId]();
+                    return 'PDF refresh initiated using loadPDF function';
+                }
+
+                return 'Could not trigger PDF reload - reload the page manually';
+            }
+        } catch (error) {
+            console.error('Error refreshing PDF:', error);
+            return 'Error refreshing PDF: ' + error.message;
+        }
+    };
+
+    // Initialize debug buttons when DOM is loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        const blockId = findBlockId();
+        if (!blockId) return;
+
+        // Initialize storage management buttons
+        const checkStorageBtn = document.getElementById('check-storage-' + blockId);
+        const clearStorageBtn = document.getElementById('clear-pdf-storage-' + blockId);
+        const clearCurrentPdfBtn = document.getElementById('clear-current-pdf-' + blockId);
+        const refreshPdfBtn = document.getElementById('refresh-pdf-' + blockId);
+
+        if (checkStorageBtn) {
+            checkStorageBtn.addEventListener('click', function() {
+                window.pdfxDebug.checkStorage(blockId).then(message => {
+                    console.log(message);
+                });
+            });
+        }
+
+        if (clearStorageBtn) {
+            clearStorageBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to clear all stored PDFs?')) {
+                    window.pdfxDebug.clearAllStorage(blockId).then(message => {
+                        console.log(message);
+                        alert(message);
+                    });
+                }
+            });
+        }
+
+        if (clearCurrentPdfBtn) {
+            clearCurrentPdfBtn.addEventListener('click', function() {
+                if (confirm('Are you sure you want to clear the current PDF from storage?')) {
+                    window.pdfxDebug.clearCurrentPdf(blockId).then(message => {
+                        console.log(message);
+                        alert(message);
+                    });
+                }
+            });
+        }
+
+        if (refreshPdfBtn) {
+            refreshPdfBtn.addEventListener('click', function() {
+                if (confirm('Force reload the current PDF from server?')) {
+                    window.pdfxDebug.forceRefreshPdf(blockId).then(message => {
+                        console.log(message);
+                        alert(message);
+                    });
+                }
+            });
+        }
+
+        // Check storage initially
+        setTimeout(() => {
+            window.pdfxDebug.checkStorage(blockId).catch(console.error);
+        }, 1000);
+    });
 
     // Export functions to the global debug namespace
     console.log('PDF XBlock debug utilities registered');

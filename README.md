@@ -64,7 +64,7 @@ mongo_db = mongo_client.get_database('your_database_name')
 ### Adding to Course
 
 1. Enable the XBlock in your course's advanced settings by adding "pdfx" to the "Advanced Module List"
-2. Create a new unit and select "Advanced" > "PDF Viewer" from the component menu
+2. Create a new unit and select "Advanced" > "PDFXpert XBlock" from the component menu
 3. Configure the PDF by either:
    - Uploading a PDF file
    - Providing a URL to a PDF file
