@@ -4,22 +4,90 @@
 <!-- Add fabric.js library -->
 <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
 
+<!-- Immediate Canvas Fix Script -->
+<script>
+// Run as early as possible to ensure canvas sizes are correct
+(function() {
+    'use strict';
+
+    function fixCanvasDimensions() {
+        // Get the block ID
+        var blockId = '${block.block_id}';
+
+        // Get PDF container for dimensions
+        var pdfContainer = document.getElementById('pdf-container-' + blockId);
+        var drawContainer = document.getElementById('draw-container-' + blockId);
+
+        if (!pdfContainer || !drawContainer) {
+            return;
+        }
+
+        // Get dimensions
+        var width = pdfContainer.offsetWidth;
+        var height = pdfContainer.offsetHeight;
+
+        // Fix draw container dimensions
+        drawContainer.style.width = width + 'px';
+        drawContainer.style.height = height + 'px';
+
+        // Set up MutationObserver to watch for canvas creation
+        var observer = new MutationObserver(function(mutations) {
+            // Look for canvas container
+            var canvasContainer = drawContainer.querySelector('.canvas-container');
+            if (canvasContainer) {
+
+                // Fix canvas container
+                canvasContainer.style.width = width + 'px';
+                canvasContainer.style.height = height + 'px';
+
+                // Fix canvases
+                var canvases = canvasContainer.querySelectorAll('canvas');
+                canvases.forEach(function(canvas) {
+                    canvas.width = width;
+                    canvas.height = height;
+                    canvas.style.width = width + 'px';
+                    canvas.style.height = height + 'px';
+                });
+
+                // We found and fixed the canvas container, can disconnect
+                observer.disconnect();
+            }
+        });
+
+        // Start observing
+        observer.observe(drawContainer, { childList: true, subtree: true });
+
+        // Set up a timeout to stop observing after 10 seconds (avoid memory leaks)
+        setTimeout(function() {
+            observer.disconnect();
+        }, 10000);
+    }
+
+    // Try to run immediately
+    if (document.readyState === 'complete' || document.readyState === 'interactive') {
+        setTimeout(fixCanvasDimensions, 0);
+    }
+
+    // Also run when DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', fixCanvasDimensions);
+
+    // And after a delay to ensure all components have initialized
+    setTimeout(fixCanvasDimensions, 1000);
+})();
+</script>
+
 <!-- Early initialization script - improved to NOT automatically activate any tool -->
 <script>
 // Early init script - tool neutral
 (function() {
     // Create a function to run as early as possible
     function earlyInit() {
-        console.log('EARLY INIT: Starting at ' + new Date().toISOString());
 
         // Wait for DOM content to load
         document.addEventListener('DOMContentLoaded', function() {
-            console.log('EARLY INIT: DOM content loaded at ' + new Date().toISOString());
-
             // Initialize tools manager when available
             var initInterval = setInterval(function() {
                 if (typeof PdfxToolsCommon !== 'undefined') {
-                    console.log('EARLY INIT: PdfxToolsCommon found, stopping interval');
                     clearInterval(initInterval);
 
                     // IMPORTANT: Do NOT activate any specific tool
@@ -38,19 +106,15 @@
 <script>
 // Improved marker initialization function that works with the tools manager
 function directMarkerFix(blockId) {
-    console.log('DIRECT MARKER FIX: Called for block ' + blockId + ' at ' + new Date().toISOString());
-
     // Look for the tools manager
     var toolsManager = window['toolsManager_' + blockId];
 
     if (toolsManager) {
-        console.log('DIRECT MARKER FIX: Using tools manager');
 
         // IMPORTANT: Do NOT automatically activate marker tool
         // Instead, just verify canvas initialization
         var drawContainer = document.getElementById('draw-container-' + blockId);
         if (drawContainer && !drawContainer._fabricCanvas) {
-            console.log('DIRECT MARKER FIX: Initializing fabric canvas only');
 
             // Just initialize canvas without activating the tool
             var pdfContainer = document.getElementById('pdf-container-' + blockId);
@@ -71,8 +135,6 @@ function directMarkerFix(blockId) {
 
                     drawContainer._fabricCanvas = fabricCanvas;
                     window['fabricCanvas_' + blockId] = fabricCanvas;
-
-                    console.log('DIRECT MARKER FIX: Canvas initialized successfully');
                 } catch (error) {
                     console.error('DIRECT MARKER FIX: Error creating canvas: ' + error.message);
                 }
@@ -81,7 +143,6 @@ function directMarkerFix(blockId) {
 
         return true;
     } else {
-        console.log('DIRECT MARKER FIX: Tools manager not available yet, will be handled by regular initialization');
         return false;
     }
 }
@@ -92,50 +153,11 @@ window.directMarkerFix = directMarkerFix;
 
 <!-- Emergency debug functions - modified to not activate marker by default -->
 <script>
-// Emergency debug functions
-window.emergencyFix = function(blockId) {
-    console.log('EMERGENCY FIX disabled for block: ' + blockId);
 
-    // The following code is commented out to prevent auto-activation
-    /*
-    // Force marker activation
-    var markerButton = document.getElementById('marker-tool-' + blockId);
-    if (markerButton) {
-        markerButton.click();
-        markerButton.classList.add('active');
-        console.log('Marker button clicked and active class added');
-    }
-
-    // Force draw container styles
-    var drawContainer = document.getElementById('draw-container-' + blockId);
-    if (drawContainer) {
-        drawContainer.style.position = 'absolute';
-        drawContainer.style.top = '0';
-        drawContainer.style.left = '0';
-        drawContainer.style.width = '100%';
-        drawContainer.style.height = '100%';
-        drawContainer.style.pointerEvents = 'auto';
-        drawContainer.style.zIndex = '30';
-        drawContainer.classList.add('draw-mode');
-        console.log('Draw container styles forced');
-    }
-
-    // Try to find the upper canvas
-    var upperCanvas = document.querySelector('.upper-canvas');
-    if (upperCanvas) {
-        upperCanvas.style.pointerEvents = 'auto';
-        upperCanvas.style.cursor = 'crosshair';
-        console.log('Upper canvas pointer events set to auto');
-    }
-    */
-
-    return 'Emergency fix disabled - marker tool not activated';
-};
 
 // Add DIRECTLY to document level event handlers - but don't activate marker tool
 document.addEventListener('DOMContentLoaded', function() {
     // Log but don't add auto-activation
-    console.log('DOMContentLoaded - auto marker activation is disabled');
 });
 </script>
 
@@ -288,6 +310,7 @@ document.addEventListener('DOMContentLoaded', function() {
             <button id="toggle-debug-${block.block_id}" class="debug-btn toggle-debug">Hide Debug Info</button>
             <button id="direct-download-${block.block_id}" class="debug-btn direct-download">Download PDF</button>
             <button id="check-canvas-${block.block_id}" class="debug-btn check-canvas">Check Canvas</button>
+            <button id="force-strokes-visibility-${block.block_id}" class="debug-btn force-strokes">Force Strokes Visibility</button>
         </div>
 
         <!-- IndexedDB Storage Management -->
@@ -312,76 +335,10 @@ document.addEventListener('DOMContentLoaded', function() {
         // Create direct fix function in global scope that uses string concatenation instead of template literals
         // but modified to not activate marker by default
         window['directMarkerFix_' + '${block.block_id}'] = function() {
-            console.log('Auto marker fix is DISABLED for ' + '${block.block_id}');
 
             // Return without activating marker
             return false;
 
-            // The original code is commented out below
-            /*
-            try {
-                // Get the drawing container
-                var drawContainer = document.getElementById('draw-container-' + '${block.block_id}');
-                var pdfContainer = document.getElementById('pdf-container-' + '${block.block_id}');
-
-                if (!drawContainer || !pdfContainer) {
-                    console.error('Container not found!');
-                    return;
-                }
-
-                // Remove any existing canvas
-                drawContainer.innerHTML = '';
-
-                // Set container styles
-                drawContainer.style.position = 'absolute';
-                drawContainer.style.top = '0';
-                drawContainer.style.left = '0';
-                drawContainer.style.width = '100%';
-                drawContainer.style.height = '100%';
-                drawContainer.style.zIndex = '30';
-                drawContainer.style.pointerEvents = 'auto';
-                drawContainer.classList.add('draw-mode');
-
-                // Create canvas element
-                var canvas = document.createElement('canvas');
-                canvas.id = 'drawing-canvas-' + '${block.block_id}';
-                canvas.width = pdfContainer.offsetWidth;
-                canvas.height = pdfContainer.offsetHeight;
-                canvas.style.position = 'absolute';
-                canvas.style.top = '0';
-                canvas.style.left = '0';
-
-                // Add canvas to container
-                drawContainer.appendChild(canvas);
-
-                // Initialize fabric canvas
-                if (typeof fabric !== 'undefined') {
-                    var fabricCanvas = new fabric.Canvas(canvas, {
-                        isDrawingMode: true,
-                        selection: false
-                    });
-
-                    // Configure brush
-                    fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
-                    var colorInput = document.getElementById('color-input-' + '${block.block_id}');
-                    fabricCanvas.freeDrawingBrush.color = colorInput ? colorInput.value : '#FF0000';
-                    fabricCanvas.freeDrawingBrush.width = 5;
-
-                    // Make sure pointer events are enabled
-                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
-
-                    // Store canvas globally
-                    window['emergencyCanvas_' + '${block.block_id}'] = fabricCanvas;
-
-                    console.log('Direct marker fix applied successfully');
-                } else {
-                    console.error('fabric.js not loaded!');
-                    alert('fabric.js is not loaded! Cannot initialize drawing.');
-                }
-            } catch (err) {
-                console.error('Error applying fix:', err);
-            }
-            */
         };
 
         // Attach to button click but don't auto-run
@@ -389,7 +346,6 @@ document.addEventListener('DOMContentLoaded', function() {
             var fixButton = document.getElementById('fix-marker-' + '${block.block_id}');
             if (fixButton) {
                 fixButton.addEventListener('click', function() {
-                    console.log('Fix button clicked but auto-activation is disabled');
                     // Do not call window['directMarkerFix_' + '${block.block_id}']();
                 });
             }
@@ -397,7 +353,6 @@ document.addEventListener('DOMContentLoaded', function() {
             // Do NOT auto-run the fix - commented out
             /*
             setTimeout(function() {
-                console.log('Auto-running marker fix...');
                 window['directMarkerFix_' + '${block.block_id}']();
             }, 1000);
             */
@@ -406,10 +361,91 @@ document.addEventListener('DOMContentLoaded', function() {
         // Do NOT try to run immediately - commented out
         /*
         setTimeout(function() {
-            console.log('Immediate marker fix attempt...');
             window['directMarkerFix_' + '${block.block_id}']();
         }, 500);
         */
     })();
     </script>
 </div>
+
+<!-- Immediate fix for canvas sizing -->
+<script type="text/javascript">
+(function() {
+    // Fix the canvas container size as soon as possible
+    function emergencyFixCanvasContainer(blockId) {
+
+        var pdfContainer = document.getElementById('pdf-container-' + blockId);
+        var drawContainer = document.getElementById('draw-container-' + blockId);
+
+        if (!pdfContainer || !drawContainer) {
+            return false;
+        }
+
+        // Get the dimensions from the PDF container
+        var width = pdfContainer.offsetWidth;
+        var height = pdfContainer.offsetHeight;
+
+        if (width <= 0 || height <= 0) {
+            return false;
+        }
+
+        // Set the draw container dimensions
+        drawContainer.style.width = width + 'px';
+        drawContainer.style.height = height + 'px';
+
+        // Find the canvas container (if it exists yet)
+        var canvasContainer = drawContainer.querySelector('.canvas-container');
+        if (canvasContainer) {
+            // Set all sizing properties to ensure proper dimensions
+            canvasContainer.style.width = width + 'px';
+            canvasContainer.style.height = height + 'px';
+            canvasContainer.style.minWidth = width + 'px';
+            canvasContainer.style.minHeight = height + 'px';
+            canvasContainer.style.maxWidth = width + 'px';
+            canvasContainer.style.maxHeight = height + 'px';
+
+            // Set the canvas sizes (both upper and lower)
+            var canvases = canvasContainer.querySelectorAll('canvas');
+            canvases.forEach(function(canvas) {
+                canvas.width = width;
+                canvas.height = height;
+                canvas.style.width = width + 'px';
+                canvas.style.height = height + 'px';
+            });
+
+            return true;
+        }
+        return false;
+    }
+
+    // Run once right away
+    var blockId = '{{ xblock_id }}';
+    emergencyFixCanvasContainer(blockId);
+
+    // Run again after DOM is fully loaded
+    document.addEventListener('DOMContentLoaded', function() {
+        emergencyFixCanvasContainer(blockId);
+
+        // Make the function available globally
+        window.emergencyFixCanvasContainer = emergencyFixCanvasContainer;
+
+        // Re-check periodically until fabric canvas is initialized
+        var checkInterval = setInterval(function() {
+            if (emergencyFixCanvasContainer(blockId)) {
+                // If canvas container is already present, we can stop
+                var fabricCanvas = window['fabricCanvas_' + blockId];
+                if (fabricCanvas) {
+                    clearInterval(checkInterval);
+                }
+            }
+        }, 500); // Check every 500ms
+
+        // Stop checking after 10 seconds regardless
+        setTimeout(function() {
+            if (checkInterval) {
+                clearInterval(checkInterval);
+            }
+        }, 10000);
+    });
+})();
+</script>

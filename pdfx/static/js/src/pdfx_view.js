@@ -21,7 +21,6 @@ function PdfxXBlock(runtime, element, initArgs) {
     function findElement(selector) {
         // Only process string selectors
         if (typeof selector !== 'string') {
-            console.error('Invalid selector type:', typeof selector);
             return null;
         }
 
@@ -61,22 +60,6 @@ function PdfxXBlock(runtime, element, initArgs) {
     var isStudio = (window.location.href.indexOf('studio') !== -1) ||
                   (window.location.href.indexOf('/cms/') !== -1);
 
-    // Debug helper
-    function debug(message) {
-        if (window.console && console.log) {
-            console.log('PDF XBlock (' + blockId + '): ' + message);
-
-            // Add to debug logs container if available and not disabled
-            var logsContainer = findElement('.debug-logs-container');
-            if (logsContainer) {
-                var timestamp = new Date().toLocaleTimeString();
-                logsContainer.innerHTML += '<div>[' + timestamp + '] ' + message + '</div>';
-                // Auto-scroll to bottom
-                logsContainer.scrollTop = logsContainer.scrollHeight;
-            }
-        }
-    }
-
     // Show error message
     function showError(message) {
         var errorElement = findElement('.pdf-error');
@@ -92,26 +75,19 @@ function PdfxXBlock(runtime, element, initArgs) {
         if (loadingIndicator) {
             loadingIndicator.style.display = 'none';
         }
-
-        debug('Error: ' + message);
     }
 
     // Get safe PDF URL
     function getSafePdfUrl() {
         if (!pdfUrl) {
-            debug('No PDF URL provided');
             return '';
         }
-
-        // Debug the input URL
-        debug('Original PDF URL: ' + pdfUrl);
 
         let url = pdfUrl;
 
         // Handle asset URLs (they might need special handling in Open edX)
         if (url.indexOf('asset-v1') !== -1) {
             // This is an Open edX asset URL
-            debug('Detected Open edX asset URL');
 
             // Check if it's already absolute
             if (!(url.indexOf('http://') === 0 || url.indexOf('https://') === 0)) {
@@ -120,7 +96,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                     // Try to get the base URL from window.location
                     const baseUrl = window.location.protocol + '//' + window.location.host;
                     url = baseUrl + url;
-                    debug('Converted to absolute URL: ' + url);
                 }
             }
 
@@ -129,15 +104,12 @@ function PdfxXBlock(runtime, element, initArgs) {
             // Relative URL - convert to absolute
             const baseUrl = window.location.protocol + '//' + window.location.host;
             url = baseUrl + url;
-            debug('Converted relative URL to absolute: ' + url);
             return url;
         } else if (url.indexOf('http://') === 0 || url.indexOf('https://') === 0) {
             // Already an absolute URL
-            debug('URL is already absolute');
             return url;
         } else {
             // Add https:// if missing
-            debug('Adding https:// to URL');
             return 'https://' + url;
         }
     }
@@ -145,23 +117,11 @@ function PdfxXBlock(runtime, element, initArgs) {
     // Load the PDF
     function loadPDF() {
         try {
-            debug('Starting PDF loading process');
-
             // Make sure PDF.js is available
             if (typeof pdfjsLib === 'undefined') {
                 showError('PDF.js library not loaded. Please refresh the page or contact support.');
-                debug('PDF.js library not available');
                 return;
             }
-
-            debug('PDF.js library is loaded. Version: ' + (pdfjsLib.version || 'unknown'));
-
-            // Configure worker if needed
-            if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
-                debug('Setting PDF.js worker source');
-                pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.10.377/pdf.worker.min.js';
-            }
-            debug('PDF.js worker source: ' + pdfjsLib.GlobalWorkerOptions.workerSrc);
 
             const url = getSafePdfUrl();
             if (!url) {
@@ -169,11 +129,8 @@ function PdfxXBlock(runtime, element, initArgs) {
                 return;
             }
 
-            debug('PDF URL: ' + url);
-
             // Check if PdfxStorage is available
             if (typeof window.PdfxStorage === 'undefined') {
-                debug('PdfxStorage not available, falling back to direct loading');
                 loadPdfFromUrl(url);
                 return;
             }
@@ -204,15 +161,11 @@ function PdfxXBlock(runtime, element, initArgs) {
                     }
                 }
             } catch (e) {
-                debug('Error getting courseId: ' + e.message + ', continuing without it');
                 // Continue without courseId, it's not critical
             }
 
-            debug('Checking if PDF exists in IndexedDB storage with metadata: ' + JSON.stringify(metadata));
-
             // Set a timeout to fall back to direct loading if IndexedDB is too slow or hangs
             const timeoutId = setTimeout(() => {
-                debug('IndexedDB operation timed out, falling back to direct loading');
                 loadPdfFromUrl(url);
             }, 3000); // 3 second timeout
 
@@ -222,16 +175,12 @@ function PdfxXBlock(runtime, element, initArgs) {
                     clearTimeout(timeoutId); // Clear the timeout as we got a response
 
                     if (exists) {
-                        debug('PDF found in IndexedDB storage, loading from there');
                         return window.PdfxStorage.getPdf(url, metadata)
                             .catch(error => {
-                                debug('Error retrieving PDF from IndexedDB: ' + error.message);
-                                debug('Falling back to direct loading');
                                 loadPdfFromUrl(url);
                                 return null;
                             });
                     } else {
-                        debug('PDF not found in IndexedDB storage, fetching from URL');
                         // Show loading indicator
                         jq('.loading-indicator').text('Loading PDF from server...');
 
@@ -242,7 +191,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                                     throw new Error('No data received from fetchPdfAsArrayBuffer');
                                 }
 
-                                debug('PDF fetched from server, storing in IndexedDB');
                                 // Get last modified information if possible via HEAD request
                                 return new Promise((resolve, reject) => {
                                     jQuery.ajax({
@@ -257,7 +205,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                                             window.PdfxStorage.storePdf(url, pdfData, metadata)
                                                 .then(() => resolve(pdfData))
                                                 .catch(error => {
-                                                    debug('Error storing PDF in IndexedDB: ' + error.message);
                                                     resolve(pdfData); // Continue even if storage fails
                                                 });
                                         },
@@ -266,7 +213,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                                             window.PdfxStorage.storePdf(url, pdfData, metadata)
                                                 .then(() => resolve(pdfData))
                                                 .catch(error => {
-                                                    debug('Error storing PDF in IndexedDB: ' + error.message);
                                                     resolve(pdfData); // Continue even if storage fails
                                                 });
                                         }
@@ -274,7 +220,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                                 });
                             })
                             .catch(error => {
-                                debug('Error fetching PDF: ' + error.message);
                                 // Fall back to direct loading
                                 loadPdfFromUrl(url);
                                 return null;
@@ -284,23 +229,18 @@ function PdfxXBlock(runtime, element, initArgs) {
                 .then(pdfData => {
                     if (pdfData) {
                         try {
-                            debug('PDF data obtained, loading with PDF.js');
                             loadPdfFromData(pdfData);
                         } catch (error) {
-                            debug('Error loading PDF from data: ' + error.message);
                             // Fall back to direct loading
                             loadPdfFromUrl(url);
                         }
                     }
                 })
                 .catch(error => {
-                    clearTimeout(timeoutId); // Clear the timeout in case of an error
-                    debug('Error in IndexedDB storage flow: ' + error.message);
                     // Fall back to direct loading
                     loadPdfFromUrl(url);
                 });
         } catch (error) {
-            debug('Error during PDF initialization: ' + error.message);
             showError('Error initializing PDF: ' + error.message);
 
             // Fall back to direct loading
@@ -313,22 +253,17 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Load PDF directly from URL (fallback method)
     function loadPdfFromUrl(url) {
-        debug('Loading PDF directly from URL: ' + url);
-
         // Test for potential CORS issues
-        debug('Checking if URL might have CORS issues...');
         try {
             const pdfOrigin = new URL(url).origin;
             const pageOrigin = window.location.origin;
             const corsIssuesPossible = pdfOrigin !== pageOrigin;
-            debug('PDF origin: ' + pdfOrigin + ', Page origin: ' + pageOrigin);
-            debug('Cross-origin request: ' + (corsIssuesPossible ? 'Yes (CORS needed)' : 'No (same origin)'));
 
             if (corsIssuesPossible) {
-                debug('⚠️ Warning: PDF is loaded from a different origin, CORS headers must be present on the server.');
+                // ⚠️ Warning: PDF is loaded from a different origin, CORS headers must be present on the server.
             }
         } catch (e) {
-            debug('Error checking CORS: ' + e.message);
+            // Ignore CORS check for now
         }
 
         // Store debug info but don't show the panel
@@ -338,13 +273,11 @@ function PdfxXBlock(runtime, element, initArgs) {
         }
 
         // Create a loading task with more detailed options
-        debug('Creating PDF.js loading task');
 
         // Check if we're using PDF.js v5+ which uses the PDF namespace
         const pdfLib = window.pdfjsLib || window.pdf;
 
         if (!pdfLib) {
-            debug('Error: PDF.js library not available');
             showError('PDF.js library not available. Please refresh the page.');
             return;
         }
@@ -353,7 +286,6 @@ function PdfxXBlock(runtime, element, initArgs) {
         const getDocumentFn = pdfLib.getDocument || (pdfLib.PDFDocumentLoadingTask && pdfLib.PDFDocumentLoadingTask.prototype.getDocument);
 
         if (!getDocumentFn) {
-            debug('Error: PDF.js getDocument function not available');
             showError('PDF.js API not available. Please refresh the page.');
             return;
         }
@@ -365,7 +297,6 @@ function PdfxXBlock(runtime, element, initArgs) {
             if (pdfLib.PDFDocumentLoadingTask) {
                 loadingTask = new pdfLib.PDFDocumentLoadingTask();
                 loadingTask.docId = url;
-                debug('Using PDF.js 5.x API');
             }
             // For PDF.js 2.x and 3.x
             else if (pdfLib.getDocument) {
@@ -377,14 +308,11 @@ function PdfxXBlock(runtime, element, initArgs) {
                     disableStream: false,
                     disableAutoFetch: false
                 });
-                debug('Using PDF.js 2.x/3.x API');
             } else {
-                debug('Error: Could not determine PDF.js API version');
                 showError('Unsupported PDF.js API version. Please contact your course administrator.');
                 return;
             }
         } catch (err) {
-            debug('Error creating PDF loading task: ' + err.message);
             showError('Error initializing PDF loader: ' + err.message);
             return;
         }
@@ -392,33 +320,22 @@ function PdfxXBlock(runtime, element, initArgs) {
         // Add progress handler if available
         if (loadingTask.onProgress) {
             loadingTask.onProgress = function(progress) {
-                debug('PDF loading progress: ' +
-                      Math.round(progress.loaded / Math.max(progress.total, 1) * 100) + '%' +
-                      ' (' + progress.loaded + ' of ' + (progress.total || 'unknown') + ' bytes)');
-
                 if (progress.total > 0) {
-                    const percent = Math.round(progress.loaded / progress.total * 100);
-                    jq('.loading-indicator').text('Loading PDF... ' + percent + '%');
+                    jq('.loading-indicator').text('Loading PDF... ' + Math.round(progress.loaded / Math.max(progress.total, 1) * 100) + '%');
                 }
             };
         }
 
         // Send a HEAD request to check if the PDF exists and is accessible
-        debug('Sending HEAD request to verify PDF accessibility');
         jQuery.ajax({
             type: "HEAD",
             url: url,
             success: function(data, textStatus, xhr) {
-                debug('HEAD request successful: ' + xhr.status);
-                debug('Content-Type: ' + xhr.getResponseHeader('Content-Type'));
-                debug('Content-Length: ' + xhr.getResponseHeader('Content-Length'));
                 // Continue loading with PDF.js
                 continuePdfLoading(loadingTask);
             },
             error: function(xhr, textStatus, error) {
-                debug('HEAD request failed: ' + xhr.status + ' - ' + error);
                 // Try loading with PDF.js anyway
-                debug('Continuing PDF loading despite HEAD request failure');
                 continuePdfLoading(loadingTask);
             }
         });
@@ -426,13 +343,10 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Load PDF from ArrayBuffer data
     function loadPdfFromData(pdfData) {
-        debug('Loading PDF from ArrayBuffer data');
-
         // Check if we're using PDF.js v5+ which uses the PDF namespace
         const pdfLib = window.pdfjsLib || window.pdf;
 
         if (!pdfLib) {
-            debug('Error: PDF.js library not available');
             showError('PDF.js library not available. Please refresh the page.');
             return;
         }
@@ -448,7 +362,6 @@ function PdfxXBlock(runtime, element, initArgs) {
 
                 // Directly load data for newer PDF.js versions
                 loadingTask.data = pdfData;
-                debug('Using PDF.js 5.x API for data loading');
             }
             // For PDF.js 2.x and 3.x
             else if (pdfLib.getDocument) {
@@ -457,14 +370,11 @@ function PdfxXBlock(runtime, element, initArgs) {
                     cMapUrl: 'https://cdn.jsdelivr.net/npm/pdfjs-dist@5.0.375/cmaps/',
                     cMapPacked: true
                 });
-                debug('Using PDF.js 2.x/3.x API for data loading');
             } else {
-                debug('Error: Could not determine PDF.js API version');
                 showError('Unsupported PDF.js API version. Please contact your course administrator.');
                 return;
             }
         } catch (err) {
-            debug('Error creating PDF loading task for data: ' + err.message);
             showError('Error initializing PDF loader: ' + err.message);
             return;
         }
@@ -472,8 +382,6 @@ function PdfxXBlock(runtime, element, initArgs) {
         // Add progress handler if available
         if (loadingTask.onProgress) {
             loadingTask.onProgress = function(progress) {
-                debug('PDF loading progress: ' +
-                     Math.round(progress.loaded / Math.max(progress.total, 1) * 100) + '%');
             };
         }
 
@@ -483,21 +391,8 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Continue PDF loading after HEAD request check
     function continuePdfLoading(loadingTask) {
-        debug('Continuing with PDF.js loading process');
-
         // Use promise to load the PDF
         loadingTask.promise.then(function(pdf) {
-            debug('PDF document loaded successfully - Object type: ' + (typeof pdf));
-            debug('PDF ID: ' + pdf.fingerprint);
-            debug('Number of pages: ' + pdf.numPages);
-
-            // Verify the PDF object has the expected properties
-            if (!pdf.numPages || typeof pdf.getPage !== 'function') {
-                debug('WARNING: PDF object does not appear to be valid');
-                showError('The loaded PDF object appears to be invalid');
-                return;
-            }
-
             pdfDoc = pdf;
 
             // Update page counter
@@ -507,27 +402,21 @@ function PdfxXBlock(runtime, element, initArgs) {
             currentZoom = 'auto';
 
             // First render with default settings
-            debug('Proceeding to render page ' + currentPage);
             renderPage(currentPage);
 
             // Hide loading indicator
             jq('.loading-indicator').hide();
         }).catch(function(error) {
-            debug('Error loading PDF: ' + error.message);
             showError('Failed to load PDF: ' + error.message);
 
             // Add more details for debugging
             if (error.name === 'MissingPDFException') {
-                debug('PDF file not found at URL: ' + getSafePdfUrl());
                 showError('PDF file not found. The URL may be incorrect or the file has been moved.');
             } else if (error.name === 'InvalidPDFException') {
-                debug('Invalid or corrupted PDF file');
                 showError('The PDF file appears to be invalid or corrupted.');
             } else if (error.name === 'UnexpectedResponseException') {
-                debug('Unexpected server response: ' + error.status);
                 showError('Unexpected response from server: ' + error.status);
             } else if (error.name === 'UnknownErrorException') {
-                debug('Unknown error occurred during PDF loading');
                 showError('An unknown error occurred while loading the PDF: ' + error.message);
             }
         });
@@ -536,12 +425,10 @@ function PdfxXBlock(runtime, element, initArgs) {
     // Render a specific page
     function renderPage(pageNum) {
         if (!pdfDoc) {
-            debug('No PDF document loaded');
             return;
         }
 
         if (pageNum < 1 || pageNum > pdfDoc.numPages) {
-            debug('Page number out of range: ' + pageNum);
             return;
         }
 
@@ -555,10 +442,23 @@ function PdfxXBlock(runtime, element, initArgs) {
             pdfViewer.scrollTop = 0;
         }
 
+        // Dispatch page change event early, so drawing tools can prepare
+        if (typeof CustomEvent === 'function') {
+            const beforePageChangeEvent = new CustomEvent('pdfx:beforepagechange', {
+                detail: {
+                    blockId: blockId,
+                    pageNum: pageNum,
+                    previousPage: currentPage !== pageNum ? currentPage : null
+                },
+                bubbles: true,
+                cancelable: false
+            });
+            document.dispatchEvent(beforePageChangeEvent);
+            console.debug(`[PdfX Debug] Dispatched pdfx:beforepagechange event for block ${blockId}, page ${pageNum}`);
+        }
+
         // Get the page
         pdfDoc.getPage(pageNum).then(function(page) {
-            debug('Rendering page ' + pageNum);
-
             // Get viewport with initial scale
             var viewport = page.getViewport({ scale: 1.0 });
 
@@ -569,7 +469,6 @@ function PdfxXBlock(runtime, element, initArgs) {
             var pdfViewer = element.querySelector('.pdf-viewer');
 
             if (!pdfCanvas || !pdfContainer || !pdfViewer) {
-                debug('Required elements not found');
                 return;
             }
 
@@ -579,7 +478,6 @@ function PdfxXBlock(runtime, element, initArgs) {
             if (pageNum === 1 || !pdfOriginalWidth) {
                 pdfOriginalWidth = viewport.width;
                 pdfOriginalHeight = viewport.height;
-                debug('Original PDF dimensions: ' + pdfOriginalWidth + 'x' + pdfOriginalHeight);
 
                 // Detect orientation
                 if (pdfOriginalWidth > pdfOriginalHeight) {
@@ -605,9 +503,6 @@ function PdfxXBlock(runtime, element, initArgs) {
 
                 // Use fitWidthScale to make "fit to width" the default behavior
                 currentZoom = fitWidthScale;
-
-                debug('Auto-scaled to fit width: ' + currentZoom.toFixed(2));
-                jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
 
                 // Update button states to reflect fit-to-width is active by default
                 var fitToWidthBtn = document.getElementById('fit-to-width-' + blockId);
@@ -635,6 +530,34 @@ function PdfxXBlock(runtime, element, initArgs) {
             if (drawContainer) {
                 drawContainer.style.width = containerWidth + 'px';
                 drawContainer.style.height = containerHeight + 'px';
+
+                // Clear existing drawing canvas objects when changing pages
+                // Access scribble instance if it exists and clear its canvas
+                if (window[`scribbleInstance_${blockId}`]) {
+                    const scribbleInstance = window[`scribbleInstance_${blockId}`];
+
+                    // Update current page in the scribble instance
+                    if (typeof scribbleInstance.setCurrentPage === 'function') {
+                        console.debug(`[PdfX Debug] Updating scribble instance page to ${pageNum}`);
+                        scribbleInstance.setCurrentPage(pageNum);
+                    }
+                }
+
+                // Dispatch event that PDF is loaded and sized
+                if (typeof CustomEvent === 'function') {
+                    const pdfLoadedEvent = new CustomEvent('pdfViewer:loaded', {
+                        detail: {
+                            blockId: blockId,
+                            width: containerWidth,
+                            height: containerHeight,
+                            page: pageNum
+                        },
+                        bubbles: true,
+                        cancelable: true
+                    });
+                    document.dispatchEvent(pdfLoadedEvent);
+                    console.debug(`[PdfX Debug] Dispatched pdfViewer:loaded event for block ${blockId} with dimensions ${containerWidth}x${containerHeight}`);
+                }
             }
 
             // Apply current filter settings (brightness/grayscale)
@@ -661,8 +584,6 @@ function PdfxXBlock(runtime, element, initArgs) {
 
             var renderTask = page.render(renderContext);
             renderTask.promise.then(function() {
-                debug('Page ' + pageNum + ' rendered successfully');
-
                 // Ensure that the scroll position is at the top after rendering is complete
                 if (pdfViewer) {
                     pdfViewer.scrollTop = 0;
@@ -676,11 +597,9 @@ function PdfxXBlock(runtime, element, initArgs) {
                 // Restore any annotations for this page
                 restoreAnnotations(pageNum);
             }).catch(function(error) {
-                debug('Error rendering page ' + pageNum + ': ' + error);
                 showError('Failed to render page ' + pageNum + ': ' + error.message);
             });
         }).catch(function(error) {
-            debug('Error getting page ' + pageNum + ': ' + error);
             showError('Failed to get page ' + pageNum + ': ' + error.message);
         });
     }
@@ -697,7 +616,6 @@ function PdfxXBlock(runtime, element, initArgs) {
     // Restore annotations for current page
     function restoreAnnotations(pageNum) {
         // Simple placeholder for now
-        debug('Would restore annotations for page ' + pageNum);
     }
 
     // Save current state to server
@@ -716,10 +634,8 @@ function PdfxXBlock(runtime, element, initArgs) {
             url: runtime.handlerUrl(element, 'save_annotations'),
             data: JSON.stringify(data),
             success: function(response) {
-                debug("Saved to server successfully");
             },
             error: function(error) {
-                debug("Error saving to server: " + error);
             }
         });
     }
@@ -727,17 +643,13 @@ function PdfxXBlock(runtime, element, initArgs) {
     // Fit functions
     function fitToWidth() {
         try {
-            debug('Fit to width requested');
-
             if (!pdfDoc || !pdfOriginalWidth) {
-                debug('Cannot fit to width: PDF document or width not available');
                 return;
             }
 
             // Get the container width
             var pdfViewer = element.querySelector('.pdf-viewer');
             if (!pdfViewer) {
-                debug('Cannot fit to width: PDF viewer element not found');
                 return;
             }
 
@@ -750,12 +662,8 @@ function PdfxXBlock(runtime, element, initArgs) {
             // Get container width with margin
             var viewerWidth = pdfViewer.clientWidth - 40;
 
-            debug('Viewer width for fit-to-width: ' + viewerWidth);
-            debug('PDF width for fit-to-width: ' + pdfOriginalWidth);
-
             // Calculate scale based on container width and page width
             currentZoom = viewerWidth / pdfOriginalWidth;
-            debug('Fit to width scale: ' + currentZoom.toFixed(2));
 
             // Update zoom display
             jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
@@ -773,18 +681,14 @@ function PdfxXBlock(runtime, element, initArgs) {
             // Apply scroll reset again after rendering with a longer timeout to ensure it takes effect
             setTimeout(function() {
                 pdfViewer.scrollTop = 0;
-                debug('Scroll position reset after fit to width');
-                // Also try to scroll any parent containers that might be scrollable
                 var viewerContainer = element.querySelector('.pdf-viewer-container');
                 var contentArea = element.querySelector('.content-area');
                 if (viewerContainer) viewerContainer.scrollTop = 0;
                 if (contentArea) contentArea.scrollTop = 0;
             }, 200);
         } catch (error) {
-            debug('Error in fitToWidth: ' + error.message);
             // If fit to width fails, at least make sure the PDF is rendered with default zoom
             if (!pdfDoc) {
-                debug('No PDF document available for rendering after fitToWidth error');
                 return;
             }
             renderPage(currentPage);
@@ -793,17 +697,13 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     function fitToPage() {
         try {
-            debug('Fit to page requested');
-
             if (!pdfDoc || !pdfOriginalWidth || !pdfOriginalHeight) {
-                debug('Cannot fit to page: PDF document or dimensions not available');
                 return;
             }
 
             // Get the container dimensions
             var pdfViewer = element.querySelector('.pdf-viewer');
             if (!pdfViewer) {
-                debug('Cannot fit to page: PDF viewer element not found');
                 return;
             }
 
@@ -817,16 +717,12 @@ function PdfxXBlock(runtime, element, initArgs) {
             var viewerWidth = pdfViewer.clientWidth - 40;
             var viewerHeight = pdfViewer.clientHeight - 40;
 
-            debug('Viewer dimensions for fit-to-page: ' + viewerWidth + 'x' + viewerHeight);
-            debug('PDF dimensions for fit-to-page: ' + pdfOriginalWidth + 'x' + pdfOriginalHeight);
-
             // Calculate scale based on both width and height to fit the page
             var scaleX = viewerWidth / pdfOriginalWidth;
             var scaleY = viewerHeight / pdfOriginalHeight;
 
             // Use the smaller scale to ensure the entire page fits
             currentZoom = Math.min(scaleX, scaleY);
-            debug('Fit to page scale: ' + currentZoom.toFixed(2));
 
             // Update zoom display
             jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
@@ -844,18 +740,14 @@ function PdfxXBlock(runtime, element, initArgs) {
             // Apply scroll reset again after rendering with a longer timeout to ensure it takes effect
             setTimeout(function() {
                 pdfViewer.scrollTop = 0;
-                debug('Scroll position reset after fit to page');
-                // Also try to scroll any parent containers that might be scrollable
                 var viewerContainer = element.querySelector('.pdf-viewer-container');
                 var contentArea = element.querySelector('.content-area');
                 if (viewerContainer) viewerContainer.scrollTop = 0;
                 if (contentArea) contentArea.scrollTop = 0;
             }, 200);
         } catch (error) {
-            debug('Error in fitToPage: ' + error.message);
             // If fit to page fails, at least make sure the PDF is rendered with default zoom
             if (!pdfDoc) {
-                debug('No PDF document available for rendering after fitToPage error');
                 return;
             }
             renderPage(currentPage);
@@ -863,8 +755,6 @@ function PdfxXBlock(runtime, element, initArgs) {
     }
 
     function toggleFullscreen() {
-        debug('Toggle fullscreen requested');
-
         // Get the container element - the specific block container, not all blocks
         var container = document.querySelector('.pdfx_block#pdfx-block-' + blockId);
         if (!container) return;
@@ -911,7 +801,7 @@ function PdfxXBlock(runtime, element, initArgs) {
                     container.msRequestFullscreen();
                 }
             } catch (e) {
-                debug('Browser fullscreen API not supported, using CSS fullscreen: ' + e.message);
+                // Ignore browser fullscreen API for now
             }
 
             // Update button appearance
@@ -931,7 +821,6 @@ function PdfxXBlock(runtime, element, initArgs) {
     // Toggle grayscale mode
     function toggleGrayscale() {
         isGrayscale = !isGrayscale;
-        debug('Toggling grayscale mode: ' + isGrayscale);
 
         // Use block-specific selectors to ensure we only modify this instance
         var button = document.getElementById('grayscale-toggle-' + blockId);
@@ -955,8 +844,6 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Initialize event listeners
     function initEventListeners() {
-        debug('Initializing event listeners with block ID: ' + blockId);
-
         // Fullscreen change event listener to handle Escape key exits
         function handleFullscreenChange() {
             // Check if we're no longer in fullscreen mode
@@ -1021,9 +908,7 @@ function PdfxXBlock(runtime, element, initArgs) {
         var zoomInBtn = document.getElementById('zoom-in-' + blockId);
         if (zoomInBtn) {
             zoomInBtn.addEventListener('click', function() {
-                debug('Zoom in clicked, current zoom: ' + currentZoom);
                 currentZoom += 0.1;
-                debug('New zoom level: ' + currentZoom);
                 jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
 
                 // Clear active state from fit buttons when manual zoom is used
@@ -1048,11 +933,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                 setTimeout(function() {
                     if (pdfViewer) {
                         pdfViewer.scrollTop = 0;
-                        debug('Scroll position reset after zoom in');
-                        var viewerContainer = element.querySelector('.pdf-viewer-container');
-                        var contentArea = element.querySelector('.content-area');
-                        if (viewerContainer) viewerContainer.scrollTop = 0;
-                        if (contentArea) contentArea.scrollTop = 0;
                     }
                 }, 200);
             });
@@ -1061,9 +941,7 @@ function PdfxXBlock(runtime, element, initArgs) {
         var zoomOutBtn = document.getElementById('zoom-out-' + blockId);
         if (zoomOutBtn) {
             zoomOutBtn.addEventListener('click', function() {
-                debug('Zoom out clicked, current zoom: ' + currentZoom);
                 currentZoom = Math.max(0.1, currentZoom - 0.1);
-                debug('New zoom level: ' + currentZoom);
                 jq('#zoom-level-' + blockId).text(Math.round(currentZoom * 100) + '%');
 
                 // Clear active state from fit buttons when manual zoom is used
@@ -1088,11 +966,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                 setTimeout(function() {
                     if (pdfViewer) {
                         pdfViewer.scrollTop = 0;
-                        debug('Scroll position reset after zoom out');
-                        var viewerContainer = element.querySelector('.pdf-viewer-container');
-                        var contentArea = element.querySelector('.content-area');
-                        if (viewerContainer) viewerContainer.scrollTop = 0;
-                        if (contentArea) contentArea.scrollTop = 0;
                     }
                 }, 200);
             });
@@ -1126,10 +999,8 @@ function PdfxXBlock(runtime, element, initArgs) {
                 downloadBtn.addEventListener('click', function() {
                     var url = getSafePdfUrl();
                     if (!url) {
-                        debug('No URL available for download');
                         return;
                     }
-                    debug('Downloading PDF: ' + url);
                     window.open(url, '_blank');
                 });
             } else {
@@ -1143,7 +1014,6 @@ function PdfxXBlock(runtime, element, initArgs) {
         });
 
         jq('#force-reload-' + blockId).on('click', function() {
-            debug('Force reloading PDF...');
             // Clear cached document if any
             pdfDoc = null;
             // Show loading indicator
@@ -1156,39 +1026,25 @@ function PdfxXBlock(runtime, element, initArgs) {
         jq('#direct-download-' + blockId).on('click', function() {
             var url = getSafePdfUrl();
             if (!url) {
-                debug('No URL available for direct download');
                 return;
             }
-            debug('Opening PDF in new tab: ' + url);
             window.open(url, '_blank');
         });
 
         jq('#check-canvas-' + blockId).on('click', function() {
-            debug('Checking canvas element...');
             var canvas = document.getElementById('pdf-canvas-' + blockId);
 
             if (!canvas) {
-                debug('ERROR: Canvas element not found');
                 return;
             }
-
-            debug('Canvas found: ' + canvas.id);
-            debug('Canvas dimensions: ' + canvas.width + 'x' + canvas.height);
-            debug('Style dimensions: ' + canvas.style.width + 'x' + canvas.style.height);
-            debug('Offset dimensions: ' + canvas.offsetWidth + 'x' + canvas.offsetHeight);
-            debug('Canvas is visible: ' + (canvas.offsetParent !== null));
 
             try {
                 var ctx = canvas.getContext('2d');
                 if (!ctx) {
-                    debug('ERROR: Could not get 2D context from canvas');
                     return;
                 }
 
-                debug('Canvas context obtained');
-
                 // Draw a test pattern
-                debug('Drawing test pattern on canvas...');
                 ctx.fillStyle = 'red';
                 ctx.fillRect(10, 10, 50, 50);
                 ctx.fillStyle = 'green';
@@ -1198,16 +1054,32 @@ function PdfxXBlock(runtime, element, initArgs) {
                 ctx.font = '20px Arial';
                 ctx.fillStyle = 'black';
                 ctx.fillText('Canvas Test', 50, 100);
-
-                debug('Test pattern drawn successfully');
             } catch (e) {
-                debug('Error testing canvas: ' + e.message);
+            }
+        });
+
+        // Force strokes visibility button
+        jq('#force-strokes-visibility-' + blockId).on('click', function() {
+            try {
+                // Get scribble instance
+                var scribbleInstance = window['scribbleInstance_' + blockId];
+
+                if (!scribbleInstance) {
+                    return;
+                }
+
+                // Check if it has the force visibility method
+                if (typeof scribbleInstance.forceStrokesVisibility !== 'function') {
+                    return;
+                }
+
+                // Call the method
+                var result = scribbleInstance.forceStrokesVisibility('#FF0000', 3);
+            } catch (e) {
             }
         });
 
         jq('#toggle-cors-proxy-' + blockId).on('click', function() {
-            debug('Trying with CORS proxy...');
-
             // Get original URL
             var url = getSafePdfUrl();
             if (!url) return;
@@ -1220,7 +1092,6 @@ function PdfxXBlock(runtime, element, initArgs) {
 
             // Choose a proxy
             var proxyUrl = corsProxies[0] + encodeURIComponent(url);
-            debug('Using proxy URL: ' + proxyUrl);
 
             // Show loading indicator
             jq('.loading-indicator').show().text('Loading via CORS proxy...');
@@ -1241,7 +1112,6 @@ function PdfxXBlock(runtime, element, initArgs) {
                 // Use promise to load the PDF
                 loadingTask.promise.then(function(pdf) {
                     pdfDoc = pdf;
-                    debug('PDF loaded via proxy with ' + pdf.numPages + ' pages');
 
                     // Update UI
                     jq('#page-count-' + blockId).text(pdf.numPages);
@@ -1253,11 +1123,9 @@ function PdfxXBlock(runtime, element, initArgs) {
                     // Hide loading indicator
                     jq('.loading-indicator').hide();
                 }).catch(function(error) {
-                    debug('Error loading PDF via proxy: ' + error.message);
                     showError('Failed to load PDF via proxy: ' + error.message);
                 });
             } catch (error) {
-                debug('Error initializing proxy PDF: ' + error.message);
                 showError('Error initializing proxy PDF: ' + error.message);
             }
         });
@@ -1265,12 +1133,6 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Initialize the XBlock
     function init() {
-        debug('Initializing PDF XBlock with ID: ' + blockId);
-
-        // Log important environment details
-        debug('User agent: ' + navigator.userAgent);
-        debug('Window dimensions: ' + window.innerWidth + 'x' + window.innerHeight);
-
         try {
             // Expose loadPDF function globally for debugging/refresh
             window['loadPDF_' + blockId] = loadPDF;
@@ -1284,7 +1146,6 @@ function PdfxXBlock(runtime, element, initArgs) {
             // Get saved settings from initArgs if available
             if (initArgs.isGrayscale !== undefined) {
                 isGrayscale = initArgs.isGrayscale;
-                debug('Restored grayscale state: ' + isGrayscale);
 
                 // Activate button if grayscale is enabled
                 if (isGrayscale) {
@@ -1295,46 +1156,37 @@ function PdfxXBlock(runtime, element, initArgs) {
 
             if (initArgs.brightness !== undefined) {
                 currentBrightness = initArgs.brightness;
-                debug('Restored brightness: ' + currentBrightness);
             }
 
             // Check if PDF.js is available
             if (typeof pdfjsLib === 'undefined') {
-                debug('PDF.js is not loaded, attempting to load it dynamically');
-
                 // Load PDF.js dynamically if not available
                 var pdfJsScript = document.createElement('script');
                 pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs';
                 pdfJsScript.type = 'module';
                 pdfJsScript.async = true;
                 pdfJsScript.onload = function() {
-                    debug('PDF.js loaded dynamically');
-
                     // Now load the worker
                     pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
 
                     // Continue initialization
-                    debug('Continuing initialization after PDF.js loaded');
                     initEventListeners();
                     loadPDF();
                 };
 
                 pdfJsScript.onerror = function() {
-                    debug('Failed to load PDF.js dynamically');
                     showError('Failed to load PDF.js library. Please refresh the page or try a different browser.');
                 };
 
                 document.head.appendChild(pdfJsScript);
             } else {
                 // PDF.js is already loaded, continuing with initialization
-                debug('PDF.js is already loaded, continuing with initialization');
                 initEventListeners();
                 loadPDF();
             }
         } catch (error) {
-            debug('Error during initialization: ' + error.message);
             if (error.stack) {
-                debug('Stack trace: ' + error.stack);
+                // Log stack trace
             }
             showError('Error initializing PDF viewer: ' + error.message);
         }
@@ -1349,4 +1201,167 @@ function PdfxXBlock(runtime, element, initArgs) {
 
     // Return an empty object (required by XBlock pattern)
     return {};
+}
+
+// Function to navigate to a specific page
+function navigateToPage(pageNum, blockId) {
+    // Get PDF document
+    var pdfDoc = window.pdfDocumentMap[blockId];
+
+    // Validate page number
+    if (!pdfDoc) {
+        return Promise.reject(new Error('No PDF document loaded'));
+    }
+
+    if (pageNum < 1) {
+        pageNum = 1;
+    } else if (pageNum > pdfDoc.numPages) {
+        pageNum = pdfDoc.numPages;
+    }
+
+    // Update instance current page if using modular approach
+    var instance = window[`pdfxInstance_${blockId}`];
+    if (instance && instance.core) {
+        instance.core.currentPage = pageNum;
+    }
+
+    // Update global state
+    window.currentPageMap[blockId] = pageNum;
+
+    // Update UI
+    $('#page-num-' + blockId).text(pageNum);
+
+    // Get the page rendering canvas
+    var canvas = document.getElementById('pdf-canvas-' + blockId);
+    var ctx = canvas.getContext('2d');
+
+    // Get page
+    return pdfDoc.getPage(pageNum).then(function(page) {
+        // Fire event before rendering
+        const beforeRenderEvent = new CustomEvent('pdfx:beforerenderpage', {
+            detail: {
+                blockId: blockId,
+                page: page,
+                pageNum: pageNum
+            }
+        });
+        document.dispatchEvent(beforeRenderEvent);
+
+        // Calculate viewport
+        var viewport = getViewportForPage(page, blockId);
+
+        // Prepare canvas for rendering
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        // Update container dimensions
+        var pdfContainer = document.getElementById('pdf-container-' + blockId);
+        if (pdfContainer) {
+            pdfContainer.style.width = viewport.width + 'px';
+            pdfContainer.style.height = viewport.height + 'px';
+        }
+
+        // Update text layer dimensions
+        var textLayer = document.getElementById('text-layer-' + blockId);
+        if (textLayer) {
+            textLayer.style.width = viewport.width + 'px';
+            textLayer.style.height = viewport.height + 'px';
+
+            // Clear any existing content
+            textLayer.innerHTML = '';
+        }
+
+        // Update draw container dimensions
+        var drawContainer = document.getElementById('draw-container-' + blockId);
+        if (drawContainer) {
+            drawContainer.style.width = viewport.width + 'px';
+            drawContainer.style.height = viewport.height + 'px';
+        }
+
+        // Fix canvas container dimensions
+        if (typeof fixCanvasContainerSize === 'function') {
+            fixCanvasContainerSize(blockId);
+        }
+
+        // Render the page
+        var renderContext = {
+            canvasContext: ctx,
+            viewport: viewport
+        };
+
+        return page.render(renderContext).then(function() {
+            // Apply filters
+            applyFilters(blockId);
+
+            // If we have a text layer, populate it
+            if (textLayer) {
+                return populateTextLayer(page, viewport, textLayer, blockId);
+            }
+
+            return Promise.resolve();
+        }).then(function() {
+            // Update the scribble instance's current page if it exists
+            var scribbleInstance = window[`scribbleInstance_${blockId}`];
+            if (scribbleInstance && typeof scribbleInstance.setCurrentPage === 'function') {
+                scribbleInstance.setCurrentPage(pageNum);
+            }
+
+            // Update highlight instance if it exists
+            var highlightInstance = window[`highlightInstance_${blockId}`];
+            if (highlightInstance && typeof highlightInstance.setCurrentPage === 'function') {
+                highlightInstance.setCurrentPage(pageNum);
+            }
+
+            // Update text, shape and note instances if they exist
+            ['text', 'shape', 'note'].forEach(function(tool) {
+                var instance = window[`${tool}Instance_${blockId}`];
+                if (instance && typeof instance.setCurrentPage === 'function') {
+                    instance.setCurrentPage(pageNum);
+                }
+            });
+
+            // Fire event after rendering
+            const afterRenderEvent = new CustomEvent('pdfx:afterrenderpage', {
+                detail: {
+                    blockId: blockId,
+                    pageNum: pageNum
+                }
+            });
+            document.dispatchEvent(afterRenderEvent);
+
+            // Save the current page to the server
+            saveCurrentPage(pageNum, blockId);
+
+            return pageNum;
+        });
+    }).catch(function(error) {
+        return Promise.reject(error);
+    });
+}
+
+// Function to save the current page to the server
+function saveCurrentPage(pageNum, blockId) {
+    // Find handler URL in DOM data element
+    const dataElement = document.getElementById(`pdfx-data-${blockId}`);
+    if (!dataElement || !dataElement.dataset.handlerUrl) {
+        return;
+    }
+
+    const handlerUrl = dataElement.dataset.handlerUrl;
+
+    // Prepare data
+    const saveData = {
+        currentPage: pageNum
+    };
+
+    // Send to server
+    $.ajax({
+        url: handlerUrl,
+        type: 'POST',
+        data: JSON.stringify(saveData),
+        contentType: 'application/json; charset=utf-8',
+        dataType: 'json'
+    }).then(function(result) {
+    }).catch(function(error) {
+    });
 }

@@ -22,7 +22,6 @@ var PdfxToolsCommon = (function() {
 
     // Debug logging helper
     function _debugLog(message) {
-        console.log(`[PDFX TOOLS] ${message}`);
     }
 
     /**
@@ -220,7 +219,7 @@ var PdfxToolsCommon = (function() {
             return false;
         }
 
-        console.log(`[PDFX TOOLS] Activating tool: ${toolName} for block ${blockId}`);
+        _debugLog(`Activating tool: ${toolName} for block ${blockId}`);
 
         // First deactivate any active tools
         deactivateAllTools(blockId, element, options);
@@ -232,7 +231,6 @@ var PdfxToolsCommon = (function() {
         var toolButton = element.querySelector(`${toolConfig.buttonSelector}${blockId}`);
         if (toolButton) {
             toolButton.classList.add('active');
-            console.log(`[PDFX TOOLS] Added active class to ${toolButton.id}`);
         }
 
         // Update tool state
@@ -249,7 +247,6 @@ var PdfxToolsCommon = (function() {
         // Get the user-selected color
         var colorInput = element.querySelector(`#color-input-${blockId}`);
         var selectedColor = colorInput ? colorInput.value : '#FF0000';
-        console.log(`[PDFX TOOLS] Selected color: ${selectedColor}`);
 
         // If this tool uses canvas, apply proper cursor styles and settings
         if (toolConfig.hasCanvas) {
@@ -257,7 +254,6 @@ var PdfxToolsCommon = (function() {
             if (drawContainer) {
                 drawContainer.style.pointerEvents = 'auto';
                 drawContainer.classList.add('draw-mode');
-                console.log(`[PDFX TOOLS] Enabled draw container for ${toolName}`);
 
                 // Get the fabric canvas
                 var fabricCanvas = window[`fabricCanvas_${blockId}`];
@@ -272,7 +268,6 @@ var PdfxToolsCommon = (function() {
                         if (fabricCanvas.upperCanvasEl) {
                             fabricCanvas.upperCanvasEl.style.pointerEvents = 'auto';
                             fabricCanvas.upperCanvasEl.style.cursor = 'crosshair';
-                            console.log(`[PDFX TOOLS] Set crosshair cursor for ${toolName}`);
                         }
                     }
                 }
@@ -285,7 +280,6 @@ var PdfxToolsCommon = (function() {
             if (textLayer) {
                 textLayer.style.pointerEvents = 'auto';
                 textLayer.style.cursor = 'text';
-                console.log(`[PDFX TOOLS] Set text cursor for text layer in highlight mode`);
 
                 // Apply hover effect to all text spans
                 var textSpans = textLayer.querySelectorAll('span');
@@ -300,9 +294,8 @@ var PdfxToolsCommon = (function() {
         // Call the tool's custom activation logic
         try {
             toolConfig.onActivate(blockId, element, options);
-            console.log(`[PDFX TOOLS] Executed onActivate callback for ${toolName}`);
         } catch (error) {
-            console.error(`[PDFX TOOLS] Error in onActivate for ${toolName}:`, error);
+            handleToolError(toolName, 'activation', error);
         }
 
         return true;
@@ -466,13 +459,54 @@ var PdfxToolsCommon = (function() {
      * Shared error handler for tool operations
      */
     function handleToolError(toolName, operation, error) {
-        console.error(`[PDFX TOOL ERROR] ${toolName} - ${operation}: ${error.message || error}`);
         return {
             success: false,
             tool: toolName,
             operation: operation,
             error: error.message || String(error)
         };
+    }
+
+    // Fix canvas container size function
+    function fixCanvasContainerSize(blockId) {
+        _debugLog(`Fixing canvas container size for block ${blockId}`);
+
+        // Get necessary elements
+        const pdfContainer = document.getElementById(`pdf-container-${blockId}`);
+        const fabricCanvas = window[`fabricCanvas_${blockId}`];
+
+        if (!pdfContainer || !fabricCanvas) {
+            _debugLog(`Missing required elements for fixing canvas container`);
+            return false;
+        }
+
+        // Get dimensions from PDF container
+        const width = pdfContainer.offsetWidth;
+        const height = pdfContainer.offsetHeight;
+
+        // Set canvas dimensions
+        fabricCanvas.setWidth(width);
+        fabricCanvas.setHeight(height);
+
+        // Fix canvas container dimensions
+        const canvasContainer = fabricCanvas.wrapperEl;
+        if (canvasContainer) {
+            canvasContainer.style.width = width + 'px';
+            canvasContainer.style.height = height + 'px';
+        }
+
+        // Fix both lower and upper canvas dimensions
+        if (fabricCanvas.lowerCanvasEl) {
+            fabricCanvas.lowerCanvasEl.style.width = width + 'px';
+            fabricCanvas.lowerCanvasEl.style.height = height + 'px';
+        }
+
+        if (fabricCanvas.upperCanvasEl) {
+            fabricCanvas.upperCanvasEl.style.width = width + 'px';
+            fabricCanvas.upperCanvasEl.style.height = height + 'px';
+        }
+
+        return true;
     }
 
     // Public API
@@ -487,6 +521,10 @@ var PdfxToolsCommon = (function() {
         getBlockElement: getBlockElement,
         styleToolButton: styleToolButton,
         hexToRgba: hexToRgba,
-        handleToolError: handleToolError
+        handleToolError: handleToolError,
+        fixCanvasContainerSize: fixCanvasContainerSize
     };
 })();
+
+// Make the function available globally
+window.fixCanvasContainerSize = PdfxToolsCommon.fixCanvasContainerSize;

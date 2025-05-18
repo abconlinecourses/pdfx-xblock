@@ -37,8 +37,6 @@
      * @param {string} blockId - The XBlock ID
      */
     function initializeScribbleTool(blockId) {
-        console.log(`[SCRIBBLE INIT] Initializing scribble tool for block ${blockId}`);
-
         // Get any data passed from the backend
         var dataElement = document.getElementById(`pdfx-data-${blockId}`);
         var scribbleData = {};
@@ -46,9 +44,8 @@
         if (dataElement && dataElement.dataset.markerStrokes) {
             try {
                 scribbleData = JSON.parse(dataElement.dataset.markerStrokes);
-                console.log(`[SCRIBBLE INIT] Found server-side marker strokes for block ${blockId}`);
             } catch (e) {
-                console.error(`[SCRIBBLE INIT] Error parsing marker strokes data: ${e.message}`);
+                // Silently continue with empty data
             }
         }
 
@@ -67,200 +64,349 @@
      * @param {Object} serverData - Data from the server (if available)
      */
     function initScribbleInstance(blockId, serverData) {
-        // Create canvas and fabric canvas if needed
-        console.log(`[SCRIBBLE INIT] Initializing scribble instance for block ${blockId}`);
+        console.debug(`[PdfX Debug] Initializing scribble instance for block ${blockId}`);
 
-        // Find necessary elements
         var block = document.getElementById(`pdfx-block-${blockId}`);
-        var drawContainer = document.getElementById(`draw-container-${blockId}`);
         var pdfContainer = document.getElementById(`pdf-container-${blockId}`);
+        var drawContainer = document.getElementById(`draw-container-${blockId}`);
         var dataElement = document.getElementById(`pdfx-data-${blockId}`);
 
-        if (!block) {
-            console.error(`[SCRIBBLE INIT] Block element not found for ID ${blockId}`);
-            return;
+        if (!block || !pdfContainer || !drawContainer) {
+            console.error(`[PdfX Debug] Missing required elements for block ${blockId}`);
+            return null;
         }
 
-        if (!drawContainer || !pdfContainer || !dataElement) {
-            console.error(`[SCRIBBLE INIT] Required elements not found for block ${blockId}`);
-            return;
+        // Log the data we received
+        console.debug(`[PdfX Debug] Server data provided to scribble init:`, serverData);
+        console.debug(`[PdfX Debug] PDF Container dimensions: ${pdfContainer.offsetWidth}x${pdfContainer.offsetHeight}`);
+
+        // Use our emergency canvas fixing function if available
+        if (typeof window.emergencyFixCanvasContainer === 'function') {
+            console.debug(`[PdfX Debug] Running emergency canvas fix for block ${blockId}`);
+            window.emergencyFixCanvasContainer(blockId);
         }
 
-        // Set up draw container for proper fabric.js positioning
-        drawContainer.style.position = 'absolute';
-        drawContainer.style.top = '0';
-        drawContainer.style.left = '0';
-        drawContainer.style.width = '100%';
-        drawContainer.style.height = '100%';
-        drawContainer.style.zIndex = '20';
+        // Get the actual PDF container dimensions
+        var containerWidth = pdfContainer.offsetWidth;
+        var containerHeight = pdfContainer.offsetHeight;
 
-        // Important: Do NOT set pointer events to auto by default
-        // Let the tool selection handle that
-        drawContainer.style.pointerEvents = 'none';
+        console.debug(`[PdfX Debug] Container dimensions: ${containerWidth}x${containerHeight}`);
 
-        // Do NOT add draw-mode class by default
-        drawContainer.classList.remove('draw-mode');
-
-        // Create a canvas element for fabric.js if one doesn't exist
+        // Create a canvas if it doesn't exist
         var canvas = document.getElementById(`drawing-canvas-${blockId}`);
+        var canvasCreated = false;
+
         if (!canvas) {
+            console.debug(`[PdfX Debug] Creating new canvas for block ${blockId}`);
+            canvasCreated = true;
             canvas = document.createElement('canvas');
             canvas.id = `drawing-canvas-${blockId}`;
-            canvas.width = pdfContainer.offsetWidth || 800;
-            canvas.height = pdfContainer.offsetHeight || 600;
 
-            // Replace any existing canvas
+            // Use the exact dimensions of the PDF container
+            canvas.width = containerWidth;
+            canvas.height = containerHeight;
+
             drawContainer.innerHTML = '';
             drawContainer.appendChild(canvas);
+
+            // Set dimensions on the draw container itself
+            drawContainer.style.width = containerWidth + 'px';
+            drawContainer.style.height = containerHeight + 'px';
+        } else {
+            console.debug(`[PdfX Debug] Canvas already exists for block ${blockId}, dimensions: ${canvas.width}x${canvas.height}`);
         }
 
-        // Create fabric canvas if it doesn't exist
-        var fabricCanvas = drawContainer._fabricCanvas;
+        // Create fabric canvas - use our helper if available
+        var fabricCanvas = null;
+        if (typeof window.ensureFabricCanvas === 'function') {
+            console.debug(`[PdfX Debug] Using ensureFabricCanvas helper for block ${blockId}`);
+            fabricCanvas = window.ensureFabricCanvas(blockId);
+        }
+
+        // Fallback to manual creation if the helper failed
         if (!fabricCanvas) {
             try {
+                console.debug(`[PdfX Debug] Creating fabric canvas manually for block ${blockId}`);
                 fabricCanvas = new fabric.Canvas(canvas, {
-                    isDrawingMode: false, // Default to NOT drawing mode
-                    selection: false // Disable selection initially
+                    isDrawingMode: false,
+                    selection: false,
+                    width: containerWidth,
+                    height: containerHeight
                 });
 
-                // Set canvas dimensions to match PDF container exactly
-                fabricCanvas.setWidth(pdfContainer.offsetWidth);
-                fabricCanvas.setHeight(pdfContainer.offsetHeight);
+                // Set correct dimensions immediately
+                fabricCanvas.setWidth(containerWidth);
+                fabricCanvas.setHeight(containerHeight);
 
-                // Store reference to canvas
-                drawContainer._fabricCanvas = fabricCanvas;
+                // Fix canvas container size
+                fixCanvasContainer(fabricCanvas, pdfContainer);
+
+                // Store reference globally
                 window[`fabricCanvas_${blockId}`] = fabricCanvas;
 
-                // Initialize free drawing brush but don't activate it
+                // Initialize brush
                 if (!fabricCanvas.freeDrawingBrush) {
                     fabricCanvas.freeDrawingBrush = new fabric.PencilBrush(fabricCanvas);
                 }
                 fabricCanvas.freeDrawingBrush.width = 5;
                 fabricCanvas.freeDrawingBrush.color = '#FF0000';
 
-                // Add marker and scribble modes to brush
-                fabricCanvas.freeDrawingBrush.markerMode = false;
-                fabricCanvas.freeDrawingBrush.scribbleMode = false;
-
-                // Set the pointer events to none by default
-                if (fabricCanvas.upperCanvasEl) {
-                    fabricCanvas.upperCanvasEl.style.pointerEvents = 'none';
-                }
-
-                console.log(`[SCRIBBLE INIT] Created new fabric canvas for block ${blockId}`);
+                console.debug(`[PdfX Debug] Fabric canvas created with dimensions ${fabricCanvas.width}x${fabricCanvas.height}`);
             } catch (error) {
-                console.error(`[SCRIBBLE INIT] Error creating fabric canvas: ${error.message}`);
-                return;
+                console.error(`[PdfX Debug] Failed to create fabric canvas: ${error.message}`);
+                return null;
             }
-        } else {
-            console.log(`[SCRIBBLE INIT] Using existing fabric canvas for block ${blockId}`);
         }
 
-        // Initialize a scribble instance if it doesn't exist
-        var scribbleInstance = window[`scribbleInstance_${blockId}`];
-        if (!scribbleInstance) {
-            console.log(`[SCRIBBLE INIT] Creating new scribble instance for block ${blockId}`);
+        // Create scribble instance
+        try {
+            // Get user data
+            var userId = block.getAttribute('data-user-id') || 'anonymous';
+            var courseId = block.getAttribute('data-course-id') || '';
 
-            // Get course and user IDs from the block element
-            var courseId = block ? block.getAttribute('data-course-id') : null;
-            var userId = block ? block.getAttribute('data-user-id') : null;
+            // Get handler URL
+            var handlerUrl = '';
+            if (dataElement && dataElement.dataset.handlerUrl) {
+                handlerUrl = dataElement.dataset.handlerUrl;
+            }
 
-            // Configure scribble options
+            console.debug(`[PdfX Debug] Creating scribble instance with user ${userId}, course ${courseId}`);
+
+            // Create options - always enable debug mode
             var scribbleOptions = {
                 blockId: blockId,
-                userId: userId || 'anonymous',
+                userId: userId,
                 courseId: courseId,
-                debugCallback: function(message) {
-                    console.log(`[SCRIBBLE DEBUG] ${blockId}: ${message}`);
-                },
-                saveCallback: function(data) {
-                    // Call the handler to save annotations
-                    console.log(`[SCRIBBLE INIT] Saving annotations via callback for block ${blockId}`);
-
-                    // Try to find the handler URL from the data element
-                    var dataElement = document.getElementById(`pdfx-data-${blockId}`);
-                    if (dataElement && dataElement.dataset.handlerUrl) {
-                        // We have a direct handler URL
-                        $.ajax({
-                            type: "POST",
-                            url: dataElement.dataset.handlerUrl,
-                            data: JSON.stringify(data),
-                            success: function(response) {
-                                console.log(`[SCRIBBLE] Saved annotations to server for block ${blockId}`);
-                            },
-                            error: function(jqXHR) {
-                                console.error(`[SCRIBBLE] Error saving annotations for block ${blockId}:`, jqXHR.responseText);
-                            }
-                        });
-                        return;
-                    }
-
-                    // Fallback to global methods
-                    if (typeof window.saveAnnotations === 'function') {
-                        window.saveAnnotations(blockId, data);
-                    } else if (typeof $.fn.saveAnnotations === 'function') {
-                        $(block).saveAnnotations(data);
-                    } else {
-                        console.error(`[SCRIBBLE INIT] No saveAnnotations function available for block ${blockId}`);
-                    }
-                },
-                color: '#FF0000', // Default to red
+                color: '#FF0000',
                 width: 5,
-                saveIntervalTime: 10000, // Save every 10 seconds
-                documentInfo: {
-                    // Add document metadata if available
-                    filename: block ? block.getAttribute('data-document-filename') : null,
-                    pages: block ? parseInt(block.getAttribute('data-document-pages'), 10) || 1 : 1
-                }
+                saveInterval: 10000, // Save every 10 seconds
+                defaultMode: 'marker',
+                handlerUrl: handlerUrl,
+                debug: true  // Enable debug mode
             };
 
-            if (block) {
-                // Create new instance
-                scribbleInstance = new PdfxScribble(block, scribbleOptions);
+            // Create scribble instance
+            var scribbleInstance = new PdfxScribble(block, scribbleOptions);
 
-                // Initialize with fabric canvas
-                if (fabricCanvas) {
-                    scribbleInstance.init(fabricCanvas);
-                }
+            // Pre-apply canvas fix before initialization
+            if (typeof window.emergencyFixCanvasContainer === 'function') {
+                window.emergencyFixCanvasContainer(blockId);
+            }
 
-                // Make available globally
-                window[`scribbleInstance_${blockId}`] = scribbleInstance;
-                console.log(`[SCRIBBLE INIT] Created and initialized new scribble instance for block ${blockId}`);
+            // Initialize the scribble instance
+            console.debug(`[PdfX Debug] Initializing scribble instance for block ${blockId}`);
+            scribbleInstance.init(fabricCanvas);
 
-                // If marker strokes data is available, load it
-                if (serverData && typeof serverData === 'object' &&
-                    (serverData.markerStrokes || Object.keys(serverData).length > 0)) {
-                    console.log(`[SCRIBBLE INIT] Loading server marker strokes data for block ${blockId}`, serverData);
-                    if (typeof scribbleInstance.loadMarkerStrokes === 'function') {
-                        scribbleInstance.loadMarkerStrokes(serverData);
+            // Store the instance globally for access by canvas fixing utilities
+            window[`scribbleInstance_${blockId}`] = scribbleInstance;
+
+            // Register with our central registry if available
+            if (typeof window.registerPdfxScribbleInstance === 'function') {
+                window.registerPdfxScribbleInstance(blockId, scribbleInstance);
+            }
+
+            // Process server data if available
+            if (serverData && typeof serverData === 'object') {
+                console.debug(`[PdfX Debug] Processing server data, keys: ${Object.keys(serverData).join(', ')}`);
+
+                // If we have marker strokes data, load it
+                if (serverData.markerStrokes) {
+                    let allStrokes = {};
+
+                    // First, apply canvas fix to ensure proper dimensions
+                    if (typeof window.emergencyFixCanvasContainer === 'function') {
+                        window.emergencyFixCanvasContainer(blockId);
+                    }
+
+                    // Log number of pages in marker strokes
+                    console.debug(`[PdfX Debug] Server data contains marker strokes with keys: ${Object.keys(serverData.markerStrokes).join(', ')}`);
+
+                    // Process the marker strokes - ensure they're organized by page
+                    Object.keys(serverData.markerStrokes).forEach(key => {
+                        // Skip metadata fields
+                        if (key === '_last_saved' || key === 'strokeCount' || key === '_lastSynced') {
+                            return;
+                        }
+
+                        // Convert page key to number if it's a string
+                        const pageNum = parseInt(key, 10);
+
+                        // If it's a valid page number and the strokes are an array
+                        if (!isNaN(pageNum) && Array.isArray(serverData.markerStrokes[key])) {
+                            console.debug(`[PdfX Debug] Processing ${serverData.markerStrokes[key].length} strokes for page ${pageNum}`);
+
+                            if (!allStrokes[pageNum]) {
+                                allStrokes[pageNum] = [];
+                            }
+
+                            // Add each stroke, ensuring it has the page number
+                            serverData.markerStrokes[key].forEach(stroke => {
+                                // Make sure stroke has the page number as an integer
+                                stroke.page = parseInt(pageNum, 10);
+
+                                // Add additional metadata if missing
+                                if (!stroke.blockId) stroke.blockId = blockId;
+                                if (!stroke.userId) stroke.userId = userId;
+                                if (!stroke.courseId) stroke.courseId = courseId;
+
+                                // Ensure stroke color properties
+                                if (!stroke.stroke) {
+                                    stroke.stroke = '#FF0000'; // Default red
+                                }
+
+                                // Ensure stroke width
+                                if (!stroke.strokeWidth || stroke.strokeWidth < 1) {
+                                    stroke.strokeWidth = 3;
+                                }
+
+                                allStrokes[pageNum].push(stroke);
+                            });
+
+                            console.debug(`[PdfX Debug] Added ${allStrokes[pageNum].length} strokes for page ${pageNum}`);
+                        }
+                    });
+
+                    // Check if we have any strokes to render
+                    const totalStrokeCount = Object.values(allStrokes).reduce((sum, arr) => sum + arr.length, 0);
+                    console.debug(`[PdfX Debug] Total strokes to be rendered: ${totalStrokeCount} across ${Object.keys(allStrokes).length} pages`);
+
+                    if (totalStrokeCount > 0) {
+                        // Before setting strokes, ensure canvas dimensions are correct
+                        console.debug(`[PdfX Debug] Fixing canvas size before loading strokes`);
+                        if (scribbleInstance.fixCanvasSizeBeforeLoading) {
+                            scribbleInstance.fixCanvasSizeBeforeLoading();
+                        }
+                        if (typeof window.emergencyFixCanvasContainer === 'function') {
+                            window.emergencyFixCanvasContainer(blockId);
+                        }
+
+                        // Set the strokes in the scribble instance
+                        console.debug(`[PdfX Debug] Setting all strokes in scribble instance`);
+                        scribbleInstance.setAllStrokes(allStrokes);
+
+                        // Get and render the current page
+                        const currentPage = getCurrentPageNumber(blockId);
+                        console.debug(`[PdfX Debug] Setting current page to ${currentPage}`);
+                        scribbleInstance.setCurrentPage(currentPage);
+
+                        // Apply force visibility to ensure strokes are visible
+                        setTimeout(() => {
+                            console.debug(`[PdfX Debug] Forcing stroke visibility after delay`);
+                            if (typeof scribbleInstance.forceStrokesVisibility === 'function') {
+                                scribbleInstance.forceStrokesVisibility('#FF0000', 5);
+                            }
+
+                            // Check if strokes are actually visible
+                            const objects = fabricCanvas ? fabricCanvas.getObjects() : [];
+                            console.debug(`[PdfX Debug] Canvas has ${objects.length} objects after forcing visibility`);
+
+                            // If still no objects, try rendering again with more aggressive settings
+                            if (objects.length === 0 && allStrokes[currentPage] && allStrokes[currentPage].length > 0) {
+                                console.warn(`[PdfX Debug] Still no visible objects on canvas despite forcing visibility, applying emergency fixes`);
+
+                                // Fix canvas size again
+                                window.emergencyFixCanvasContainer(blockId);
+
+                                // Re-render with a delay
+                                setTimeout(() => {
+                                    scribbleInstance.renderPage(currentPage);
+                                }, 200);
+                            }
+                        }, 1000);
                     } else {
-                        console.error(`[SCRIBBLE INIT] loadMarkerStrokes function not available on scribble instance for ${blockId}`);
+                        console.debug(`[PdfX Debug] No strokes to render from server data`);
                     }
                 } else {
-                    console.log(`[SCRIBBLE INIT] No server data available for block ${blockId}, will use browser storage only`);
+                    console.debug(`[PdfX Debug] No markerStrokes found in server data`);
                 }
             } else {
-                console.error(`[SCRIBBLE INIT] Block element not found for ID ${blockId}`);
-            }
-        } else {
-            console.log(`[SCRIBBLE INIT] Using existing scribble instance for block ${blockId}`);
-            // Make sure it's initialized with the fabric canvas
-            if (fabricCanvas && typeof scribbleInstance.init === 'function') {
-                scribbleInstance.init(fabricCanvas);
+                console.debug(`[PdfX Debug] No server data provided or invalid format`);
             }
 
-            // Also load server data if available, even for existing instances
-            if (serverData && typeof serverData === 'object' &&
-                (serverData.markerStrokes || Object.keys(serverData).length > 0)) {
-                console.log(`[SCRIBBLE INIT] Loading server data for existing scribble instance for block ${blockId}`);
-                if (typeof scribbleInstance.loadMarkerStrokes === 'function') {
-                    scribbleInstance.loadMarkerStrokes(serverData);
-                }
+            // Add debug controls to the UI if debug mode is on
+            if (scribbleInstance.debug && typeof scribbleInstance.addDebugControls === 'function') {
+                scribbleInstance.addDebugControls();
             }
+
+            console.debug(`[PdfX Debug] Scribble instance initialization complete for block ${blockId}`);
+
+            // Return the instance
+            return scribbleInstance;
+        } catch (error) {
+            console.error(`[PdfX Debug] Error initializing scribble instance: ${error.message}`);
+            return null;
+        }
+    }
+
+    /**
+     * Fix the canvas container size to match the PDF container
+     * This addresses the issue where canvas-container is not sized correctly
+     */
+    function fixCanvasContainer(fabricCanvas, pdfContainer) {
+        if (!fabricCanvas || !pdfContainer) {
+            return;
         }
 
-        return fabricCanvas;
+        try {
+            const width = pdfContainer.offsetWidth;
+            const height = pdfContainer.offsetHeight;
+
+            // Set canvas dimensions
+            fabricCanvas.setWidth(width);
+            fabricCanvas.setHeight(height);
+
+            // Fix the canvas container dimensions
+            const canvasContainer = fabricCanvas.wrapperEl;
+            if (canvasContainer) {
+                // Apply all possible dimension properties to ensure correct sizing
+                canvasContainer.style.width = width + 'px';
+                canvasContainer.style.height = height + 'px';
+                canvasContainer.style.minWidth = width + 'px';
+                canvasContainer.style.minHeight = height + 'px';
+                canvasContainer.style.maxWidth = width + 'px';
+                canvasContainer.style.maxHeight = height + 'px';
+
+                // Set attributes as well
+                canvasContainer.setAttribute('width', width);
+                canvasContainer.setAttribute('height', height);
+            }
+
+            // Fix both lower and upper canvas dimensions
+            if (fabricCanvas.lowerCanvasEl) {
+                fabricCanvas.lowerCanvasEl.width = width;
+                fabricCanvas.lowerCanvasEl.height = height;
+                fabricCanvas.lowerCanvasEl.style.width = width + 'px';
+                fabricCanvas.lowerCanvasEl.style.height = height + 'px';
+            }
+
+            if (fabricCanvas.upperCanvasEl) {
+                fabricCanvas.upperCanvasEl.width = width;
+                fabricCanvas.upperCanvasEl.height = height;
+                fabricCanvas.upperCanvasEl.style.width = width + 'px';
+                fabricCanvas.upperCanvasEl.style.height = height + 'px';
+            }
+
+            // Also apply to the draw container
+            const blockId = pdfContainer.id.replace('pdf-container-', '');
+            const drawContainer = document.getElementById(`draw-container-${blockId}`);
+            if (drawContainer) {
+                drawContainer.style.width = width + 'px';
+                drawContainer.style.height = height + 'px';
+            }
+        } catch (error) {
+            // Silently fail
+        }
     }
+
+    // Add method to PdfxScribble prototype for fixing canvas container
+    PdfxScribble.prototype.fixCanvasContainer = function() {
+        if (this.canvas && this.blockId) {
+            const pdfContainer = document.getElementById(`pdf-container-${this.blockId}`);
+            if (pdfContainer) {
+                fixCanvasContainer(this.canvas, pdfContainer);
+            }
+        }
+    };
 
     /**
      * Check the status of the scribble tool
@@ -316,4 +462,16 @@
         }
         return checkScribbleToolStatus(blockId);
     };
+
+    /**
+     * Get the current page number
+     */
+    function getCurrentPageNumber(blockId) {
+        // Try to get current page from page display
+        const pageNumElement = document.getElementById(`page-num-${blockId}`);
+        if (pageNumElement) {
+            return parseInt(pageNumElement.textContent, 10) || 1;
+        }
+        return 1;
+    }
 })();

@@ -7,8 +7,6 @@
 (function() {
     'use strict';
 
-    console.log('PDF XBlock: Update helper loaded at ' + new Date().toISOString());
-
     /**
      * Initialize the update process for all PDF XBlocks on the page
      */
@@ -17,11 +15,8 @@
         var pdfxBlocks = document.querySelectorAll('.pdfx_block');
 
         if (pdfxBlocks.length === 0) {
-            console.log('No PDF XBlocks found on this page');
             return;
         }
-
-        console.log('Found ' + pdfxBlocks.length + ' PDF XBlocks - updating each one');
 
         // Update each block
         pdfxBlocks.forEach(function(block) {
@@ -35,8 +30,6 @@
      * @param {string} blockId - The block ID to update
      */
     function updateBlock(blockId) {
-        console.log(`Updating PDF XBlock ${blockId}...`);
-
         // Rename button elements from marker to scribble
         updateButtonElements(blockId);
 
@@ -45,8 +38,6 @@
 
         // Clean up legacy global objects
         cleanupGlobalObjects(blockId);
-
-        console.log(`PDF XBlock ${blockId} updated successfully`);
     }
 
     /**
@@ -74,7 +65,6 @@
             // Replace the button
             if (markerBtn.parentNode) {
                 markerBtn.parentNode.replaceChild(scribbleBtn, markerBtn);
-                console.log(`Replaced marker button with scribble button for block ${blockId}`);
             }
 
             // Add click handler for new button
@@ -98,7 +88,6 @@
             // Update the current tool attribute
             if (drawContainer.dataset.currentTool === 'marker') {
                 drawContainer.dataset.currentTool = 'scribble';
-                console.log(`Updated currentTool attribute for block ${blockId}`);
             }
         }
 
@@ -114,7 +103,6 @@
                 if (fabricCanvas.freeDrawingBrush.markerMode) {
                     fabricCanvas.freeDrawingBrush.markerMode = false;
                     fabricCanvas.freeDrawingBrush.scribbleMode = true;
-                    console.log(`Updated drawing brush mode for block ${blockId}`);
                 }
             }
         }
@@ -141,8 +129,6 @@
         if (window.checkPdfxTools) {
             delete window.checkPdfxTools;
         }
-
-        console.log(`Cleaned up legacy global objects for block ${blockId}`);
     }
 
     // Run the update when the DOM is fully loaded

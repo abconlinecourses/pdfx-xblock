@@ -18,7 +18,6 @@ function PdfxHighlight(element, options) {
     var _isHighlightingActive = false; // Track if highlighting is currently enabled
 
     // Callback functions
-    var _debugCallback = _options.debugCallback || function() {};
     var _saveCallback = _options.saveCallback || function() {};
 
     // MongoDB highlight cache to avoid duplicates
@@ -36,7 +35,6 @@ function PdfxHighlight(element, options) {
     function applyTextCursors() {
         var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
         if (!textLayer) {
-            _debugCallback('Text layer not found');
             return;
         }
 
@@ -58,8 +56,6 @@ function PdfxHighlight(element, options) {
             // Enable basic pointer events for cursor to work
             span.style.pointerEvents = 'auto';
         });
-
-        _debugCallback('Text cursors applied');
     }
 
     // Enhanced visual feedback for active text layer - optimized for large documents
@@ -67,8 +63,7 @@ function PdfxHighlight(element, options) {
         try {
             var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
             if (!textLayer) {
-                console.error(`[HIGHLIGHT] Text layer not found when applying active styles`);
-                return;
+                return false;
             }
 
             // Add visual indicator for highlighter active state to the container first
@@ -78,12 +73,8 @@ function PdfxHighlight(element, options) {
             var allSpans = textLayer.querySelectorAll('span');
             var spanCount = allSpans.length;
 
-            console.log(`[HIGHLIGHT] Applying active styles to text layer with ${spanCount} spans`);
-
             // Optimize for large documents
             if (spanCount > 2000) {
-                console.log(`[HIGHLIGHT] Large document detected (${spanCount} spans), using optimized styling approach`);
-
                 // Apply styles to the text layer as a whole rather than individual spans
                 textLayer.style.transition = 'background-color 0.2s ease';
 
@@ -114,10 +105,7 @@ function PdfxHighlight(element, options) {
                     span.style.borderRadius = '2px';
                 });
             }
-
-            console.log(`[HIGHLIGHT] Applied active highlighting styles to text layer`);
         } catch (error) {
-            console.error(`[HIGHLIGHT] Error applying active highlighting styles:`, error);
         }
     }
 
@@ -126,7 +114,6 @@ function PdfxHighlight(element, options) {
         try {
             var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
             if (!textLayer) {
-                console.error(`[HIGHLIGHT] Text layer not found when removing active styles`);
                 return;
             }
 
@@ -138,7 +125,6 @@ function PdfxHighlight(element, options) {
             if (spanCount <= 2000) {
                 // Only remove classes from individual spans for smaller documents
                 var spans = textLayer.querySelectorAll('span.highlight-hover-effect');
-                console.log(`[HIGHLIGHT] Removing hover effect from ${spans.length} spans`);
 
                 // Use a more efficient method if there are many spans
                 if (spans.length > 500) {
@@ -152,10 +138,7 @@ function PdfxHighlight(element, options) {
                     });
                 }
             }
-
-            console.log(`[HIGHLIGHT] Removed active highlighting styles from text layer`);
         } catch (error) {
-            console.error(`[HIGHLIGHT] Error removing active highlighting styles:`, error);
         }
     }
 
@@ -163,11 +146,8 @@ function PdfxHighlight(element, options) {
     function enableTextHighlighting() {
         var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
         if (!textLayer) {
-            console.error(`[HIGHLIGHT] Text layer not found for block ${_blockId}`);
             return false;
         }
-
-        console.log(`[HIGHLIGHT] Enabling text highlighting for block ${_blockId}`);
 
         try {
             // Get the user-selected color from the color picker
@@ -176,19 +156,16 @@ function PdfxHighlight(element, options) {
                 // Use color picker color with 50% transparency for highlights
                 var colorValue = colorInput.value;
                 _color = colorValue + '80'; // Add 50% transparency
-                console.log(`[HIGHLIGHT] Using color from color picker: ${colorValue} with transparency: ${_color}`);
             }
 
             // Make text layer visible and selectable
             $(textLayer).addClass('active');
-            console.log(`[HIGHLIGHT] Added active class to text layer`);
 
             // Make each text span selectable - use a more efficient approach
             var textSpans = textLayer.querySelectorAll('span');
 
             // Safety check to prevent hanging if there are too many spans
             if (textSpans.length > 5000) {
-                console.warn(`[HIGHLIGHT] Large number of text spans (${textSpans.length}), optimizing processing`);
                 // Apply styles directly to the text layer instead of each span
                 textLayer.style.pointerEvents = 'auto';
                 textLayer.style.cursor = 'text';
@@ -198,7 +175,6 @@ function PdfxHighlight(element, options) {
                 textLayer.style.msUserSelect = 'text';
             } else {
                 // Process individual spans since the count is reasonable
-                console.log(`[HIGHLIGHT] Processing ${textSpans.length} text spans individually`);
                 textSpans.forEach(function(span) {
                     span.style.pointerEvents = 'auto';
                     span.style.cursor = 'text';
@@ -216,16 +192,12 @@ function PdfxHighlight(element, options) {
                 });
             }
 
-            console.log(`[HIGHLIGHT] Applied styles to text layer with ${textSpans.length} spans`);
-
             // Remove existing event listener first to avoid duplicates
             try {
                 textLayer.removeEventListener('mouseup', handleTextSelection);
                 // Add mouse up event for text selection
                 textLayer.addEventListener('mouseup', handleTextSelection);
-                console.log(`[HIGHLIGHT] Added mouseup event listener for text selection`);
             } catch (eventError) {
-                console.error(`[HIGHLIGHT] Error setting up event listeners:`, eventError);
             }
 
             // Set up event listeners for real-time color changes
@@ -237,26 +209,21 @@ function PdfxHighlight(element, options) {
                     colorInput.addEventListener('change', handleColorChange);
                     colorInput.removeEventListener('input', handleColorChange);
                     colorInput.addEventListener('input', handleColorChange);
-                    console.log(`[HIGHLIGHT] Set up color change listeners`);
                 }
             } catch (colorError) {
-                console.error(`[HIGHLIGHT] Error setting up color change listeners:`, colorError);
             }
 
             // Apply active highlighting styles for better visual feedback
             try {
                 applyActiveHighlightingStyles();
             } catch (styleError) {
-                console.error(`[HIGHLIGHT] Error applying active styles:`, styleError);
             }
 
             // Set flag
             _isHighlightingActive = true;
 
-            _debugCallback('Text highlighting enabled');
             return true;
         } catch (error) {
-            console.error(`[HIGHLIGHT] Error enabling text highlighting:`, error);
             // Try to reset to a safe state
             _isHighlightingActive = false;
             return false;
@@ -268,7 +235,6 @@ function PdfxHighlight(element, options) {
         var newColor = event.target.value;
         // Add 50% transparency for highlights
         var newColorWithTransparency = newColor + '80';
-        console.log(`[HIGHLIGHT] Color changed to: ${newColor} with transparency: ${newColorWithTransparency}`);
         setHighlightColor(newColorWithTransparency);
     }
 
@@ -279,11 +245,8 @@ function PdfxHighlight(element, options) {
 
         var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
         if (!textLayer) {
-            console.error(`[HIGHLIGHT] Text layer not found while disabling highlighting`);
             return false;
         }
-
-        console.log(`[HIGHLIGHT] Disabling text highlighting for block ${_blockId}`);
 
         try {
             // Make text layer non-interactive
@@ -292,9 +255,7 @@ function PdfxHighlight(element, options) {
             // Remove event listeners
             try {
                 textLayer.removeEventListener('mouseup', handleTextSelection);
-                console.log(`[HIGHLIGHT] Removed mouseup event listener`);
             } catch (eventError) {
-                console.error(`[HIGHLIGHT] Error removing event listener:`, eventError);
             }
 
             // Remove color change event listeners
@@ -303,23 +264,18 @@ function PdfxHighlight(element, options) {
                 if (colorInput) {
                     colorInput.removeEventListener('change', handleColorChange);
                     colorInput.removeEventListener('input', handleColorChange);
-                    console.log(`[HIGHLIGHT] Removed color change listeners`);
                 }
             } catch (colorError) {
-                console.error(`[HIGHLIGHT] Error removing color listeners:`, colorError);
             }
 
             // Remove active highlighting styles
             try {
                 removeActiveHighlightingStyles();
             } catch (styleError) {
-                console.error(`[HIGHLIGHT] Error removing active styles:`, styleError);
             }
 
-            _debugCallback('Text highlighting disabled');
             return true;
         } catch (error) {
-            console.error(`[HIGHLIGHT] Error disabling text highlighting:`, error);
             return false;
         }
     }
@@ -327,7 +283,6 @@ function PdfxHighlight(element, options) {
     // Handle text selection - with debounce to prevent excessive processing
     function handleTextSelection(event) {
         if (!_isHighlightingActive) {
-            console.log(`[HIGHLIGHT] Selection ignored - highlighting not active`);
             return;
         }
 
@@ -346,24 +301,18 @@ function PdfxHighlight(element, options) {
     function processTextSelection(event) {
         var selection = window.getSelection();
         if (!selection) {
-            console.error(`[HIGHLIGHT] Window selection not available`);
             return;
         }
 
         var selectedText = selection.toString().trim();
 
         if (selectedText === '') {
-            console.log(`[HIGHLIGHT] No text selected, ignoring event`);
             return; // No text selected
         }
-
-        console.log(`[HIGHLIGHT] Selected text: "${selectedText.substring(0, 50)}${selectedText.length > 50 ? '...' : ''}"`);
-        _debugCallback(`Selected text: "${selectedText}"`);
 
         try {
             // Safety check: make sure we have a range
             if (selection.rangeCount === 0) {
-                console.error(`[HIGHLIGHT] No selection range found`);
                 return;
             }
 
@@ -374,15 +323,12 @@ function PdfxHighlight(element, options) {
             if (colorInput) {
                 var colorValue = colorInput.value;
                 _color = colorValue + '80'; // Add 50% transparency
-                console.log(`[HIGHLIGHT] Using color from color picker: ${colorValue} with transparency: ${_color}`);
             } else {
                 _color = _options.getHighlightColor ? _options.getHighlightColor() : '#FFFF0050';
             }
 
             // Get all selected spans within this block's text layer
             var selectedSpans = getSelectedSpans(range);
-            console.log(`[HIGHLIGHT] Selected ${selectedSpans.length} text spans`);
-            _debugCallback(`Selected ${selectedSpans.length} text spans`);
 
             if (selectedSpans.length > 0) {
                 // Create highlight elements for each selected span
@@ -392,7 +338,6 @@ function PdfxHighlight(element, options) {
                         var spanRect = span.getBoundingClientRect();
                         var containerRect = $(element).find(`#pdf-container-${_blockId}`)[0].getBoundingClientRect();
                         if (!containerRect) {
-                            console.error(`[HIGHLIGHT] Container rect not found for block ${_blockId}`);
                             return;
                         }
                         rects.push({
@@ -403,18 +348,15 @@ function PdfxHighlight(element, options) {
                             text: span.textContent
                         });
                     } catch (rectError) {
-                        console.error(`[HIGHLIGHT] Error creating rectangle:`, rectError);
                     }
                 });
 
                 if (rects.length === 0) {
-                    console.error(`[HIGHLIGHT] No valid rectangles were created`);
                     return;
                 }
 
                 // Create highlight elements - check if it was successful
                 var highlightsCreated = createSafeHighlightElements(rects, _color, selectedText);
-                console.log(`[HIGHLIGHT] Created highlights with color ${_color}: ${highlightsCreated ? 'success' : 'failed'}`);
 
                 // Only save if highlights were successfully created
                 if (highlightsCreated) {
@@ -422,12 +364,10 @@ function PdfxHighlight(element, options) {
                     try {
                         saveHighlights();
                     } catch (saveError) {
-                        console.error(`[HIGHLIGHT] Error saving highlights:`, saveError);
                     }
                 }
             }
         } catch (e) {
-            console.error(`[HIGHLIGHT] Error creating highlight:`, e);
         } finally {
             // Always clear the text selection after processing
             try {
@@ -441,29 +381,23 @@ function PdfxHighlight(element, options) {
                     document.selection.empty();
                 }
             } catch (clearError) {
-                console.error(`[HIGHLIGHT] Error clearing selection:`, clearError);
             }
         }
-
-        console.log(`[HIGHLIGHT] Finished handling text selection`);
     }
 
     // Safer version of createHighlightElements with better error handling
     function createSafeHighlightElements(rects, color, text) {
         if (!rects || !Array.isArray(rects) || rects.length === 0) {
-            console.error(`[HIGHLIGHT] Invalid rectangles provided`);
             return false;
         }
 
         var highlightLayer = $(element).find(`#highlight-layer-${_blockId}`)[0];
         if (!highlightLayer) {
-            console.error(`[HIGHLIGHT] Highlight layer not found for block ${_blockId}`);
             return false;
         }
 
         // Only proceed if text selection highlighting is enabled
         if (!_isHighlightingActive) {
-            console.error(`[HIGHLIGHT] Text highlighting not currently enabled`);
             return false;
         }
 
@@ -564,7 +498,6 @@ function PdfxHighlight(element, options) {
                     }
                     fabricCanvas.renderAll();
                 } catch (fabricError) {
-                    console.warn(`[HIGHLIGHT] Error adding highlights to fabric canvas:`, fabricError);
                     // Continue with DOM-based highlights even if fabric.js fails
                 }
             }
@@ -581,11 +514,9 @@ function PdfxHighlight(element, options) {
                         userHighlights: getUserHighlightsForStorage()
                     });
                 } catch (saveCallbackError) {
-                    console.error(`[HIGHLIGHT] Error in save callback:`, saveCallbackError);
                 }
             }
         } catch (e) {
-            console.error(`[HIGHLIGHT] Error creating highlight elements:`, e);
         }
 
         return success;
@@ -600,7 +531,6 @@ function PdfxHighlight(element, options) {
     function getSelectedSpans(range) {
         try {
             if (!range) {
-                console.error(`[HIGHLIGHT] Invalid range provided to getSelectedSpans`);
                 return [];
             }
 
@@ -608,7 +538,6 @@ function PdfxHighlight(element, options) {
             var textLayer = $(element).find(`#text-layer-${_blockId}`)[0];
 
             if (!textLayer) {
-                console.error(`[HIGHLIGHT] Text layer not found when getting selected spans`);
                 return [];
             }
 
@@ -616,12 +545,8 @@ function PdfxHighlight(element, options) {
             var allSpans = textLayer.querySelectorAll('span');
             var spanCount = allSpans.length;
 
-            console.log(`[HIGHLIGHT] Checking ${spanCount} spans for selection`);
-
             // For large documents, use a more efficient approach
             if (spanCount > 2000) {
-                console.log(`[HIGHLIGHT] Large document detected, using optimized selection approach`);
-
                 // Use faster range comparison instead of intersectsNode
                 var startContainer = range.startContainer;
                 var endContainer = range.endContainer;
@@ -642,7 +567,6 @@ function PdfxHighlight(element, options) {
 
                 // If we can't find valid spans, return empty
                 if (!startSpan || !endSpan) {
-                    console.warn(`[HIGHLIGHT] Could not find valid start/end spans`);
                     return [];
                 }
 
@@ -665,8 +589,6 @@ function PdfxHighlight(element, options) {
                 for (var i = startIdx; i <= endIdx; i++) {
                     spans.push(spansArray[i]);
                 }
-
-                console.log(`[HIGHLIGHT] Optimized selection found ${spans.length} spans between indices ${startIdx} and ${endIdx}`);
             } else {
                 // For smaller documents, we can use the normal approach
                 allSpans.forEach(function(span) {
@@ -674,12 +596,10 @@ function PdfxHighlight(element, options) {
                         spans.push(span);
                     }
                 });
-                console.log(`[HIGHLIGHT] Standard selection found ${spans.length} spans`);
             }
 
             return spans;
         } catch (error) {
-            console.error(`[HIGHLIGHT] Error getting selected spans:`, error);
             return [];
         }
     }
@@ -751,8 +671,6 @@ function PdfxHighlight(element, options) {
             }));
             delete _mongoHighlightIds[highlightId];
         }
-
-        _debugCallback(`Removed highlight: ${highlightId}`);
     }
 
     // Prepare highlights for storage
@@ -783,31 +701,15 @@ function PdfxHighlight(element, options) {
 
     // Save highlights to server
     function saveHighlights() {
-        try {
-            console.log(`[HIGHLIGHT] Saving highlights, count: ${_highlights.length}`);
+        if (typeof _saveCallback === 'function') {
+            var data = {
+                highlights: _highlights,
+                userId: _userId,
+                blockId: _blockId
+            };
 
-            // Verify _saveCallback is actually a function before calling it
-            if (typeof _saveCallback === 'function') {
-                var highlightsData = getUserHighlightsForStorage();
-
-                // Make sure we have data to save
-                if (highlightsData && Object.keys(highlightsData).length > 0) {
-                    _saveCallback({
-                        userHighlights: highlightsData
-                    });
-
-                    console.log(`[HIGHLIGHT] Highlights saved successfully`);
-                } else {
-                    console.warn(`[HIGHLIGHT] No highlight data to save`);
-                }
-            } else {
-                console.warn(`[HIGHLIGHT] No save callback available for highlights`);
-            }
-
-            return true;
-        } catch (error) {
-            console.error(`[HIGHLIGHT] Error saving highlights:`, error);
-            return false;
+            // Save data through callback
+            _saveCallback(data);
         }
     }
 
@@ -846,15 +748,12 @@ function PdfxHighlight(element, options) {
                 }
             });
         }
-
-        _debugCallback(`Loaded highlights from data for page ${_currentPage}`);
     }
 
     // Create highlight elements from existing data - modified to use fabric.js
     function createHighlightElementFromData(rects, color, text, highlightId, userId, timestamp) {
         var highlightLayer = $(element).find(`#highlight-layer-${_blockId}`)[0];
         if (!highlightLayer) {
-            _debugCallback('Highlight layer not found');
             return;
         }
 
@@ -1014,7 +913,6 @@ function PdfxHighlight(element, options) {
 
             var highlightLayer = $(element).find(`#highlight-layer-${_blockId}`)[0];
             if (!highlightLayer) {
-                _debugCallback('Highlight layer not found');
                 return;
             }
 
@@ -1035,14 +933,11 @@ function PdfxHighlight(element, options) {
                         highlight.timestamp
                     );
                 });
-
-                _debugCallback(`Restored ${pageHighlights.length} highlights for block ${_blockId} page ${_currentPage}`);
             }
 
             // Now fetch highlights from MongoDB
             fetchMongoDBHighlights();
         } catch (error) {
-            _debugCallback(`Error restoring highlights: ${error.message}`);
         }
     }
 
@@ -1054,13 +949,10 @@ function PdfxHighlight(element, options) {
             $.post(handlerUrl, JSON.stringify({})).done(function(response) {
                 if (response.result === 'success' && response.highlights) {
                     setHighlightsFromData(response.highlights);
-                    _debugCallback('Loaded highlights from MongoDB');
                 }
             }).fail(function(error) {
-                _debugCallback('Error loading highlights from MongoDB: ' + JSON.stringify(error));
             });
         } catch (error) {
-            _debugCallback(`Error fetching MongoDB highlights: ${error.message}`);
         }
     }
 
@@ -1070,8 +962,6 @@ function PdfxHighlight(element, options) {
         if (_currentPage === page) {
             return;
         }
-
-        console.log(`[HIGHLIGHT] Changing from page ${_currentPage} to page ${page}`);
 
         // Save highlights for current page before switching
         saveHighlights();
@@ -1124,10 +1014,6 @@ function PdfxHighlight(element, options) {
             objectsToRemove.forEach(function(obj) {
                 fabricCanvas.remove(obj);
             });
-
-            if (objectsToRemove.length > 0) {
-                fabricCanvas.renderAll();
-            }
         }
 
         // Reset highlights array
@@ -1139,16 +1025,12 @@ function PdfxHighlight(element, options) {
                 userHighlights: {}
             });
         }
-
-        _debugCallback('Cleared all highlights');
     }
 
     // Set highlight color
     function setHighlightColor(color) {
         if (color) {
             _color = color;
-            console.log(`[HIGHLIGHT] Highlight color set to: ${color}`);
-            _debugCallback(`Highlight color set to: ${color}`);
         }
     }
 

@@ -462,7 +462,6 @@ class PdfxXBlock(XBlock):
             pdfJsScript.type = 'module';
             pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs';
             pdfJsScript.onload = function() {
-                console.log("PDF.js module loaded successfully in student view");
                 // Set up worker with matching version
                 if (window.pdfjsLib) {
                     window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
@@ -478,7 +477,7 @@ class PdfxXBlock(XBlock):
                         workerSrc: ''
                     }
                 };
-                console.log("Created pdfjsLib stub via Python in student view while module loads");
+
             }
         """)
 
@@ -495,10 +494,30 @@ class PdfxXBlock(XBlock):
         frag.add_javascript(self.resource_string("static/js/src/pdfx_shape.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_note.js"))
 
+        # Add our new canvas fixing utility
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_fix_canvas.js"))
+
         # PDF.js base scripts
         frag.add_javascript(self.resource_string("static/js/src/pdfx_init.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble_init.js"))
+
+        # Add debugging script
+        frag.add_javascript("""
+            // Enable debug mode for stroke functionality
+            window.PDFX_DEBUG = true;
+
+            // Add event listener to automatically fix canvas when marker tool is activated
+            document.addEventListener('DOMContentLoaded', function() {
+                document.addEventListener('pdfx:toolactivated', function(event) {
+                    if (event.detail && event.detail.toolName === 'marker') {
+                        if (typeof window.emergencyFixCanvasContainer === 'function') {
+                            window.emergencyFixCanvasContainer(event.detail.blockId);
+                        }
+                    }
+                });
+            });
+        """)
 
         # Add a data element with the same data to the DOM for direct access by JavaScript
         data_html = f"""
@@ -576,7 +595,6 @@ class PdfxXBlock(XBlock):
             pdfJsScript.type = 'module';
             pdfJsScript.src = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs';
             pdfJsScript.onload = function() {
-                console.log("PDF.js module loaded successfully");
                 // Set up worker with matching version
                 if (window.pdfjsLib) {
                     window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
@@ -592,7 +610,6 @@ class PdfxXBlock(XBlock):
                         workerSrc: ''
                     }
                 };
-                console.log("Created pdfjsLib stub via Python while module loads");
             }
         """)
 
@@ -1222,3 +1239,26 @@ class PdfxXBlock(XBlock):
              """<pdfx/>
              """),
         ]
+
+    def get_javascript_files(self):
+        """Return the JavaScript files needed for our XBlock."""
+        javascript_files = [
+            'js/vendor/jquery-3.5.1.min.js',
+            'js/vendor/pdf.js',
+            'js/vendor/pdf.worker.js',
+            'js/vendor/fabric.min.js',
+            'js/src/pdfx_fix_canvas.js',  # Add our new canvas fix script early
+            'js/src/pdfx_modules.js',
+            'js/src/pdfx_init.js',
+            'js/src/pdfx_tools_common.js',
+            'js/src/pdfx_highlight.js',
+            'js/src/pdfx_scribble.js',
+            'js/src/pdfx_scribble_init.js',
+            'js/src/pdfx_text.js',
+            'js/src/pdfx_shape.js',
+            'js/src/pdfx_note.js',
+            'js/src/pdfx_drawing.js',
+            'js/src/pdfx_storage.js',
+            'js/src/pdfx_debug_utils.js',
+        ]
+        return javascript_files

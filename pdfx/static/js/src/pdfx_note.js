@@ -41,7 +41,6 @@ function PdfxNote(element, options) {
     function init(fabricCanvas) {
         _fabricCanvas = fabricCanvas;
         _debugCallback('Note tool initialized');
-        console.log(`[NOTE] Initializing note tool for block ${_blockId}`);
 
         // Create color selector UI if it doesn't exist already
         createColorSelector();
@@ -90,7 +89,6 @@ function PdfxNote(element, options) {
             button.addEventListener('click', function() {
                 _color = color;
                 highlightSelectedColor(this);
-                console.log(`[NOTE] Selected note color: ${color}`);
             });
 
             selectorContainer.appendChild(button);
@@ -103,8 +101,6 @@ function PdfxNote(element, options) {
         } else {
             document.body.appendChild(selectorContainer);
         }
-
-        console.log('[NOTE] Created note color selector UI');
     }
 
     /**
@@ -126,8 +122,6 @@ function PdfxNote(element, options) {
      */
     function createNote(x, y) {
         if (!_fabricCanvas) return;
-
-        console.log(`[NOTE] Creating new note at (${x}, ${y})`);
 
         var noteId = 'note-' + _blockId + '-' + _userId + '-' + Date.now();
 
@@ -265,8 +259,6 @@ function PdfxNote(element, options) {
     function deleteNote(noteGroup) {
         if (!_fabricCanvas || !noteGroup) return;
 
-        console.log(`[NOTE] Deleting note: ${noteGroup.noteId}`);
-
         // Remove from fabric canvas
         _fabricCanvas.remove(noteGroup);
 
@@ -309,8 +301,6 @@ function PdfxNote(element, options) {
                 currentPage: _currentPage
             });
         }
-
-        console.log(`[NOTE] Saved note annotations for page ${_currentPage}`);
     }
 
     /**
@@ -458,7 +448,6 @@ function PdfxNote(element, options) {
         if (_isActive) return;
 
         _isActive = true;
-        console.log(`[NOTE] Enabling note tool for block ${_blockId}`);
 
         // Show color selector
         var selector = document.getElementById(`note-color-selector-${_blockId}`);
@@ -511,7 +500,6 @@ function PdfxNote(element, options) {
         if (!_isActive) return;
 
         _isActive = false;
-        console.log(`[NOTE] Disabling note tool for block ${_blockId}`);
 
         // Hide color selector
         var selector = document.getElementById(`note-color-selector-${_blockId}`);
@@ -547,7 +535,6 @@ function PdfxNote(element, options) {
         if (page === _currentPage) return;
 
         _currentPage = page;
-        console.log(`[NOTE] Changed to page ${page}`);
 
         // Load notes for this page
         if (_isActive) {
@@ -560,7 +547,6 @@ function PdfxNote(element, options) {
      */
     function setColor(color) {
         _color = color;
-        console.log(`[NOTE] Color set to ${color}`);
     }
 
     /**

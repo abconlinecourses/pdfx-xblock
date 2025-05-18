@@ -25,17 +25,12 @@
             if (isIndexedDBSupported) {
                 const testRequest = window.indexedDB.open('test');
                 testRequest.onerror = function() {
-                    console.error('IndexedDB access denied - likely in private browsing mode');
                     isIndexedDBSupported = false;
                 };
             }
         } catch (e) {
-            console.error('Error checking IndexedDB support:', e);
             isIndexedDBSupported = false;
         }
-
-        // Log the support status
-        console.log('IndexedDB support: ' + (isIndexedDBSupported ? 'YES' : 'NO'));
 
         /**
          * Initialize the IndexedDB database
@@ -57,7 +52,6 @@
                     const request = window.indexedDB.open(DB_NAME, DB_VERSION);
 
                     request.onerror = (event) => {
-                        console.error('IndexedDB error:', event.target.error);
                         isIndexedDBSupported = false; // Disable further attempts
                         reject(event.target.error);
                     };
@@ -67,7 +61,6 @@
 
                         // Add error handler for database
                         db.onerror = (event) => {
-                            console.error('Database error:', event.target.error);
                         };
 
                         resolve(db);
@@ -90,11 +83,9 @@
 
                     // Handle blocked or failed version change
                     request.onblocked = (event) => {
-                        console.error('Database upgrade was blocked');
                         reject(new Error('Database upgrade was blocked. Please close other tabs with this site open.'));
                     };
                 } catch (error) {
-                    console.error('Error initializing IndexedDB:', error);
                     isIndexedDBSupported = false;
                     reject(error);
                 }
@@ -171,12 +162,10 @@
 
                     // Handle transaction completion
                     tx.oncomplete = () => {
-                        console.log('PDF stored successfully with ID:', pdfId);
                         resolve(pdfId);
                     };
 
                     tx.onerror = (event) => {
-                        console.error('Error storing PDF:', event.target.error);
                         reject(event.target.error);
                     };
                 });
@@ -222,8 +211,6 @@
                                     const CACHE_MAX_AGE = 1000 * 60 * 60; // 1 hour
 
                                     if (cacheAge > CACHE_MAX_AGE && url.indexOf('http') === 0) {
-                                        console.log('Cached PDF is older than 1 hour, checking for updates...');
-
                                         // Make HEAD request to check Last-Modified
                                         fetch(url, { method: 'HEAD', cache: 'no-cache' })
                                             .then(response => {
@@ -231,31 +218,23 @@
 
                                                 // If we have a Last-Modified date and it's different from our cached one
                                                 if (serverLastModified && serverLastModified !== meta.lastModified) {
-                                                    console.log('PDF has been updated on server, will fetch new version');
-                                                    // Return null to trigger a fresh download
                                                     resolve(null);
                                                 } else {
-                                                    // No change detected, use cached version
                                                     resolve(result.data);
                                                 }
                                             })
-                                            .catch(error => {
-                                                // On error, use cached version
-                                                console.warn('Error checking for PDF updates:', error);
+                                            .catch(() => {
                                                 resolve(result.data);
                                             });
                                     } else {
-                                        // Cache is fresh enough, use it
                                         resolve(result.data);
                                     }
                                 } else {
-                                    // No metadata, but we have the data - use it
                                     resolve(result.data);
                                 }
                             };
 
                             metaRequest.onerror = () => {
-                                // Metadata error, still return the data
                                 resolve(result.data);
                             };
                         } else {
@@ -264,12 +243,10 @@
                     };
 
                     pdfRequest.onerror = (event) => {
-                        console.error('Error retrieving PDF:', event.target.error);
                         reject(event.target.error);
                     };
                 });
             }).catch(error => {
-                console.error('Error in getPdf:', error);
                 return null;
             });
         }
@@ -289,7 +266,6 @@
                         tx.objectStore(META_STORE).clear();
 
                         tx.oncomplete = () => {
-                            console.log('All PDF data cleared');
                             resolve();
                         };
 
@@ -340,7 +316,6 @@
                                 });
 
                                 deleteTx.oncomplete = () => {
-                                    console.log(`Deleted ${idsToDelete.length} PDFs`);
                                     resolve(idsToDelete.length);
                                 };
 
@@ -380,12 +355,10 @@
                     };
 
                     request.onerror = (event) => {
-                        console.error('Error checking PDF existence:', event.target.error);
                         reject(event.target.error);
                     };
                 });
             }).catch(error => {
-                console.error('Error in hasPdf:', error);
                 return false;
             });
         }

@@ -36,7 +36,6 @@ function PdfxShape(element, options) {
     function init(fabricCanvas) {
         _fabricCanvas = fabricCanvas;
         _debugCallback('Shape tool initialized');
-        console.log(`[SHAPE] Initializing shape tool for block ${_blockId}`);
 
         // Get current color from UI if available
         var colorInput = document.getElementById(`color-input-${_blockId}`);
@@ -50,7 +49,6 @@ function PdfxShape(element, options) {
             _fabricCanvas.on('mouse:move', _handleMouseMove);
             _fabricCanvas.on('mouse:up', _handleMouseUp);
             _fabricCanvas._shapeEventsBound = true;
-            console.log('[SHAPE] Set up fabric event handlers');
         }
 
         // Create shape selector UI if it doesn't exist already
@@ -124,7 +122,6 @@ function PdfxShape(element, options) {
             button.addEventListener('click', function() {
                 _currentShapeType = shapeType;
                 highlightSelectedButton(this);
-                console.log(`[SHAPE] Selected shape type: ${shapeType}`);
             });
 
             selectorContainer.appendChild(button);
@@ -137,8 +134,6 @@ function PdfxShape(element, options) {
         } else {
             document.body.appendChild(selectorContainer);
         }
-
-        console.log('[SHAPE] Created shape selector UI');
     }
 
     /**
@@ -401,8 +396,6 @@ function PdfxShape(element, options) {
                 currentPage: _currentPage
             });
         }
-
-        console.log(`[SHAPE] Saved shape annotations for page ${_currentPage}`);
     }
 
     /**
@@ -412,7 +405,6 @@ function PdfxShape(element, options) {
         if (_isActive) return;
 
         _isActive = true;
-        console.log(`[SHAPE] Enabling shape tool for block ${_blockId}`);
 
         // Show shape selector
         var selector = document.getElementById(`shape-selector-${_blockId}`);
@@ -457,7 +449,6 @@ function PdfxShape(element, options) {
         if (!_isActive) return;
 
         _isActive = false;
-        console.log(`[SHAPE] Disabling shape tool for block ${_blockId}`);
 
         // Hide shape selector
         var selector = document.getElementById(`shape-selector-${_blockId}`);
@@ -488,7 +479,6 @@ function PdfxShape(element, options) {
         if (page === _currentPage) return;
 
         _currentPage = page;
-        console.log(`[SHAPE] Changed to page ${page}`);
 
         // Load shapes for this page
         if (_isActive) {
@@ -650,7 +640,6 @@ function PdfxShape(element, options) {
      */
     function setColor(color) {
         _color = color;
-        console.log(`[SHAPE] Color set to ${color}`);
     }
 
     /**
@@ -658,7 +647,6 @@ function PdfxShape(element, options) {
      */
     function setStrokeWidth(width) {
         _strokeWidth = width;
-        console.log(`[SHAPE] Stroke width set to ${width}`);
     }
 
     /**
@@ -666,7 +654,6 @@ function PdfxShape(element, options) {
      */
     function setOpacity(opacity) {
         _opacity = opacity;
-        console.log(`[SHAPE] Opacity set to ${opacity}`);
     }
 
     /**
@@ -707,8 +694,6 @@ function PdfxShape(element, options) {
 
         // Save the cleared state
         saveShapeAnnotations();
-
-        console.log(`[SHAPE] Cleared all shapes from page ${_currentPage}`);
     }
 
     // Public API

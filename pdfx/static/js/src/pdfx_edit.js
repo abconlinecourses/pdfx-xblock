@@ -11,7 +11,6 @@ function PdfxXBlockEdit(runtime, element) {
                 workerSrc: ''
             }
         };
-        console.log("Created pdfjsLib stub for edit view");
     }
 
     var $element = $(element);

@@ -26,7 +26,6 @@ function PdfxText(element, options) {
      */
     function initialize() {
         _debugCallback('Text tool initialized');
-        console.log(`[TEXT] Initializing text tool for block ${_blockId}`);
 
         // Get current color from UI if available
         var colorInput = document.getElementById(`color-input-${_blockId}`);
@@ -47,8 +46,6 @@ function PdfxText(element, options) {
      */
     function handleContainerClick(event) {
         if (!_isActive) return;
-
-        console.log(`[TEXT] Container clicked at (${event.offsetX}, ${event.offsetY})`);
 
         // Create text input at click position
         createTextInput(event.offsetX, event.offsetY);
@@ -136,8 +133,6 @@ function PdfxText(element, options) {
                 blockId: _blockId
             });
         }
-
-        console.log(`[TEXT] Saved text annotation: ${annotation.text.substring(0, 20)}...`);
     }
 
     /**
@@ -251,81 +246,58 @@ function PdfxText(element, options) {
             textInput.value = annotation.text;
             textInput.style.left = annotation.x + 'px';
             textInput.style.top = annotation.y + 'px';
-            textInput.setAttribute('data-timestamp', annotation.timestamp);
 
+            // Convert to display element
             convertToDisplayElement(textInput, annotation);
         });
-
-        console.log(`[TEXT] Loaded ${pageAnnotations.length} text annotations for page ${page}`);
     }
 
     /**
-     * Set the current page
+     * Set current page
      */
     function setCurrentPage(page) {
-        if (_currentPage !== page) {
-            _currentPage = page;
-
-            // Load annotations for the new page
-            if (_isActive) {
-                loadAnnotationsForPage(page);
-            }
-        }
+        _currentPage = page;
+        loadAnnotationsForPage(page);
     }
 
     /**
-     * Enable the text tool
+     * Enable text tool
      */
     function enable() {
         if (_isActive) return;
 
         _isActive = true;
-        console.log(`[TEXT] Enabling text tool for block ${_blockId}`);
 
-        // Set cursor on draw container
+        // Add click handler to draw container
         var drawContainer = document.getElementById(`draw-container-${_blockId}`);
-        if (drawContainer) {
-            drawContainer.style.cursor = 'text';
-            drawContainer.classList.add('draw-mode');
-            drawContainer.style.pointerEvents = 'auto';
-
-            // Add click handler
+        if (drawContainer && drawContainer._textToolClickHandler) {
             drawContainer.addEventListener('click', drawContainer._textToolClickHandler);
         }
 
-        // Get current color
-        var colorInput = document.getElementById(`color-input-${_blockId}`);
-        if (colorInput) {
-            _color = colorInput.value;
+        // Set cursor style
+        if (drawContainer) {
+            drawContainer.style.cursor = 'text';
         }
-
-        // Load annotations for current page
-        loadAnnotationsForPage(_currentPage);
-
-        _debugCallback('Text tool enabled');
     }
 
     /**
-     * Disable the text tool
+     * Disable text tool
      */
     function disable() {
         if (!_isActive) return;
 
         _isActive = false;
-        console.log(`[TEXT] Disabling text tool for block ${_blockId}`);
 
-        // Reset draw container
+        // Remove click handler from draw container
         var drawContainer = document.getElementById(`draw-container-${_blockId}`);
-        if (drawContainer) {
-            drawContainer.style.cursor = 'default';
-            drawContainer.classList.remove('draw-mode');
-            drawContainer.style.pointerEvents = 'none';
-
-            // Remove click handler
+        if (drawContainer && drawContainer._textToolClickHandler) {
             drawContainer.removeEventListener('click', drawContainer._textToolClickHandler);
         }
 
-        _debugCallback('Text tool disabled');
+        // Reset cursor style
+        if (drawContainer) {
+            drawContainer.style.cursor = 'default';
+        }
     }
 
     /**
@@ -333,7 +305,6 @@ function PdfxText(element, options) {
      */
     function setColor(color) {
         _color = color;
-        console.log(`[TEXT] Color set to ${color}`);
     }
 
     /**
@@ -341,7 +312,6 @@ function PdfxText(element, options) {
      */
     function setFontSize(size) {
         _fontSize = size;
-        console.log(`[TEXT] Font size set to ${size}px`);
     }
 
     /**
@@ -357,20 +327,14 @@ function PdfxText(element, options) {
     function setAnnotations(annotations) {
         if (Array.isArray(annotations)) {
             _textAnnotations = annotations;
-
-            // Reload annotations for current page
-            if (_isActive) {
-                loadAnnotationsForPage(_currentPage);
-            }
-
-            console.log(`[TEXT] Loaded ${annotations.length} text annotations from data`);
+            loadAnnotationsForPage(_currentPage);
         }
     }
 
     // Initialize on creation
     initialize();
 
-    // Public API
+    // Return public API
     return {
         enable: enable,
         disable: disable,
@@ -378,55 +342,40 @@ function PdfxText(element, options) {
         setColor: setColor,
         setFontSize: setFontSize,
         getAllAnnotations: getAllAnnotations,
-        setAnnotations: setAnnotations,
-        isActive: function() { return _isActive; }
+        setAnnotations: setAnnotations
     };
 }
 
-// Auto-initialize when document is ready
-document.addEventListener('DOMContentLoaded', function() {
-    console.log('Text tool module loaded');
+// Register text tool globally for initialization
+window.initTextTool = function(blockId, options) {
+    if (!blockId) return null;
 
-    // Look for PDF blocks in the document
-    var pdfBlocks = document.querySelectorAll('.pdfx_block');
-    pdfBlocks.forEach(function(block) {
-        var blockId = block.getAttribute('data-id');
-        if (blockId) {
-            console.log(`Registering text tool for block: ${blockId}`);
+    // Set default options
+    options = options || {};
+    options.blockId = blockId;
 
-            // Create text tool instance
-            var textInstance = new PdfxText(block, {
-                blockId: blockId,
-                userId: block.getAttribute('data-user-id') || 'anonymous',
-                debugCallback: function(message) {
-                    console.log(`[TEXT ${blockId}] ${message}`);
-                },
-                saveCallback: function(data) {
-                    console.log(`[TEXT ${blockId}] Save requested:`, data);
-                    // Actual save implementation would go here
-                }
-            });
+    // Create the text tool instance
+    var block = document.getElementById('pdfx-block-' + blockId);
+    if (!block) return null;
 
-            // Store instance in global scope
-            window[`textInstance_${blockId}`] = textInstance;
+    // Create text tool instance
+    var textTool = new PdfxText(block, options);
 
-            // Add CSS for text annotations if needed
-            if (!document.getElementById('pdfx-text-styles')) {
-                var style = document.createElement('style');
-                style.id = 'pdfx-text-styles';
-                style.textContent = `
-                    .pdf-text-annotation {
-                        font-family: Arial, sans-serif;
-                        outline: none;
-                    }
-                    .pdf-text-annotation-display {
-                        font-family: Arial, sans-serif;
-                        cursor: pointer;
-                        user-select: none;
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-        }
-    });
-});
+    // Register globally
+    window['textTool_' + blockId] = textTool;
+
+    return textTool;
+};
+
+// Debug logging helper - can be disabled in production
+function logText(blockId, message) {
+    // Empty implementation
+}
+
+// Save handler for text annotations
+window.saveTextAnnotations = function(blockId, data) {
+    // Empty debug implementation
+};
+
+// Module loaded notification
+// Module loaded
