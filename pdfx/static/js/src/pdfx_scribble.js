@@ -1044,6 +1044,93 @@ class PdfxScribble {
         console.debug(`[PdfX Debug] Successfully created ${createdCount} basic strokes for page ${currentPage}`);
         this.fabricCanvas.renderAll();
     }
+
+    // Clear all strokes on the current page
+    clearCurrentPage() {
+        const currentPage = this.currentPage;
+        console.log(`[PDFX Scribble] Clearing all strokes on current page ${currentPage}`);
+        return this.clearPage(currentPage);
+    }
+
+    // Clear all strokes on a specific page
+    clearPage(pageNum) {
+        const targetPage = parseInt(pageNum, 10);
+        console.log(`[PDFX Scribble] Clearing all strokes on page ${targetPage}`);
+
+        try {
+            // 1. Clear from fabric canvas
+            if (this.fabricCanvas) {
+                const objects = [...this.fabricCanvas.getObjects()];
+                let removedCount = 0;
+
+                objects.forEach(obj => {
+                    // Remove objects that belong to this page or have no page info
+                    if (!obj.page || parseInt(obj.page) === targetPage) {
+                        this.fabricCanvas.remove(obj);
+                        removedCount++;
+                    }
+                });
+
+                this.fabricCanvas.renderAll();
+                console.log(`[PDFX Scribble] Removed ${removedCount} objects from fabric canvas`);
+            }
+
+            // 2. Clear from allStrokes data structure
+            if (this.allStrokes && this.allStrokes[targetPage]) {
+                const strokeCount = Array.isArray(this.allStrokes[targetPage]) ? this.allStrokes[targetPage].length : 0;
+                delete this.allStrokes[targetPage];
+                console.log(`[PDFX Scribble] Cleared ${strokeCount} strokes from allStrokes data for page ${targetPage}`);
+            }
+
+            // 3. Mark page as dirty for saving
+            this.dirtyPages[targetPage] = true;
+
+            // 4. Save changes to server immediately
+            this.saveStrokesToServer().then(() => {
+                console.log(`[PDFX Scribble] Successfully saved cleared strokes to server for page ${targetPage}`);
+            }).catch(error => {
+                console.error(`[PDFX Scribble] Error saving cleared strokes to server: ${error.message}`);
+            });
+
+            return true;
+        } catch (error) {
+            console.error(`[PDFX Scribble] Error clearing page ${targetPage}: ${error.message}`);
+            return false;
+        }
+    }
+
+    // Clear all strokes on all pages
+    clearAll() {
+        console.log(`[PDFX Scribble] Clearing all strokes on all pages`);
+
+        try {
+            // 1. Clear fabric canvas completely
+            if (this.fabricCanvas) {
+                this.fabricCanvas.clear();
+                this.fabricCanvas.renderAll();
+                console.log(`[PDFX Scribble] Cleared fabric canvas completely`);
+            }
+
+            // 2. Clear all strokes data
+            this.allStrokes = {};
+            console.log(`[PDFX Scribble] Cleared all strokes data`);
+
+            // 3. Mark all pages as dirty
+            this.dirtyPages = { all: true };
+
+            // 4. Save changes to server immediately
+            this.saveStrokesToServer().then(() => {
+                console.log(`[PDFX Scribble] Successfully saved cleared strokes to server for all pages`);
+            }).catch(error => {
+                console.error(`[PDFX Scribble] Error saving cleared strokes to server: ${error.message}`);
+            });
+
+            return true;
+        } catch (error) {
+            console.error(`[PDFX Scribble] Error clearing all strokes: ${error.message}`);
+            return false;
+        }
+    }
 }
 
 // Export for global access

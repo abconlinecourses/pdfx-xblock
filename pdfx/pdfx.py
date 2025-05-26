@@ -498,6 +498,7 @@ class PdfxXBlock(XBlock):
         frag.add_javascript(self.resource_string("static/js/src/pdfx_fix_canvas.js"))
 
         # PDF.js base scripts
+        frag.add_javascript(self.resource_string("static/js/src/pdfx_modules.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_init.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_view.js"))
         frag.add_javascript(self.resource_string("static/js/src/pdfx_scribble_init.js"))

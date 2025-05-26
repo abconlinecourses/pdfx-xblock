@@ -1,109 +1,145 @@
-/* Javascript for PdfxXBlock. */
+/**
+ * Main JavaScript for PDF XBlock
+ *
+ * This is the main entry point for the PDF XBlock functionality.
+ * It provides a module-based architecture for PDF viewing and annotations.
+ */
+
+// Ensure the PDFX namespace exists
+window.PDFX = window.PDFX || {};
+
+// Store instances for easy access
+PDFX.instances = {};
+
+/**
+ * Initialize a new PDF XBlock instance
+ * @param {string} blockId - The block ID
+ * @param {object} options - Configuration options
+ * @returns {object} The initialized instance with all modules
+ */
+PDFX.initInstance = function(blockId, options) {
+    console.debug(`[PDFX] Initializing instance for block ${blockId}`);
+
+    if (PDFX.instances[blockId]) {
+        console.debug(`[PDFX] Instance for block ${blockId} already exists, returning existing instance`);
+        return PDFX.instances[blockId];
+    }
+
+    // Create a new instance with all modules
+    const instance = {
+        blockId: blockId,
+        options: options || {},
+        core: null,
+        tools: null,
+        ui: null,
+        canvas: null,
+        storage: null,
+        scribble: null,
+        rendering: null,
+        debug: options.debugMode || false
+    };
+
+    // Initialize core module
+    if (PDFX.Core) {
+        instance.core = Object.create(PDFX.Core);
+        instance.core.init(blockId, options);
+    }
+
+    // Initialize tools module
+    if (PDFX.Tools) {
+        instance.tools = Object.create(PDFX.Tools);
+        instance.tools.init(blockId, options);
+    }
+
+    // Initialize UI module
+    if (PDFX.UI) {
+        instance.ui = Object.create(PDFX.UI);
+        instance.ui.init(blockId, options);
+    }
+
+    // Initialize canvas module if available
+    if (PDFX.Canvas) {
+        instance.canvas = Object.create(PDFX.Canvas);
+        instance.canvas.init(blockId, options);
+    }
+
+    // Initialize storage module if available
+    if (PDFX.Storage) {
+        instance.storage = Object.create(PDFX.Storage);
+        instance.storage.init(blockId, options);
+    }
+
+    // Initialize scribble module if available
+    if (PDFX.Scribble) {
+        instance.scribble = Object.create(PDFX.Scribble);
+        instance.scribble.init(blockId, options);
+    }
+
+    // Initialize rendering module if available
+    if (PDFX.Rendering) {
+        instance.rendering = Object.create(PDFX.Rendering);
+        instance.rendering.init(blockId, options);
+    }
+
+    // Store instance for later access
+    PDFX.instances[blockId] = instance;
+
+    // Also store in legacy format for backward compatibility
+    window[`pdfxInstance_${blockId}`] = instance;
+
+    return instance;
+};
+
+/**
+ * Get an existing instance by block ID
+ * @param {string} blockId - The block ID
+ * @returns {object} The instance or null if not found
+ */
+PDFX.getInstance = function(blockId) {
+    return PDFX.instances[blockId] || null;
+};
+
+/**
+ * Entry point for PDF XBlock
+ * This is called by the Open edX runtime
+ */
 function PdfxXBlock(runtime, element) {
+    console.debug('[PDFX] Initializing PdfxXBlock module');
 
-    console.debug('[PdfX Debug] Initializing main PdfxXBlock module');
+    // Extract block ID from element ID
+    const blockId = element.id.replace('pdfx-block-', '');
 
-    function updateCount(result) {
-        $('.count', element).text(result.count);
-    }
+    // Get options from data element
+    const dataElement = document.getElementById(`pdfx-data-${blockId}`);
+    const options = {
+        runtime: runtime,
+        handlerUrl: runtime.handlerUrl(element, 'save_annotations'),
+        debugMode: false
+    };
 
-    var handlerUrl = runtime.handlerUrl(element, 'increment_count');
-
-    $('p', element).click(function(eventObject) {
-        $.ajax({
-            type: "POST",
-            url: handlerUrl,
-            data: JSON.stringify({"hello": "world"}),
-            success: updateCount
-        });
-    });
-
-    // Function to check if the data element contains valid information
-    function logDataElementContents() {
-        // Try to find data element for this block
-        var blockId = '';
-
-        // First try to get block ID from element
-        if (element && element.id) {
-            // Remove prefix if present
-            blockId = element.id.replace('pdfx-block-', '');
+    // Parse additional options from data element if available
+    if (dataElement && dataElement.dataset) {
+        // Add PDF URL if available
+        if (dataElement.dataset.pdfUrl) {
+            options.pdfUrl = dataElement.dataset.pdfUrl;
         }
 
-        // Also try to get from the nearest pdfx_block element
-        if (!blockId) {
-            var pdfxBlock = element.querySelector('.pdfx_block');
-            if (pdfxBlock && pdfxBlock.id) {
-                blockId = pdfxBlock.id.replace('pdfx-block-', '');
-            }
+        // Add current page if available
+        if (dataElement.dataset.currentPage) {
+            options.currentPage = parseInt(dataElement.dataset.currentPage, 10) || 1;
         }
 
-        if (!blockId) {
-            console.warn('[PdfX Debug] Could not determine block ID for diagnostics');
-            return;
-        }
-
-        console.debug(`[PdfX Debug] Checking data element for block ${blockId}`);
-
-        // Find the data element
-        var dataElement = document.getElementById(`pdfx-data-${blockId}`);
-        if (!dataElement) {
-            console.warn(`[PdfX Debug] Data element not found for block ${blockId}`);
-            return;
-        }
-
-        // Log all dataset attributes
-        console.debug(`[PdfX Debug] Data element attributes for block ${blockId}:`, dataElement.dataset);
-
-        // Check specifically for marker strokes
-        if (dataElement.dataset.markerStrokes) {
-            try {
-                var markerData = JSON.parse(dataElement.dataset.markerStrokes);
-                console.debug(`[PdfX Debug] Marker strokes data found:`, Object.keys(markerData));
-
-                // Count total strokes
-                var totalStrokes = 0;
-                var pageCount = 0;
-
-                Object.keys(markerData).forEach(function(key) {
-                    if (key !== '_last_saved' && key !== 'strokeCount' && key !== '_lastSynced') {
-                        pageCount++;
-                        if (Array.isArray(markerData[key])) {
-                            totalStrokes += markerData[key].length;
-                        }
-                    }
-                });
-
-                console.debug(`[PdfX Debug] Total marker strokes: ${totalStrokes} across ${pageCount} pages`);
-            } catch (e) {
-                console.error(`[PdfX Debug] Error parsing marker strokes data: ${e.message}`);
-            }
-        } else {
-            console.warn(`[PdfX Debug] No marker strokes data found in data element`);
+        // Add debug mode if enabled
+        if (dataElement.dataset.debugMode === 'true') {
+            options.debugMode = true;
         }
     }
 
-    // Set up global error handlers to catch any initialization issues
-    window.addEventListener('error', function(event) {
-        console.error(`[PdfX Debug] Global error caught: ${event.message} at ${event.filename}:${event.lineno}`);
-    });
+    // Initialize the PDF XBlock instance
+    const instance = PDFX.initInstance(blockId, options);
 
-    // Run diagnostics when DOM is ready
-    $(function () {
-        console.debug('[PdfX Debug] DOM ready, running diagnostics');
-        logDataElementContents();
+    // Log successful initialization
+    console.debug(`[PDFX] PDF XBlock initialized for block ${blockId}`);
 
-        // Verify fabric.js is loaded
-        if (typeof fabric === 'undefined') {
-            console.error('[PdfX Debug] fabric.js is not loaded');
-        } else {
-            console.debug('[PdfX Debug] fabric.js is loaded, version:', fabric.version);
-        }
-
-        // Verify PDF.js is loaded
-        if (typeof pdfjsLib === 'undefined') {
-            console.error('[PdfX Debug] PDF.js is not loaded');
-        } else {
-            console.debug('[PdfX Debug] PDF.js is loaded, version:', pdfjsLib.version);
-        }
-    });
+    return instance;
 }
