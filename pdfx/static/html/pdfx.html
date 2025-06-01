@@ -1,451 +1,138 @@
-<!-- PDF Viewer XBlock -->
-
-
-<!-- Add fabric.js library -->
-<script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/5.3.1/fabric.min.js"></script>
-
-<!-- Immediate Canvas Fix Script -->
-<script>
-// Run as early as possible to ensure canvas sizes are correct
-(function() {
-    'use strict';
-
-    function fixCanvasDimensions() {
-        // Get the block ID
-        var blockId = '${block.block_id}';
-
-        // Get PDF container for dimensions
-        var pdfContainer = document.getElementById('pdf-container-' + blockId);
-        var drawContainer = document.getElementById('draw-container-' + blockId);
-
-        if (!pdfContainer || !drawContainer) {
-            return;
-        }
-
-        // Get dimensions
-        var width = pdfContainer.offsetWidth;
-        var height = pdfContainer.offsetHeight;
-
-        // Fix draw container dimensions
-        drawContainer.style.width = width + 'px';
-        drawContainer.style.height = height + 'px';
-
-        // Set up MutationObserver to watch for canvas creation
-        var observer = new MutationObserver(function(mutations) {
-            // Look for canvas container
-            var canvasContainer = drawContainer.querySelector('.canvas-container');
-            if (canvasContainer) {
-
-                // Fix canvas container
-                canvasContainer.style.width = width + 'px';
-                canvasContainer.style.height = height + 'px';
-
-                // Fix canvases
-                var canvases = canvasContainer.querySelectorAll('canvas');
-                canvases.forEach(function(canvas) {
-                    canvas.width = width;
-                    canvas.height = height;
-                    canvas.style.width = width + 'px';
-                    canvas.style.height = height + 'px';
-                });
-
-                // We found and fixed the canvas container, can disconnect
-                observer.disconnect();
-            }
-        });
-
-        // Start observing
-        observer.observe(drawContainer, { childList: true, subtree: true });
-
-        // Set up a timeout to stop observing after 10 seconds (avoid memory leaks)
-        setTimeout(function() {
-            observer.disconnect();
-        }, 10000);
-    }
-
-    // Try to run immediately
-    if (document.readyState === 'complete' || document.readyState === 'interactive') {
-        setTimeout(fixCanvasDimensions, 0);
-    }
-
-    // Also run when DOM is fully loaded
-    document.addEventListener('DOMContentLoaded', fixCanvasDimensions);
-
-    // And after a delay to ensure all components have initialized
-    setTimeout(fixCanvasDimensions, 1000);
-})();
-</script>
-
-<!-- Early initialization script - improved to NOT automatically activate any tool -->
-<script>
-// Early init script - tool neutral
-(function() {
-    // Create a function to run as early as possible
-    function earlyInit() {
-
-        // Wait for DOM content to load
-        document.addEventListener('DOMContentLoaded', function() {
-            // Initialize tools manager when available
-            var initInterval = setInterval(function() {
-                if (typeof PdfxToolsCommon !== 'undefined') {
-                    clearInterval(initInterval);
-
-                    // IMPORTANT: Do NOT activate any specific tool
-                    // Let the tools manager handle tool selection
-                }
-            }, 500);
-        });
-    }
-
-    // Run early init immediately
-    earlyInit();
-})();
-</script>
-
-<!-- Fix for marker tool initialization issues - integrated with tool manager -->
-<script>
-// Improved marker initialization function that works with the tools manager
-function directMarkerFix(blockId) {
-    // Look for the tools manager
-    var toolsManager = window['toolsManager_' + blockId];
-
-    if (toolsManager) {
-
-        // IMPORTANT: Do NOT automatically activate marker tool
-        // Instead, just verify canvas initialization
-        var drawContainer = document.getElementById('draw-container-' + blockId);
-        if (drawContainer && !drawContainer._fabricCanvas) {
-
-            // Just initialize canvas without activating the tool
-            var pdfContainer = document.getElementById('pdf-container-' + blockId);
-            if (pdfContainer) {
-                var canvas = document.createElement('canvas');
-                canvas.id = 'drawing-canvas-' + blockId;
-                canvas.width = pdfContainer.offsetWidth || 800;
-                canvas.height = pdfContainer.offsetHeight || 600;
-
-                drawContainer.innerHTML = '';
-                drawContainer.appendChild(canvas);
-
-                try {
-                    var fabricCanvas = new fabric.Canvas(canvas, {
-                        isDrawingMode: false,
-                        selection: false
-                    });
-
-                    drawContainer._fabricCanvas = fabricCanvas;
-                    window['fabricCanvas_' + blockId] = fabricCanvas;
-                } catch (error) {
-                    console.error('DIRECT MARKER FIX: Error creating canvas: ' + error.message);
-                }
-            }
-        }
-
-        return true;
-    } else {
-        return false;
-    }
-}
-
-// Store function globally per block for potential use
-window.directMarkerFix = directMarkerFix;
-</script>
-
-<!-- Emergency debug functions - modified to not activate marker by default -->
-<script>
-
-
-// Add DIRECTLY to document level event handlers - but don't activate marker tool
-document.addEventListener('DOMContentLoaded', function() {
-    // Log but don't add auto-activation
-});
-</script>
-
-<div class="pdfx_block" id="pdfx-block-${block.block_id}"
-     data-course-id="${block.course_id}"
-     data-id="${block.block_id}">
-    <h2 class="pdf-title">${block.display_name}</h2>
-
-    <!-- PDF Viewer and Tools -->
-    <div class="pdf-viewer-container">
-        <!-- Left Sidebar -->
-        <div class="sidebar">
-            <div class="tool-section">
-                <button class="tool-btn" id="marker-tool-${block.block_id}" title="Scribble">
-                    <i class="fas fa-pen"></i>
-                </button>
-                <button class="tool-btn" id="highlight-tool-${block.block_id}" title="Highlighter">
-                    <i class="fas fa-highlighter"></i>
-                </button>
-                <button class="tool-btn" id="text-tool-${block.block_id}" title="Text">
-                    <i class="fas fa-font"></i>
-                </button>
-                <button class="tool-btn" id="shape-tool-${block.block_id}" title="Shape">
-                    <i class="fas fa-shapes"></i>
-                </button>
-                <button class="tool-btn" id="note-tool-${block.block_id}" title="Note">
-                    <i class="fas fa-sticky-note"></i>
-                </button>
-                <button class="tool-btn" id="select-tool-${block.block_id}" title="Select">
-                    <i class="fas fa-mouse-pointer"></i>
-                </button>
-                <button class="tool-btn" id="eraser-tool-${block.block_id}" title="Eraser">
-                    <i class="fas fa-eraser"></i>
-                </button>
-            </div>
-            <button class="tool-btn" id="undo-btn-${block.block_id}" title="Undo">
-                <i class="fas fa-undo"></i>
-            </button>
-            <button class="tool-btn" id="redo-btn-${block.block_id}" title="Redo">
-                <i class="fas fa-redo"></i>
-            </button>
+<!DOCTYPE html>
+<div class="pdfx-block" id="pdfx-block-${block.block_id}" data-block-type="pdfx" data-block-id="${block.block_id}">
+    <!-- PDF XBlock Container -->
+    <div class="pdf-container-wrapper">
+        <!-- Loading Indicator -->
+        <div class="loading-indicator" id="loading-${block.block_id}">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading PDF...</div>
         </div>
 
-        <!-- Main Content Area -->
-        <div class="content-area">
-            <!-- Top Toolbar -->
-            <div class="top-toolbar">
-                <div class="tool-group">
-                    <div class="drawing-controls">
-                        <input type="color" id="color-input-${block.block_id}" value="#FF0000" title="Color">
-                        <input type="range" id="width-input-${block.block_id}" min="1" max="20" value="5" title="Line Width">
-                        <span id="width-value-${block.block_id}">5px</span>
+        <!-- Error Display -->
+        <div class="pdf-error" id="error-${block.block_id}" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <div class="error-message">An error occurred while loading the PDF</div>
+            <button class="error-retry">Retry</button>
+        </div>
+
+        <!-- Main PDF Container -->
+        <div class="pdf-main-container" id="pdf-main-${block.block_id}" style="display: none;">
+            <!-- Toolbar with FontAwesome Icons (No Text Labels) -->
+            <div class="pdf-toolbar" id="toolbar-${block.block_id}">
+                <div class="toolbar-section tools-section">
+                    <div class="tool-buttons">
+                        <button class="tool-button" data-tool="highlight" title="Highlight Text">
+                            <i class="fas fa-highlighter"></i>
+                        </button>
+                        <button class="tool-button" data-tool="scribble" title="Draw/Scribble">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button class="tool-button" data-tool="text" title="Add Text">
+                            <i class="fas fa-font"></i>
+                        </button>
+                        <button class="tool-button" data-tool="shape" title="Draw Shape">
+                            <i class="fas fa-shapes"></i>
+                        </button>
+                        <button class="tool-button" data-tool="note" title="Add Note">
+                            <i class="fas fa-sticky-note"></i>
+                        </button>
                     </div>
                 </div>
-                <div class="separator"></div>
-                <div class="tool-group">
-                    <button class="tool-btn" id="clear-tool-${block.block_id}" title="Clear All">
-                        <i class="fas fa-trash"></i>
-                    </button>
+
+                <div class="toolbar-section settings-section">
+                    <div class="setting-controls">
+                        <label for="color-input-${block.block_id}">
+                            <i class="fas fa-palette"></i>
+                        </label>
+                        <input type="color" id="color-input-${block.block_id}" value="#FF0000" class="color-picker">
+
+                        <label for="size-input-${block.block_id}">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </label>
+                        <input type="range" id="size-input-${block.block_id}" min="1" max="20" value="5" class="size-slider">
+                    </div>
                 </div>
-                <div class="separator"></div>
-                <div class="brightness-controls">
-                    <button class="tool-btn" id="brightness-down-${block.block_id}" title="Decrease Brightness">
-                        <i class="fas fa-sun"></i>
-                        <i class="fas fa-minus" style="font-size: 8px; position: absolute; margin-left: -8px; margin-top: 12px;"></i>
-                    </button>
-                    <span id="brightness-level-${block.block_id}" style="font-size: 12px; color: #555;">100%</span>
-                    <button class="tool-btn" id="brightness-up-${block.block_id}" title="Increase Brightness">
-                        <i class="fas fa-sun"></i>
-                        <i class="fas fa-plus" style="font-size: 8px; position: absolute; margin-left: -8px; margin-top: 12px;"></i>
-                    </button>
-                </div>
-                <div style="margin-left: auto;">
-                    <button class="tool-btn" id="download-tool-${block.block_id}" title="Download">
-                        <i class="fas fa-download"></i>
-                    </button>
+
+                <div class="toolbar-section actions-section">
+                    <div class="action-buttons">
+                        <button class="action-button" data-action="clear" title="Clear All">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button class="action-button" data-action="undo" title="Undo">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        <button class="action-button" data-action="download" title="Download PDF">
+                            <i class="fas fa-download"></i>
+                        </button>
+                    </div>
                 </div>
             </div>
 
             <!-- PDF Viewer -->
-            <div class="pdf-viewer">
-                <div id="pdf-container-${block.block_id}" class="pdf-container">
-                    <canvas id="pdf-canvas-${block.block_id}"></canvas>
-                    <div id="text-layer-${block.block_id}" class="text-layer"></div>
-                    <div id="draw-container-${block.block_id}" class="draw-container" data-block-id="${block.block_id}"></div>
-                    <div id="highlight-layer-${block.block_id}" class="highlight-layer"></div>
-                </div>
-                <!-- Loading indicator -->
-                <div class="loading-indicator">Loading PDF...</div>
-                <!-- Error message container -->
-                <div class="pdf-error" style="display: none;">
-                    <div class="error-title">Error loading PDF</div>
-                    <div class="error-message"></div>
-                    <div class="error-help">Try refreshing the page or contact your course administrator if the problem persists.</div>
+            <div class="pdf-viewer-area">
+                <div class="pdf-container" id="pdf-container-${block.block_id}">
+                    <!-- PDF Canvas -->
+                    <canvas id="pdf-canvas-${block.block_id}" class="pdf-canvas"></canvas>
+
+                    <!-- Text Layer -->
+                    <div id="text-layer-${block.block_id}" class="textLayer"></div>
+
+                    <!-- Drawing Container -->
+                    <div id="draw-container-${block.block_id}" class="draw-container"></div>
+
+                    <!-- Highlight Container -->
+                    <div id="highlight-container-${block.block_id}" class="highlight-container"></div>
                 </div>
             </div>
 
-            <!-- Bottom Toolbar -->
-            <div class="bottom-toolbar">
-                <div class="page-controls">
-                    <button class="page-btn prev-page" id="prev-page-${block.block_id}" title="Previous Page">
+            <!-- Navigation with FontAwesome Icons (Moved to Bottom) -->
+            <div class="pdf-navigation" id="navigation-${block.block_id}">
+                <div class="nav-section">
+                    <button class="nav-button" data-nav="first" title="First Page">
+                        <i class="fas fa-step-backward"></i>
+                    </button>
+                    <button class="nav-button" data-nav="prev" title="Previous Page">
                         <i class="fas fa-chevron-left"></i>
                     </button>
-                    <span class="page-info">Page <span id="page-num-${block.block_id}" class="page-num">1</span> / <span id="page-count-${block.block_id}" class="page-count">1</span></span>
-                    <button class="page-btn next-page" id="next-page-${block.block_id}" title="Next Page">
+                    <span class="page-info">
+                        <input type="number" class="page-input" value="1" min="1">
+                        <span class="page-separator">of</span>
+                        <span class="total-pages">1</span>
+                    </span>
+                    <button class="nav-button" data-nav="next" title="Next Page">
                         <i class="fas fa-chevron-right"></i>
                     </button>
+                    <button class="nav-button" data-nav="last" title="Last Page">
+                        <i class="fas fa-step-forward"></i>
+                    </button>
                 </div>
-                <div class="separator"></div>
-                <div class="zoom-controls">
-                    <button class="page-btn zoom-out" id="zoom-out-${block.block_id}" title="Zoom Out">
+
+                <div class="zoom-section">
+                    <button class="zoom-button" data-zoom="out" title="Zoom Out">
                         <i class="fas fa-search-minus"></i>
                     </button>
-                    <span id="zoom-level-${block.block_id}" class="zoom-level">100%</span>
-                    <button class="page-btn zoom-in" id="zoom-in-${block.block_id}" title="Zoom In">
+                    <span class="zoom-info">100%</span>
+                    <button class="zoom-button" data-zoom="in" title="Zoom In">
                         <i class="fas fa-search-plus"></i>
                     </button>
-                </div>
-                <div class="separator"></div>
-                <div class="view-controls">
-                    <button class="page-btn fit-to-width" id="fit-to-width-${block.block_id}" title="Fit to Width">
-                        <i class="fas fa-arrows-alt-h"></i>
-                    </button>
-                    <button class="page-btn fit-to-page" id="fit-to-page-${block.block_id}" title="Fit to Page">
-                        <i class="fas fa-compress-arrows-alt"></i>
-                    </button>
-                    <button class="page-btn fullscreen-btn" id="fullscreen-btn-${block.block_id}" title="Toggle Fullscreen">
+                    <button class="zoom-button" data-zoom="fit" title="Fit to Page">
                         <i class="fas fa-expand"></i>
                     </button>
-                    <button class="page-btn grayscale-toggle" id="grayscale-toggle-${block.block_id}" title="Toggle Grayscale">
-                        <i class="fas fa-adjust"></i>
+                    <button class="zoom-button" data-zoom="fit-width" title="Fit Width">
+                        <i class="fas fa-arrows-alt-h"></i>
                     </button>
+                </div>
+            </div>
+
+            <!-- Status Bar -->
+            <div class="pdf-status-bar" id="status-bar-${block.block_id}">
+                <div class="status-section">
+                    <span class="status-text">Ready</span>
+                </div>
+                <div class="tool-status">
+                    <span class="active-tool-label">No tool active</span>
                 </div>
             </div>
         </div>
     </div>
-
-    <!-- Debug Information (hidden by default) -->
-    <div class="pdf-debug" id="pdf-debug-${block.block_id}" style="display: none;">
-        <h4>Debug Information</h4>
-        <div>PDF Config URL: <span style="font-family: monospace;">${block.pdf_url or ""}</span></div>
-        <div>PDF Asset Key: <span style="font-family: monospace;">${block.pdf_file_asset_key or "Not set"}</span></div>
-        <div>PDF Filename: <span style="font-family: monospace;">${block.pdf_file_name or "Not set"}</span></div>
-        <div>Actual URL used: <span class="pdf-url-debug" style="font-family: monospace;"></span></div>
-        <div>Page Orientation: <span id="page-orientation-${block.block_id}" class="page-orientation">Not detected</span></div>
-        <div class="debug-logs-container" id="debug-logs-${block.block_id}" style="max-height: 200px; overflow-y: auto; margin-top: 10px; font-family: monospace; font-size: 11px; border: 1px solid #ddd; padding: 5px; background: #f9f9f9;"></div>
-        <div>
-            <button id="toggle-cors-proxy-${block.block_id}" class="debug-btn toggle-cors-proxy">Try with CORS Proxy</button>
-            <button id="force-reload-${block.block_id}" class="debug-btn force-reload">Force Reload PDF</button>
-            <button id="toggle-debug-${block.block_id}" class="debug-btn toggle-debug">Hide Debug Info</button>
-            <button id="direct-download-${block.block_id}" class="debug-btn direct-download">Download PDF</button>
-            <button id="check-canvas-${block.block_id}" class="debug-btn check-canvas">Check Canvas</button>
-            <button id="force-strokes-visibility-${block.block_id}" class="debug-btn force-strokes">Force Strokes Visibility</button>
-        </div>
-
-        <!-- IndexedDB Storage Management -->
-        <div class="storage-management" style="margin-top: 15px; border-top: 1px solid #ddd; padding-top: 10px;">
-            <h5>IndexedDB Storage Management</h5>
-            <div id="storage-stats-${block.block_id}" style="margin-bottom: 10px; font-size: 12px;">
-                Checking storage status...
-            </div>
-            <div>
-                <button id="check-storage-${block.block_id}" class="debug-btn check-storage">Check Storage Status</button>
-                <button id="refresh-pdf-${block.block_id}" class="debug-btn refresh-pdf" title="Force refresh current PDF from server">Force Refresh PDF</button>
-                <button id="clear-current-pdf-${block.block_id}" class="debug-btn clear-storage">Clear Current PDF Only</button>
-                <button id="clear-pdf-storage-${block.block_id}" class="debug-btn clear-storage">Clear All PDFs</button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Direct fix script - modified to not activate marker by default -->
-    <script>
-    // Make sure the fix function is available but doesn't activate marker by default
-    (function() {
-        // Create direct fix function in global scope that uses string concatenation instead of template literals
-        // but modified to not activate marker by default
-        window['directMarkerFix_' + '${block.block_id}'] = function() {
-
-            // Return without activating marker
-            return false;
-
-        };
-
-        // Attach to button click but don't auto-run
-        document.addEventListener('DOMContentLoaded', function() {
-            var fixButton = document.getElementById('fix-marker-' + '${block.block_id}');
-            if (fixButton) {
-                fixButton.addEventListener('click', function() {
-                    // Do not call window['directMarkerFix_' + '${block.block_id}']();
-                });
-            }
-
-            // Do NOT auto-run the fix - commented out
-            /*
-            setTimeout(function() {
-                window['directMarkerFix_' + '${block.block_id}']();
-            }, 1000);
-            */
-        });
-
-        // Do NOT try to run immediately - commented out
-        /*
-        setTimeout(function() {
-            window['directMarkerFix_' + '${block.block_id}']();
-        }, 500);
-        */
-    })();
-    </script>
 </div>
-
-<!-- Immediate fix for canvas sizing -->
-<script type="text/javascript">
-(function() {
-    // Fix the canvas container size as soon as possible
-    function emergencyFixCanvasContainer(blockId) {
-
-        var pdfContainer = document.getElementById('pdf-container-' + blockId);
-        var drawContainer = document.getElementById('draw-container-' + blockId);
-
-        if (!pdfContainer || !drawContainer) {
-            return false;
-        }
-
-        // Get the dimensions from the PDF container
-        var width = pdfContainer.offsetWidth;
-        var height = pdfContainer.offsetHeight;
-
-        if (width <= 0 || height <= 0) {
-            return false;
-        }
-
-        // Set the draw container dimensions
-        drawContainer.style.width = width + 'px';
-        drawContainer.style.height = height + 'px';
-
-        // Find the canvas container (if it exists yet)
-        var canvasContainer = drawContainer.querySelector('.canvas-container');
-        if (canvasContainer) {
-            // Set all sizing properties to ensure proper dimensions
-            canvasContainer.style.width = width + 'px';
-            canvasContainer.style.height = height + 'px';
-            canvasContainer.style.minWidth = width + 'px';
-            canvasContainer.style.minHeight = height + 'px';
-            canvasContainer.style.maxWidth = width + 'px';
-            canvasContainer.style.maxHeight = height + 'px';
-
-            // Set the canvas sizes (both upper and lower)
-            var canvases = canvasContainer.querySelectorAll('canvas');
-            canvases.forEach(function(canvas) {
-                canvas.width = width;
-                canvas.height = height;
-                canvas.style.width = width + 'px';
-                canvas.style.height = height + 'px';
-            });
-
-            return true;
-        }
-        return false;
-    }
-
-    // Run once right away
-    var blockId = '{{ xblock_id }}';
-    emergencyFixCanvasContainer(blockId);
-
-    // Run again after DOM is fully loaded
-    document.addEventListener('DOMContentLoaded', function() {
-        emergencyFixCanvasContainer(blockId);
-
-        // Make the function available globally
-        window.emergencyFixCanvasContainer = emergencyFixCanvasContainer;
-
-        // Re-check periodically until fabric canvas is initialized
-        var checkInterval = setInterval(function() {
-            if (emergencyFixCanvasContainer(blockId)) {
-                // If canvas container is already present, we can stop
-                var fabricCanvas = window['fabricCanvas_' + blockId];
-                if (fabricCanvas) {
-                    clearInterval(checkInterval);
-                }
-            }
-        }, 500); // Check every 500ms
-
-        // Stop checking after 10 seconds regardless
-        setTimeout(function() {
-            if (checkInterval) {
-                clearInterval(checkInterval);
-            }
-        }, 10000);
-    });
-})();
-</script>

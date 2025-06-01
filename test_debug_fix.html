@@ -1,0 +1,235 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDFX Debug Utilities Test</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .test-title {
+            color: #333;
+            border-bottom: 2px solid #007cba;
+            padding-bottom: 10px;
+            margin-bottom: 15px;
+        }
+        .test-button {
+            background: #007cba;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+            font-size: 14px;
+        }
+        .test-button:hover {
+            background: #005a8b;
+        }
+        .test-result {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 4px;
+            padding: 10px;
+            margin-top: 10px;
+            font-family: monospace;
+            white-space: pre-wrap;
+        }
+        .success {
+            color: #28a745;
+        }
+        .error {
+            color: #dc3545;
+        }
+        .warning {
+            color: #ffc107;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <h1 class="test-title">PDFX Debug Utilities Test</h1>
+        <p>This page tests the fixed debug utilities to ensure they work correctly without "this" reference errors.</p>
+
+        <h3>Test Functions:</h3>
+        <button class="test-button" onclick="testCheckPDFJS()">Test checkPDFJSAvailability()</button>
+        <button class="test-button" onclick="testGetPDFInstance()">Test getPDFInstance()</button>
+        <button class="test-button" onclick="testRunDiagnostic()">Test runComprehensiveDiagnostic()</button>
+        <button class="test-button" onclick="testGlobalFunction()">Test Global diagnosePDFX()</button>
+        <button class="test-button" onclick="clearResults()">Clear Results</button>
+
+        <div id="test-results"></div>
+    </div>
+
+    <!-- Mock PDFX elements for testing -->
+    <div id="pdfx-block-test123" style="display: none;">
+        <div id="pdf-container-test123"></div>
+        <div id="pdf-canvas-test123"></div>
+        <div id="text-layer-test123"></div>
+        <div id="pdfx-data-test123"></div>
+    </div>
+
+    <script>
+        // Mock PDF.js for testing
+        window.pdfjsLib = {
+            version: '5.0.375',
+            TextLayer: function() {},
+            getDocument: function() {},
+            GlobalWorkerOptions: {
+                workerSrc: ''
+            }
+        };
+
+        // Mock PDFX instances for testing
+        window.pdfxInstances = {
+            'test123': {
+                blockId: 'test123',
+                pdfDoc: { numPages: 5 },
+                currentPage: 1,
+                isInitialized: true
+            }
+        };
+
+        function logResult(message, type = 'info') {
+            const resultsDiv = document.getElementById('test-results');
+            const timestamp = new Date().toLocaleTimeString();
+            const resultDiv = document.createElement('div');
+            resultDiv.className = `test-result ${type}`;
+            resultDiv.textContent = `[${timestamp}] ${message}`;
+            resultsDiv.appendChild(resultDiv);
+            resultsDiv.scrollTop = resultsDiv.scrollHeight;
+        }
+
+        function testCheckPDFJS() {
+            try {
+                logResult('Testing checkPDFJSAvailability()...', 'info');
+
+                if (typeof window.PDFX_TEXT_DEBUG === 'undefined') {
+                    logResult('ERROR: PDFX_TEXT_DEBUG not found. Debug utilities not loaded.', 'error');
+                    return;
+                }
+
+                const result = window.PDFX_TEXT_DEBUG.checkPDFJSAvailability();
+                logResult(`checkPDFJSAvailability() returned: ${result}`, result ? 'success' : 'warning');
+
+            } catch (error) {
+                logResult(`ERROR in checkPDFJSAvailability(): ${error.message}`, 'error');
+            }
+        }
+
+        function testGetPDFInstance() {
+            try {
+                logResult('Testing getPDFInstance()...', 'info');
+
+                if (typeof window.PDFX_TEXT_DEBUG === 'undefined') {
+                    logResult('ERROR: PDFX_TEXT_DEBUG not found. Debug utilities not loaded.', 'error');
+                    return;
+                }
+
+                const instance = window.PDFX_TEXT_DEBUG.getPDFInstance('test123');
+                if (instance) {
+                    logResult(`getPDFInstance() found instance: ${JSON.stringify(instance, null, 2)}`, 'success');
+                } else {
+                    logResult('getPDFInstance() returned null - no instance found', 'warning');
+                }
+
+            } catch (error) {
+                logResult(`ERROR in getPDFInstance(): ${error.message}`, 'error');
+            }
+        }
+
+        function testRunDiagnostic() {
+            try {
+                logResult('Testing runComprehensiveDiagnostic()...', 'info');
+
+                if (typeof window.PDFX_TEXT_DEBUG === 'undefined') {
+                    logResult('ERROR: PDFX_TEXT_DEBUG not found. Debug utilities not loaded.', 'error');
+                    return;
+                }
+
+                const results = window.PDFX_TEXT_DEBUG.runComprehensiveDiagnostic('test123');
+                logResult(`runComprehensiveDiagnostic() results: ${JSON.stringify(results, null, 2)}`, 'success');
+
+            } catch (error) {
+                logResult(`ERROR in runComprehensiveDiagnostic(): ${error.message}`, 'error');
+            }
+        }
+
+        function testGlobalFunction() {
+            try {
+                logResult('Testing global diagnosePDFX()...', 'info');
+
+                if (typeof window.diagnosePDFX === 'undefined') {
+                    logResult('ERROR: diagnosePDFX global function not found.', 'error');
+                    return;
+                }
+
+                const results = window.diagnosePDFX('test123');
+                if (results) {
+                    logResult(`diagnosePDFX() results: ${JSON.stringify(results, null, 2)}`, 'success');
+                } else {
+                    logResult('diagnosePDFX() returned null', 'warning');
+                }
+
+            } catch (error) {
+                logResult(`ERROR in diagnosePDFX(): ${error.message}`, 'error');
+            }
+        }
+
+        function clearResults() {
+            document.getElementById('test-results').innerHTML = '';
+            logResult('Test results cleared.', 'info');
+        }
+
+        // Auto-run basic test when page loads
+        window.addEventListener('load', function() {
+            setTimeout(() => {
+                logResult('=== PDFX Debug Utilities Test Started ===', 'info');
+                logResult('Checking if debug utilities are loaded...', 'info');
+
+                if (typeof window.PDFX_TEXT_DEBUG !== 'undefined') {
+                    logResult('✅ PDFX_TEXT_DEBUG object found!', 'success');
+
+                    // List available methods
+                    const methods = Object.keys(window.PDFX_TEXT_DEBUG);
+                    logResult(`Available methods: ${methods.join(', ')}`, 'info');
+                } else {
+                    logResult('❌ PDFX_TEXT_DEBUG object not found. Debug utilities may not be loaded.', 'error');
+                }
+
+                if (typeof window.diagnosePDFX !== 'undefined') {
+                    logResult('✅ Global diagnosePDFX function found!', 'success');
+                } else {
+                    logResult('❌ Global diagnosePDFX function not found.', 'error');
+                }
+
+            }, 1000);
+        });
+    </script>
+
+    <!-- Load the debug utilities -->
+    <script>
+        // This would normally be loaded from the actual file
+        // For testing, we'll load it dynamically
+        const script = document.createElement('script');
+        script.src = 'pdfx/static/js/src/pdfx_debug_utils.js';
+        script.onload = function() {
+            logResult('Debug utilities script loaded successfully!', 'success');
+        };
+        script.onerror = function() {
+            logResult('Failed to load debug utilities script. Make sure the path is correct.', 'error');
+        };
+        document.head.appendChild(script);
+    </script>
+</body>
+</html>

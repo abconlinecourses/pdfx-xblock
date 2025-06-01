@@ -342,6 +342,7 @@ input[type="range"] {
     display: flex;
     justify-content: center;
     align-items: center;
+    max-width: 100%;
 }
 
 /* Canvas styling */
@@ -349,6 +350,8 @@ input[type="range"] {
     display: block;
     width: 100%;
     height: 100%;
+    max-width: 100%;
+    margin: 0 auto;
     filter: brightness(1) grayscale(0) !important; /* Override to ensure PDF renders in normal colors by default */
 }
 
@@ -441,7 +444,28 @@ input[type="range"] {
     background-color: transparent !important;
 }
 
-/* Individual highlight elements */
+/* BULLETPROOF FIX: Hide highlight containers by default */
+.highlight-container, #highlight-container, [id^="highlight-container-"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    z-index: 2;
+    pointer-events: none;
+    background-color: transparent !important;
+    visibility: hidden !important; /* Hide by default */
+    opacity: 0 !important; /* Make invisible by default */
+}
+
+/* Show highlight container only when it has content */
+.highlight-container:not(:empty), #highlight-container:not(:empty), [id^="highlight-container-"]:not(:empty) {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Individual highlight elements - only show when explicitly created */
 .highlight, .highlight-element, [class^="highlight-"] {
     position: absolute;
     background-color: rgba(255, 235, 0, 0.4); /* Light yellow with better visibility */
@@ -450,12 +474,47 @@ input[type="range"] {
     transition: all 0.2s ease;
     pointer-events: auto;
     cursor: pointer;
+    display: none !important; /* Hide by default */
 }
 
-/* Highlight hover effects */
-.highlight:hover, .highlight-element:hover, [class^="highlight-"]:hover {
-    background-color: rgba(255, 220, 0, 0.4);
-    box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+/* Only show highlights when they have the 'active' class or are inside an active container */
+.highlight.active,
+.highlight-element.active,
+[class^="highlight-"].active,
+.highlight-tool-active .highlight,
+.highlight-tool-active .highlight-element,
+.highlight-tool-active [class^="highlight-"] {
+    display: block !important;
+}
+
+/* BULLETPROOF FIX: Ensure no highlight elements show on initial load */
+.highlight-container .highlight,
+.highlight-container .highlight-element,
+.highlight-container [class^="highlight-"],
+#highlight-container .highlight,
+#highlight-container .highlight-element,
+#highlight-container [class^="highlight-"],
+[id^="highlight-container-"] .highlight,
+[id^="highlight-container-"] .highlight-element,
+[id^="highlight-container-"] [class^="highlight-"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+}
+
+/* Only show when explicitly activated by user */
+.highlight-container.user-created .highlight,
+.highlight-container.user-created .highlight-element,
+.highlight-container.user-created [class^="highlight-"],
+#highlight-container.user-created .highlight,
+#highlight-container.user-created .highlight-element,
+#highlight-container.user-created [class^="highlight-"],
+[id^="highlight-container-"].user-created .highlight,
+[id^="highlight-container-"].user-created .highlight-element,
+[id^="highlight-container-"].user-created [class^="highlight-"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
 /* Update draw container styles */
@@ -841,13 +900,15 @@ html body .canvas-container .upper-canvas {
 
 /* Adding active state for fit buttons */
 .fit-to-width.active, #fit-to-width.active, [id^="fit-to-width-"].active,
-.fit-to-page.active, #fit-to-page.active, [id^="fit-to-page-"].active {
+.fit-to-page.active, #fit-to-page.active, [id^="fit-to-page-"].active,
+.zoom-button.active {
     background: #4CAF50;
     color: white;
 }
 
 .fit-to-width.active span, #fit-to-width.active span, [id^="fit-to-width-"].active span,
-.fit-to-page.active span, #fit-to-page.active span, [id^="fit-to-page-"].active span {
+.fit-to-page.active span, #fit-to-page.active span, [id^="fit-to-page-"].active span,
+.zoom-button.active span {
     color: white;
 }
 
@@ -894,15 +955,15 @@ html body .canvas-container .upper-canvas {
 /* Styles for PDF text layer */
 .text-layer {
     position: absolute;
-    top: 0;
     left: 0;
+    top: 0;
     right: 0;
     bottom: 0;
-    color: transparent;
-    z-index: 3;
-    pointer-events: none;
-    opacity: 0.2;
+    overflow: hidden;
+    opacity: 0.5;
     line-height: 1.0;
+    z-index: 10;
+    background-color: transparent !important; /* Ensure no yellow background */
 }
 
 .text-layer.active {
@@ -911,11 +972,17 @@ html body .canvas-container .upper-canvas {
 }
 
 .text-layer span {
-    position: absolute;
     color: transparent;
+    position: absolute;
     white-space: pre;
-    cursor: text;
+    cursor: text !important; /* Force text cursor */
+    pointer-events: auto !important; /* Make sure spans are interactive */
     transform-origin: 0% 0%;
+    user-select: text !important; /* Make text selectable */
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    background-color: transparent !important; /* Ensure no yellow background on spans */
 }
 
 /* Make text layer visible when debugging */
@@ -1104,124 +1171,48 @@ html body [id^="marker-tool-"].active {
     box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
 }
 
-/* Enhanced text selection cursor styles */
-.text-layer {
-    position: absolute;
-    left: 0;
-    top: 0;
-    right: 0;
-    bottom: 0;
-    overflow: hidden;
-    opacity: 0.5;
-    line-height: 1.0;
-    z-index: 10;
+/* BULLETPROOF FIX: Remove any yellow background from text layer and PDF elements */
+.textLayer, .text-layer, #text-layer, [id^="text-layer-"], [class*="textLayer"], .pdf-text-layer {
+    background-color: transparent !important;
+    background: none !important;
+    opacity: 0 !important; /* Make text layer completely invisible to remove yellow tint */
 }
 
-/* Make text spans show text cursor on hover */
-.text-layer span {
-    color: transparent;
-    position: absolute;
-    white-space: pre;
-    cursor: text !important; /* Force text cursor */
-    pointer-events: auto !important; /* Make sure spans are interactive */
-    transform-origin: 0% 0%;
-    user-select: text !important; /* Make text selectable */
-    -webkit-user-select: text !important;
-    -moz-user-select: text !important;
-    -ms-user-select: text !important;
+.textLayer span,
+.text-layer span,
+[class*="textLayer"] span,
+[id*="textLayer"] span,
+[class*="text-layer"] span,
+[id*="text-layer"] span {
+    background-color: transparent !important;
+    background: none !important;
+    color: transparent !important;
+}
+
+/* Fix PDF.js text layer yellow background issue */
+.textLayer {
+    background-color: transparent !important;
+    mix-blend-mode: normal !important;
+}
+
+.textLayer > span, .textLayer span {
+    background-color: transparent !important;
+    color: transparent !important;
+}
+
+/* Ensure PDF canvas has no yellow tint */
+.pdf-canvas, #pdf-canvas, [id^="pdf-canvas-"], canvas {
+    background-color: transparent !important;
+    filter: none !important;
 }
 
 /* Add subtle highlight effect on text layer hover to indicate it's selectable */
 .text-layer:hover {
-    background-color: rgba(0, 0, 0, 0.01); /* Very subtle gray background */
+    background-color: rgba(0, 0, 0, 0.01) !important; /* Very subtle gray background, not yellow */
 }
 
 .text-layer span:hover {
-    background-color: rgba(0, 0, 255, 0.02); /* Very subtle blue highlight */
-}
-
-/* Make sure draw container doesn't interfere with text selection when inactive */
-.draw-container:not(.draw-mode) {
-    pointer-events: none !important;
-}
-
-/* Only when drawing mode is active, make the draw container interactive */
-.draw-container.draw-mode {
-    pointer-events: auto !important;
-}
-
-/* Ensure upper canvas doesn't interfere with text selection when not in drawing mode */
-.upper-canvas:not(.drawing-active) {
-    pointer-events: none !important;
-}
-
-/* Highlight tool specific styles */
-.text-layer.highlight-tool-active {
-    opacity: 0.9 !important;
-    background-color: rgba(255, 255, 0, 0.03);
-    cursor: text !important;
-}
-
-/* Hover effect for text spans when highlighter is active */
-.text-layer span.highlight-hover-effect:hover {
-    background-color: rgba(255, 255, 0, 0.15) !important;
-    box-shadow: 0 0 2px rgba(255, 220, 0, 0.4);
-}
-
-/* Active highlight tool button specific styling */
-#highlight-tool-active,
-[id^="highlight-tool-"].active {
-    background-color: #3498db !important;
-    color: white !important;
-    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
-    border: none !important;
-    position: relative;
-}
-
-/* Remove the custom after element for the highlight tool active state */
-[id^="highlight-tool-"].active:after {
-    display: none;
-}
-
-/* Remove the tool indicator dot in sidebar */
-.sidebar .tool-btn.active::after {
-    display: none;
-}
-
-/* Highlight selection styles */
-.text-layer.highlight-tool-active ::selection {
-    background-color: rgba(255, 215, 0, 0.5) !important;
-    color: #000;
-}
-
-.text-layer.highlight-tool-active ::-moz-selection {
-    background-color: rgba(255, 215, 0, 0.5) !important;
-    color: #000;
-}
-
-/* Enhanced highlight rectangles */
-.highlight-tool-active ~ .highlight-layer [class^="highlight-"],
-.highlight-tool-active ~ [id^="highlight-layer-"] [class^="highlight-"] {
-    box-shadow: 0 1px 4px rgba(0, 0, 0, 0.2);
-    mix-blend-mode: multiply;
-}
-
-/* Ensure cursor is always text selection when highlight tool is active */
-.highlight-tool-active,
-.highlight-tool-active * {
-    cursor: text !important;
-}
-
-/* Cursor styles for different tools */
-.draw-container.draw-mode {
-    cursor: crosshair !important;
-}
-
-/* Highlight hover effect for text spans */
-.highlight-hover-effect:hover {
-    background-color: rgba(255, 255, 0, 0.2) !important;
-    border-radius: 2px;
-    transition: background-color 0.2s ease;
+    background-color: rgba(0, 0, 255, 0.02) !important; /* Very subtle blue highlight, not yellow */
 }
 
 /* Highlight tool active state for text layer */
@@ -1310,7 +1301,7 @@ html body [id^="marker-tool-"].active {
 
 .pdfx-modal-dialog {
     background-color: white;
-    border-radius: 8px;
+    border-radius: 4px;
     width: 100%;
     max-width: 400px;
     box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
@@ -1413,4 +1404,530 @@ html body [id^="marker-tool-"].active {
 @keyframes pdfx-slide-in {
     from { transform: translateX(100%); opacity: 0; }
     to { transform: translateX(0); opacity: 1; }
+}
+
+/* Responsive Design for Small Screens */
+@media (max-width: 768px) {
+    .pdfx_block {
+        height: 600px !important;
+    }
+
+    .sidebar {
+        width: 45px;
+    }
+
+    .tool-btn {
+        height: 35px;
+        min-width: 30px;
+    }
+
+    .tool-btn i {
+        font-size: 14px;
+        padding: 6px;
+    }
+
+    .bottom-toolbar {
+        height: 35px;
+        padding: 0 5px;
+    }
+
+    .page-btn {
+        min-width: 30px;
+        height: 30px;
+    }
+
+    .pdf-title {
+        font-size: 20px;
+        margin-bottom: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .pdfx_block {
+        height: 500px !important;
+    }
+
+    .sidebar {
+        width: 40px;
+    }
+
+    .tool-btn {
+        height: 30px;
+        min-width: 25px;
+    }
+
+    .tool-btn i {
+        font-size: 12px;
+        padding: 4px;
+    }
+
+    .bottom-toolbar {
+        height: 30px;
+        padding: 0;
+    }
+
+    .page-btn {
+        min-width: 25px;
+        height: 25px;
+    }
+
+    .pdf-title {
+        font-size: 18px;
+        margin-bottom: 5px;
+    }
+}
+
+/* BULLETPROOF FIX FOR YELLOW OVERLAY AND LOADING ISSUES */
+
+/* Ensure all PDF.js text layers are transparent */
+.textLayer,
+.text-layer,
+[class*="textLayer"],
+[id*="textLayer"],
+[class*="text-layer"],
+[id*="text-layer"] {
+    background-color: transparent !important;
+    background: none !important;
+    opacity: 0 !important; /* Make text layer completely invisible to remove yellow tint */
+}
+
+/* Hide all text spans that might cause yellow overlay */
+.textLayer span,
+.text-layer span,
+[class*="textLayer"] span,
+[id*="textLayer"] span,
+[class*="text-layer"] span,
+[id*="text-layer"] span {
+    background-color: transparent !important;
+    background: none !important;
+    color: transparent !important;
+}
+
+/* Force loading indicators to be hidden */
+.loading-indicator,
+.loading-spinner,
+.loading-text,
+[class*="loading"],
+[id*="loading"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    z-index: -1 !important;
+}
+
+/* Ensure main PDF containers are visible */
+.pdf-main-container,
+.pdf-container,
+[class*="pdf-main"],
+[class*="pdf-container"],
+[id*="pdf-main"],
+[id*="pdf-container"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Additional fix for PDF.js 5.x text layer rendering */
+.page .textLayer {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    background: transparent !important;
+}
+
+/* Remove any yellow/highlighter background from PDF rendering */
+canvas[data-main-rotation] {
+    background-color: white !important;
+    filter: none !important;
+}
+
+/* PDF Toolbar with FontAwesome Icons - No Text Labels */
+.pdf-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    min-height: 50px;
+}
+
+.toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Remove any section labels */
+.toolbar-section .section-label {
+    display: none !important;
+}
+
+.tool-buttons,
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.tool-button,
+.action-button {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 6px;
+    background: #f8f9fa;
+    color: #495057;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 16px;
+    position: relative;
+}
+
+.tool-button:hover,
+.action-button:hover {
+    background: #e9ecef;
+    color: #212529;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tool-button.active {
+    background: #007bff;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
+.tool-button.active:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+}
+
+/* Setting Controls */
+.setting-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.setting-controls label {
+    display: flex;
+    align-items: center;
+    color: #6c757d;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.color-picker {
+    width: 32px;
+    height: 32px;
+    border: 2px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    background: transparent;
+}
+
+.color-picker:hover {
+    border-color: #007bff;
+}
+
+.size-slider {
+    width: 80px;
+    height: 4px;
+    border-radius: 2px;
+    background: #dee2e6;
+    outline: none;
+    cursor: pointer;
+}
+
+.size-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+}
+
+.size-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: none;
+}
+
+/* PDF Navigation with FontAwesome Icons - Now at Bottom */
+.pdf-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0; /* Changed from border-bottom to border-top */
+    min-height: 45px;
+    order: 3; /* Ensure it appears after the PDF viewer */
+}
+
+.nav-section,
+.zoom-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-button,
+.zoom-button {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #495057;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    border: 1px solid #dee2e6;
+}
+
+.nav-button:hover,
+.zoom-button:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateY(-1px);
+}
+
+.nav-button:disabled,
+.zoom-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.nav-button:disabled:hover, .zoom-button:disabled:hover {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+.zoom-button.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.page-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #495057;
+}
+
+.page-input {
+    width: 60px;
+    height: 32px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+    padding: 4px;
+}
+
+.page-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.page-separator {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.total-pages {
+    font-weight: 500;
+    color: #495057;
+}
+
+.zoom-info {
+    min-width: 50px;
+    text-align: center;
+    font-size: 14px;
+    color: #495057;
+    font-weight: 500;
+}
+
+/* PDF Viewer Area */
+.pdf-viewer-area {
+    position: relative;
+    flex: 1;
+    overflow: auto;
+    background: #f8f9fa;
+    padding: 20px;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+}
+
+/* Main PDF Container Layout - Ensure proper ordering */
+.pdf-main-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.pdf-toolbar {
+    order: 1; /* Toolbar at top */
+}
+
+.pdf-viewer-area {
+    order: 2; /* Viewer in middle */
+}
+
+.pdf-navigation {
+    order: 3; /* Navigation at bottom */
+}
+
+.pdf-status-bar {
+    order: 4; /* Status bar at very bottom */
+}
+
+/* Status Bar */
+.pdf-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 16px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    min-height: 35px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.status-section,
+.tool-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-text {
+    font-weight: 500;
+}
+
+.active-tool-label {
+    padding: 2px 8px;
+    background: #e9ecef;
+    border-radius: 12px;
+    font-size: 11px;
+    color: #495057;
+}
+
+/* Responsive Design for Toolbar */
+@media (max-width: 768px) {
+    .pdf-toolbar {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .toolbar-section {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .tool-button,
+    .action-button {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    .pdf-navigation {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .nav-section,
+    .zoom-section {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .tool-button,
+    .action-button,
+    .nav-button,
+    .zoom-button {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+
+    .page-input {
+        width: 50px;
+        height: 28px;
+        font-size: 12px;
+    }
+
+    .size-slider {
+        width: 60px;
+    }
+}
+
+/* Fit width mode */
+.pdf-container.fit-width {
+    width: 100%;
+    max-width: 100%;
+}
+
+.pdf-container.fit-width .pdf-canvas {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+}
+
+/* Responsive Design (consolidated from pdfx.html) */
+@media (max-width: 768px) {
+    .pdf-viewer-area {
+        padding: 10px;
+    }
+
+    .pdf-toolbar {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .pdf-navigation {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .nav-section, .zoom-section {
+        justify-content: center;
+    }
+}
+
+/* Print Styles (consolidated from pdfx.html) */
+@media print {
+    .pdf-toolbar,
+    .pdf-navigation,
+    .pdf-status-bar {
+        display: none !important;
+    }
+
+    .pdf-container {
+        box-shadow: none;
+        border: none;
+    }
 }

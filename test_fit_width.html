@@ -1,0 +1,355 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF XBlock - Fit Width Test</title>
+
+    <!-- Load FontAwesome for icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css">
+
+    <!-- Load our CSS -->
+    <link rel="stylesheet" href="pdfx/static/css/pdfx.css">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background: #f5f5f5;
+        }
+        .test-container {
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+            margin-bottom: 20px;
+        }
+        .status {
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+        }
+        .success { background: #d4edda; color: #155724; border: 1px solid #c3e6cb; }
+        .error { background: #f8d7da; color: #721c24; border: 1px solid #f5c6cb; }
+        .warning { background: #fff3cd; color: #856404; border: 1px solid #ffeaa7; }
+        .info { background: #d1ecf1; color: #0c5460; border: 1px solid #bee5eb; }
+
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin: 5px;
+        }
+
+        button:hover {
+            background: #0056b3;
+        }
+
+        .pdf-test-area {
+            margin-top: 20px;
+            min-height: 800px;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+            padding: 20px;
+            background: white;
+        }
+    </style>
+</head>
+<body>
+    <h1>PDF XBlock - Fit Width & Centering Test</h1>
+
+    <div class="test-container">
+        <h2>Test Status</h2>
+        <div id="test-status" class="status info">
+            Ready to test PDF centering and fit-width functionality...
+        </div>
+
+        <div>
+            <button onclick="testPDFXBlock()">Load PDF with Fit Width</button>
+            <button onclick="clearTest()">Clear Test</button>
+        </div>
+
+        <div class="status info">
+            <strong>Expected Results:</strong>
+            <ul>
+                <li>PDF should be centered in the viewer area</li>
+                <li>PDF should fit the full width of the container</li>
+                <li>"Fit Width" button should be active (highlighted) by default</li>
+                <li>Navigation controls should be at the bottom</li>
+            </ul>
+        </div>
+    </div>
+
+    <div class="test-container">
+        <h2>PDF XBlock Test Area</h2>
+        <div class="pdf-test-area" id="pdf-test-area">
+            <!-- PDF XBlock will be rendered here -->
+        </div>
+    </div>
+
+    <!-- Load external dependencies -->
+    <script>
+        // Load PDF.js as a module and make it globally available
+        (async function() {
+            try {
+                // Import PDF.js as a module
+                const pdfjsModule = await import('https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.min.mjs');
+
+                // Make it globally available
+                window.pdfjsLib = pdfjsModule;
+
+                // Set up worker
+                window.pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
+
+                console.log('PDF.js v5.0.375 loaded and configured');
+
+                // Trigger custom event to signal PDF.js is ready
+                document.dispatchEvent(new CustomEvent('pdfjsReady'));
+
+            } catch (error) {
+                console.error('Error loading PDF.js:', error);
+            }
+        })();
+    </script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/fabric.js/6.6.6/fabric.min.js"></script>
+
+    <!-- Load our PDF XBlock -->
+    <script src="pdfx/static/js/pdfx-xblock.js"></script>
+
+    <script>
+        function updateStatus(message, type = 'info') {
+            const statusDiv = document.getElementById('test-status');
+            statusDiv.textContent = message;
+            statusDiv.className = `status ${type}`;
+        }
+
+        function clearTest() {
+            const testArea = document.getElementById('pdf-test-area');
+            testArea.innerHTML = '';
+            updateStatus('Test area cleared. Ready for new test.', 'info');
+        }
+
+        // Test PDF XBlock functionality with fit-width
+        async function testPDFXBlock() {
+            updateStatus('Loading PDF XBlock with fit-width functionality...', 'info');
+            console.log('=== Starting PDF XBlock Fit Width Test ===');
+
+            try {
+                // Wait for PDF.js to be ready
+                if (typeof pdfjsLib === 'undefined') {
+                    console.log('Waiting for PDF.js to load...');
+                    await new Promise((resolve) => {
+                        document.addEventListener('pdfjsReady', resolve, { once: true });
+                    });
+                }
+
+                // Check if dependencies are loaded
+                if (typeof pdfjsLib === 'undefined') {
+                    throw new Error('PDF.js library not loaded');
+                }
+
+                if (typeof fabric === 'undefined') {
+                    throw new Error('Fabric.js library not loaded');
+                }
+
+                console.log('✅ Dependencies loaded successfully');
+
+                // Create test container with our updated HTML template
+                const testArea = document.getElementById('pdf-test-area');
+                testArea.innerHTML = `
+                    <div class="pdfx-block" id="pdfx-block-test123" data-block-type="pdfx" data-block-id="test123">
+                        <div class="pdf-container-wrapper">
+                            <div class="loading-indicator" id="loading-test123">
+                                <div class="loading-spinner"></div>
+                                <div class="loading-text">Loading PDF...</div>
+                            </div>
+                            <div class="pdf-error" id="error-test123" style="display: none;">
+                                <div class="error-icon">⚠️</div>
+                                <div class="error-message">An error occurred while loading the PDF</div>
+                                <button class="error-retry">Retry</button>
+                            </div>
+                            <div class="pdf-main-container" id="pdf-main-test123" style="display: none;">
+                                <!-- Toolbar with FontAwesome Icons -->
+                                <div class="pdf-toolbar" id="toolbar-test123">
+                                    <div class="toolbar-section tools-section">
+                                        <div class="tool-buttons">
+                                            <button class="tool-button" data-tool="highlight" title="Highlight Text">
+                                                <i class="fas fa-highlighter"></i>
+                                            </button>
+                                            <button class="tool-button" data-tool="scribble" title="Draw/Scribble">
+                                                <i class="fas fa-pen"></i>
+                                            </button>
+                                            <button class="tool-button" data-tool="text" title="Add Text">
+                                                <i class="fas fa-font"></i>
+                                            </button>
+                                            <button class="tool-button" data-tool="shape" title="Draw Shape">
+                                                <i class="fas fa-shapes"></i>
+                                            </button>
+                                            <button class="tool-button" data-tool="note" title="Add Note">
+                                                <i class="fas fa-sticky-note"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                    <div class="toolbar-section settings-section">
+                                        <div class="setting-controls">
+                                            <label for="color-input-test123">
+                                                <i class="fas fa-palette"></i>
+                                            </label>
+                                            <input type="color" id="color-input-test123" value="#FF0000" class="color-picker">
+                                            <label for="size-input-test123">
+                                                <i class="fas fa-expand-arrows-alt"></i>
+                                            </label>
+                                            <input type="range" id="size-input-test123" min="1" max="20" value="5" class="size-slider">
+                                        </div>
+                                    </div>
+                                    <div class="toolbar-section actions-section">
+                                        <div class="action-buttons">
+                                            <button class="action-button" data-action="clear" title="Clear All">
+                                                <i class="fas fa-trash"></i>
+                                            </button>
+                                            <button class="action-button" data-action="undo" title="Undo">
+                                                <i class="fas fa-undo"></i>
+                                            </button>
+                                            <button class="action-button" data-action="download" title="Download PDF">
+                                                <i class="fas fa-download"></i>
+                                            </button>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- PDF Viewer -->
+                                <div class="pdf-viewer-area">
+                                    <div class="pdf-container" id="pdf-container-test123">
+                                        <canvas id="pdf-canvas-test123" class="pdf-canvas"></canvas>
+                                        <div id="text-layer-test123" class="textLayer"></div>
+                                        <div id="draw-container-test123" class="draw-container"></div>
+                                        <div id="highlight-container-test123" class="highlight-container"></div>
+                                    </div>
+                                </div>
+
+                                <!-- Navigation with FontAwesome Icons (At Bottom) -->
+                                <div class="pdf-navigation" id="navigation-test123">
+                                    <div class="nav-section">
+                                        <button class="nav-button" data-nav="first" title="First Page">
+                                            <i class="fas fa-step-backward"></i>
+                                        </button>
+                                        <button class="nav-button" data-nav="prev" title="Previous Page">
+                                            <i class="fas fa-chevron-left"></i>
+                                        </button>
+                                        <span class="page-info">
+                                            <input type="number" class="page-input" value="1" min="1">
+                                            <span class="page-separator">of</span>
+                                            <span class="total-pages">1</span>
+                                        </span>
+                                        <button class="nav-button" data-nav="next" title="Next Page">
+                                            <i class="fas fa-chevron-right"></i>
+                                        </button>
+                                        <button class="nav-button" data-nav="last" title="Last Page">
+                                            <i class="fas fa-step-forward"></i>
+                                        </button>
+                                    </div>
+                                    <div class="zoom-section">
+                                        <button class="zoom-button" data-zoom="out" title="Zoom Out">
+                                            <i class="fas fa-search-minus"></i>
+                                        </button>
+                                        <span class="zoom-info">100%</span>
+                                        <button class="zoom-button" data-zoom="in" title="Zoom In">
+                                            <i class="fas fa-search-plus"></i>
+                                        </button>
+                                        <button class="zoom-button" data-zoom="fit" title="Fit to Page">
+                                            <i class="fas fa-expand"></i>
+                                        </button>
+                                        <button class="zoom-button" data-zoom="fit-width" title="Fit Width">
+                                            <i class="fas fa-arrows-alt-h"></i>
+                                        </button>
+                                    </div>
+                                </div>
+
+                                <!-- Status Bar -->
+                                <div class="pdf-status-bar" id="status-bar-test123">
+                                    <div class="status-section">
+                                        <span class="status-text">Ready</span>
+                                    </div>
+                                    <div class="tool-status">
+                                        <span class="active-tool-label">No tool active</span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                `;
+
+                console.log('✅ Test container created');
+
+                // Mock runtime object
+                const mockRuntime = {
+                    handlerUrl: (element, handler) => {
+                        console.log(`Mock handler URL for: ${handler}`);
+                        return `/mock/${handler}`;
+                    }
+                };
+
+                // Get the container element
+                const containerElement = document.getElementById('pdfx-block-test123');
+
+                // Test configuration
+                const testConfig = {
+                    blockId: 'test123',
+                    pdfUrl: 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf',
+                    allowDownload: true,
+                    allowAnnotation: true,
+                    currentPage: 1,
+                    savedAnnotations: {},
+                    drawingStrokes: {},
+                    highlights: {},
+                    userId: 'test_user',
+                    courseId: 'test_course'
+                };
+
+                console.log('✅ Creating PDF XBlock instance...');
+
+                // Create and initialize the PDF XBlock
+                const pdfxInstance = new window.PdfxXBlock(mockRuntime, containerElement, testConfig);
+
+                // Set up event listeners to track progress
+                pdfxInstance.on('documentLoaded', (data) => {
+                    console.log('✅ PDF document loaded:', data);
+                    updateStatus('PDF loaded successfully! Check if it\'s centered and fit to width.', 'success');
+
+                    // Check if fit-width button is active
+                    setTimeout(() => {
+                        const fitWidthButton = document.querySelector('[data-zoom="fit-width"]');
+                        if (fitWidthButton && fitWidthButton.classList.contains('active')) {
+                            console.log('✅ Fit Width button is active by default');
+                        } else {
+                            console.log('⚠️ Fit Width button is not active by default');
+                        }
+
+                        // Check if PDF container has fit-width class
+                        const pdfContainer = document.getElementById('pdf-container-test123');
+                        if (pdfContainer && pdfContainer.classList.contains('fit-width')) {
+                            console.log('✅ PDF container has fit-width class');
+                        } else {
+                            console.log('⚠️ PDF container does not have fit-width class');
+                        }
+                    }, 1000);
+                });
+
+                pdfxInstance.on('error', (error) => {
+                    console.error('❌ PDF XBlock error:', error);
+                    updateStatus(`Error: ${error.message}`, 'error');
+                });
+
+                console.log('✅ PDF XBlock instance created and initializing...');
+
+            } catch (error) {
+                console.error('❌ Test failed:', error);
+                updateStatus(`Test failed: ${error.message}`, 'error');
+            }
+        }
+    </script>
+</body>
+</html>

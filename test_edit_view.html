@@ -1,0 +1,183 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PDF XBlock Edit View Test</title>
+
+    <!-- jQuery -->
+    <script src="https://code.jquery.com/jquery-3.6.0.min.js"></script>
+
+    <!-- Font Awesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
+    <!-- Our CSS -->
+    <link rel="stylesheet" href="pdfx/static/css/pdfx_edit.css">
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 20px;
+            background-color: #f5f5f5;
+        }
+        .test-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            background: white;
+            padding: 20px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+        }
+        .test-header {
+            background: #2196f3;
+            color: white;
+            padding: 15px;
+            margin: -20px -20px 20px -20px;
+            border-radius: 8px 8px 0 0;
+        }
+    </style>
+</head>
+<body>
+    <div class="test-container">
+        <div class="test-header">
+            <h1>PDF XBlock Edit View Test</h1>
+            <p>Testing the edit view functionality without PDF.js dependencies</p>
+        </div>
+
+        <!-- Include the edit view HTML -->
+        <div class="wrapper-comp-settings is-active editor-with-buttons" id="settings-tab">
+            <!-- PDF Preview Notice -->
+            <div class="pdf-preview-notice">
+                <div class="notice-icon">
+                    <i class="fas fa-info-circle"></i>
+                </div>
+                <div class="notice-content">
+                    <h3>PDF Preview</h3>
+                    <p>PDF preview is not available in Studio. To view and test the PDF with all annotation features, please view this component in the LMS (Live version) or Course Preview.</p>
+                </div>
+            </div>
+
+            <form id="pdf-form">
+                <!-- Hidden Block ID field -->
+                <input type="hidden" name="block_id" id="pdf-block-id" value="test_block_123" />
+
+                <ul class="list-input settings-list">
+                    <li class="field comp-setting-entry is-set">
+                        <div class="wrapper-comp-setting">
+                            <label class="label setting-label pdf-setting-label" for="pdf-display-name">Display Name</label>
+                            <input class="input setting-input" name="display_name" id="pdf-display-name" value="Test PDF XBlock" type="text" />
+                        </div>
+                        <span class="tip setting-help">The name that appears in the course ribbon</span>
+                    </li>
+
+                    <li class="field comp-setting-entry is-set">
+                        <div class="wrapper-comp-setting">
+                            <label class="label setting-label pdf-setting-label">PDF Source</label>
+                            <div class="pdf-source-tabs">
+                                <button type="button" class="button action-primary active" data-tab="upload">Upload PDF</button>
+                                <button type="button" class="button" data-tab="url">External URL</button>
+                            </div>
+
+                            <div class="tab-content" id="upload-tab">
+                                <div class="file-upload-wrapper" id="drop-zone">
+                                    <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                                    <input type="file" id="pdf-file" accept="application/pdf" style="display: none;">
+                                    <button type="button" class="button action-primary" id="upload-trigger">Choose PDF File</button>
+                                    <div class="file-info" id="file-info">
+                                        <span class="placeholder">No file chosen</span>
+                                    </div>
+                                    <div class="drag-text">or drag and drop a PDF file here</div>
+                                </div>
+                            </div>
+
+                            <div class="tab-content" id="url-tab" style="display: none;">
+                                <input class="input setting-input" name="pdf_url" id="pdf-url" value="" type="text" placeholder="Enter PDF URL" />
+                                <div class="url-help-text">
+                                    <i class="fas fa-info-circle"></i> Enter a full URL to an external PDF (e.g., https://example.com/document.pdf)
+                                </div>
+                            </div>
+                        </div>
+                        <span class="tip setting-help">Upload a PDF file or provide a URL to an external PDF</span>
+                    </li>
+
+                    <li class="field comp-setting-entry is-set">
+                        <div class="wrapper-comp-setting">
+                            <label class="label setting-label pdf-setting-label" for="pdf-allow-download">Allow Download</label>
+                            <select class="input setting-input" name="allow_download" id="pdf-allow-download">
+                                <option value="true" selected>True</option>
+                                <option value="false">False</option>
+                            </select>
+                        </div>
+                        <span class="tip setting-help">Allow students to download the annotated PDF</span>
+                    </li>
+
+                    <li class="field comp-setting-entry is-set">
+                        <div class="wrapper-comp-setting">
+                            <label class="label setting-label pdf-setting-label" for="pdf-allow-annotation">Allow Annotation</label>
+                            <select class="input setting-input" name="allow_annotation" id="pdf-allow-annotation">
+                                <option value="true" selected>True</option>
+                                <option value="false">False</option>
+                            </select>
+                        </div>
+                        <span class="tip setting-help">Allow students to annotate the PDF</span>
+                    </li>
+                </ul>
+                <div class="xblock-actions">
+                    <ul>
+                        <li class="action-item">
+                            <button id="pdf-submit-options" type="submit" class="button action-primary save-button">Save</button>
+                        </li>
+                        <li class="action-item">
+                            <button type="button" class="button cancel-button">Cancel</button>
+                        </li>
+                    </ul>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- Mock runtime for testing -->
+    <script>
+        // Mock runtime object for testing
+        window.mockRuntime = {
+            notify: function(type, data) {
+                console.log('[Mock Runtime] Notify:', type, data);
+                if (type === 'error') {
+                    alert('Error: ' + (data.msg || data.message || 'Unknown error'));
+                } else if (type === 'success') {
+                    alert('Success: ' + (data.message || data.title || 'Operation successful'));
+                }
+            },
+            handlerUrl: function(element, handler) {
+                console.log('[Mock Runtime] Handler URL requested for:', handler);
+                return '/mock/' + handler;
+            }
+        };
+    </script>
+
+    <!-- Our JavaScript -->
+    <script src="pdfx/static/js/src/pdfx_edit.js"></script>
+
+    <!-- Initialize the edit view -->
+    <script>
+        $(document).ready(function() {
+            console.log('[Test] Initializing PDF XBlock edit view');
+
+            // Find the element
+            var element = document.getElementById('settings-tab');
+
+            if (element) {
+                // Initialize the edit view
+                try {
+                    PdfxXBlockEdit(window.mockRuntime, element);
+                    console.log('[Test] Edit view initialized successfully');
+                } catch (error) {
+                    console.error('[Test] Error initializing edit view:', error);
+                }
+            } else {
+                console.error('[Test] Element not found');
+            }
+        });
+    </script>
+</body>
+</html>

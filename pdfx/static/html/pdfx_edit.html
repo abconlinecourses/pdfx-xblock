@@ -6,6 +6,15 @@
             <!-- Hidden Block ID field -->
             <input type="hidden" name="block_id" id="pdf-block-id" value="${block.block_id}" />
 
+            <!-- Hidden PDF file name field for uploaded files -->
+            <input type="hidden" name="pdf_file_name" id="pdf-file-name" value="${block.pdf_file_name}" />
+
+            <!-- Hidden PDF asset key field for uploaded files -->
+            <input type="hidden" name="pdf_file_asset_key" id="pdf-file-asset-key" value="${block.pdf_file_asset_key}" />
+
+            <!-- Hidden PDF file path field for uploaded files (legacy) -->
+            <input type="hidden" name="pdf_file_path" id="pdf-file-path" value="${block.pdf_file_path}" />
+
             <ul class="list-input settings-list">
                 <li class="field comp-setting-entry is-set">
                     <div class="wrapper-comp-setting">
@@ -19,7 +28,7 @@
                     <div class="wrapper-comp-setting">
                         <label class="label setting-label pdf-setting-label">PDF Source</label>
                         <div class="pdf-source-tabs">
-                            <button type="button" class="button action-primary active" data-tab="upload">Upload PDF</button>
+                            <button type="button" class="button action-primary" data-tab="upload">Upload PDF</button>
                             <button type="button" class="button" data-tab="url">External URL</button>
                         </div>
 
@@ -35,11 +44,27 @@
                                         <span class="placeholder">No file chosen</span>
                                     % endif
                                 </div>
+                                <div class="uploaded-file-info" id="uploaded-file-info">
+                                    % if block.pdf_file_asset_key:
+                                        <div class="uploaded-file-details">
+                                            <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                                            <span class="upload-status">File uploaded successfully</span>
+                                            <div class="asset-url" style="contain: content;">
+                                                <small>Asset URL: <code>${block.pdf_file_asset_key}</code></small>
+                                            </div>
+                                        </div>
+                                    % elif block.pdf_file_name:
+                                        <div class="uploaded-file-details">
+                                            <i class="fas fa-info-circle" style="color: #17a2b8;"></i>
+                                            <span class="upload-status">File configured: ${block.pdf_file_name}</span>
+                                        </div>
+                                    % endif
+                                </div>
                                 <div class="drag-text">or drag and drop a PDF file here</div>
                             </div>
                         </div>
 
-                        <div class="tab-content" id="url-tab" style="display: none;">
+                        <div class="tab-content" id="url-tab">
                             <input class="input setting-input" name="pdf_url" id="pdf-url" value="${block.pdf_url}" type="text" placeholder="Enter PDF URL" />
                             <div class="url-help-text">
                                 <i class="fas fa-info-circle"></i> Enter a full URL to an external PDF (e.g., https://example.com/document.pdf)
