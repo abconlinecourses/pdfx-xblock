@@ -618,13 +618,13 @@ class PdfxXBlock(XBlock):
 
         # Add external library dependencies
         # Load PDF.js using custom loader to handle ES modules properly
-        frag.add_javascript(self.resource_string("static/js/pdfx-js/pdf-loader.js"))
+        frag.add_javascript(self.resource_string("static/js/pdf-loader.js"))
 
         # Load Fabric.js from local vendor file
         frag.add_javascript(self.resource_string("static/js/vendor/fabric.min.js"))
 
         # Add the PDF XBlock implementation
-        frag.add_javascript(self.resource_string("static/js/pdfx-js/pdfx-xblock.js"))
+        frag.add_javascript(self.resource_string("static/js/build/pdfx-xblock.js"))
 
         # Add initialization script
         frag.add_javascript(f"""
@@ -999,7 +999,7 @@ class PdfxXBlock(XBlock):
             frag.add_css(self.resource_string("static/css/pdfx_edit.css"))
 
             # Add JavaScript
-            frag.add_javascript(self.resource_string("static/js/pdfx-js/pdfx-edit.js"))
+            frag.add_javascript(self.resource_string("static/js/build/pdfx-edit.js"))
 
             # Initialize JavaScript
             frag.initialize_js('PdfxXBlockEdit')
