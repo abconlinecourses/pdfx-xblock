@@ -236,8 +236,14 @@ class PdfxXBlock(XBlock):
 
     def get_pdf_url(self):
         """Get the PDF URL, handling both direct URLs and file uploads"""
+        log.info(f"[PdfxXBlock] get_pdf_url - START")
+        log.info(f"[PdfxXBlock] get_pdf_url - pdf_file_asset_key: '{getattr(self, 'pdf_file_asset_key', 'N/A')}'")
+        log.info(f"[PdfxXBlock] get_pdf_url - pdf_url field: '{self.pdf_url}'")
+        log.info(f"[PdfxXBlock] get_pdf_url - pdf_file_path: '{getattr(self, 'pdf_file_path', 'N/A')}'")
+        log.info(f"[PdfxXBlock] get_pdf_url - pdf_file_name: '{self.pdf_file_name}'")
+
         # **PRIORITY 1: Check for Open edX asset key (uploaded files)**
-        if self.pdf_file_asset_key:
+        if hasattr(self, 'pdf_file_asset_key') and self.pdf_file_asset_key:
             log.info(f"[PdfxXBlock] get_pdf_url - Using asset key: {self.pdf_file_asset_key}")
 
             # The asset key should already be in the correct format from upload
@@ -256,15 +262,22 @@ class PdfxXBlock(XBlock):
                 except Exception as e:
                     log.warning(f"[PdfxXBlock] get_pdf_url - Could not make asset URL absolute: {e}")
 
+            log.info(f"[PdfxXBlock] get_pdf_url - Returning asset URL: {asset_url}")
             return asset_url
+
+        log.info(f"[PdfxXBlock] get_pdf_url - No asset key, checking pdf_url field")
 
         # **PRIORITY 2: Check for direct URL or data URL**
         if not self.pdf_url:
+            log.warning(f"[PdfxXBlock] get_pdf_url - pdf_url field is empty/None")
             return ""
 
         url = self.pdf_url.strip()
         if not url:
+            log.warning(f"[PdfxXBlock] get_pdf_url - pdf_url field is empty after strip")
             return ""
+
+        log.info(f"[PdfxXBlock] get_pdf_url - Processing URL: {url}")
 
         # Handle data URLs (base64 encoded files from uploads)
         if url.startswith('data:application/pdf;base64,'):
@@ -310,6 +323,7 @@ class PdfxXBlock(XBlock):
             return f"https://{url}"
 
         # Return as is if it's already a complete URL
+        log.info(f"[PdfxXBlock] get_pdf_url - Returning complete URL: {url}")
         return url
 
     def is_staff_user(self):
@@ -418,7 +432,14 @@ class PdfxXBlock(XBlock):
         # Debug logging
         log.info(f"[PdfxXBlock] Block ID: {working_block_id}")
         log.info(f"[PdfxXBlock] Raw PDF URL field: '{self.pdf_url}'")
+        log.info(f"[PdfxXBlock] Raw PDF URL length: {len(self.pdf_url) if self.pdf_url else 0}")
+        log.info(f"[PdfxXBlock] PDF file asset key: '{getattr(self, 'pdf_file_asset_key', 'N/A')}'")
+        log.info(f"[PdfxXBlock] PDF file path: '{getattr(self, 'pdf_file_path', 'N/A')}'")
+        log.info(f"[PdfxXBlock] PDF file name: '{self.pdf_file_name}'")
+        log.info(f"[PdfxXBlock] Allow download: {self.allow_download}")
+        log.info(f"[PdfxXBlock] Allow annotation: {self.allow_annotation}")
         log.info(f"[PdfxXBlock] Processed PDF URL: '{pdf_url}'")
+        log.info(f"[PdfxXBlock] Processed PDF URL length: {len(pdf_url) if pdf_url else 0}")
         log.info(f"[PdfxXBlock] User ID: {user_info.get('id', 'anonymous')}")
         log.info(f"[PdfxXBlock] Username: {user_info.get('username', 'anonymous')}")
         log.info(f"[PdfxXBlock] User Email: {user_info.get('email', 'none')}")
@@ -446,81 +467,28 @@ class PdfxXBlock(XBlock):
             log.warning(f"[PdfxXBlock] Raw pdf_url field: '{self.pdf_url}'")
             log.warning(f"[PdfxXBlock] Raw pdf_url length: {len(self.pdf_url) if self.pdf_url else 0}")
             log.warning(f"[PdfxXBlock] PDF file name: '{self.pdf_file_name}'")
-            log.warning(f"[PdfxXBlock] PDF file path: '{self.pdf_file_path}'")
+            log.warning(f"[PdfxXBlock] PDF file path: '{getattr(self, 'pdf_file_path', 'N/A')}'")
+            log.warning(f"[PdfxXBlock] PDF file asset key: '{getattr(self, 'pdf_file_asset_key', 'N/A')}'")
 
-            # Return a simple error view with debug JavaScript
-            error_html = """
-            <div class="pdfx-error" style="padding: 20px; text-align: center; border: 1px solid #ccc; background: #f9f9f9;">
-                <h3>PDF Configuration Required</h3>
-                <p>No PDF file has been configured for this component.</p>
-                <p><strong>Instructors:</strong> Please edit this component and provide a PDF URL or upload a PDF file.</p>
-            </div>
-            """
+            # Instead of returning a different fragment, let's continue with the normal template
+            # but use an empty PDF URL - this will allow the template to render properly
+            # and the JavaScript to handle the "no PDF" case gracefully
+            pdf_url = ""  # Ensure it's an empty string, not None
+            log.info(f"[PdfxXBlock] Continuing with empty PDF URL to render proper template")
 
-            # Create fragment with debug JavaScript
-            error_frag = Fragment(error_html)
-
-            # Add debug JavaScript even for error case (json is now available)
-            error_location = json.dumps(str(getattr(self, 'location', 'unknown')))
-            raw_pdf_url = json.dumps(self.pdf_url)
-            pdf_file_name = json.dumps(self.pdf_file_name)
-            pdf_file_path = json.dumps(self.pdf_file_path)
-
-            # Enhanced user debugging
-            user_debug_info = {
-                'user_id': user_info.get('id', 'anonymous'),
-                'username': user_info.get('username', 'anonymous'),
-                'email': user_info.get('email', 'none'),
-                'is_staff': is_staff,
-                'course_id': course_info.get('id', 'none')
-            }
-
-            # Pre-serialize JSON data for error case to avoid scope issues
-            user_debug_info_json = json.dumps(user_debug_info)
-
-            error_frag.add_javascript(f"""
-            // PDF XBlock Error State Debug
-            (function() {{
-                'use strict';
-                console.log('[PdfxXBlock] 🚨 ERROR: No PDF URL configured for block {working_block_id}');
-                console.log('[PdfxXBlock] 🚨 User Info:', {user_debug_info_json});
-                console.log('[PdfxXBlock] 🚨 Block location:', {error_location});
-                console.log('[PdfxXBlock] 🚨 Raw pdf_url field:', {raw_pdf_url});
-                console.log('[PdfxXBlock] 🚨 Raw pdf_url length:', {len(self.pdf_url) if self.pdf_url else 0});
-                console.log('[PdfxXBlock] 🚨 PDF file name:', {pdf_file_name});
-                console.log('[PdfxXBlock] 🚨 PDF file path:', {pdf_file_path});
-                console.log('[PdfxXBlock] 🚨 This component needs to be configured with a PDF URL or file upload');
-
-                // Store error state for debugging
-                window.PdfxErrorInstances = window.PdfxErrorInstances || {{}};
-                window.PdfxErrorInstances['{working_block_id}'] = {{
-                    blockId: '{working_block_id}',
-                    error: 'no_pdf_url',
-                    userInfo: {user_debug_info_json},
-                    rawPdfUrl: {raw_pdf_url},
-                    rawPdfUrlLength: {len(self.pdf_url) if self.pdf_url else 0},
-                    pdfFileName: {pdf_file_name},
-                    pdfFilePath: {pdf_file_path},
-                    timestamp: new Date().toISOString(),
-                    location: {error_location}
-                }};
-
-                console.log('[PdfxXBlock] 🚨 Error instance stored in window.PdfxErrorInstances');
-            }})();
-            """)
-
-            log.info(f"[PdfxXBlock] STUDENT_VIEW END - Returning error fragment (no PDF URL)")
-            return error_frag
-
-        # Log successful PDF configuration
-        log.info(f"[PdfxXBlock] ✅ PDF successfully configured for block {working_block_id}")
-        if self.pdf_file_path:
-            log.info(f"[PdfxXBlock] ✅ PDF source: Uploaded file (stored at: {self.pdf_file_path})")
-        elif pdf_url.startswith('data:application/pdf'):
-            log.info(f"[PdfxXBlock] ✅ PDF source: Uploaded file (data URL, length: {len(pdf_url)})")
+        # Log PDF configuration status
+        if pdf_url:
+            log.info(f"[PdfxXBlock] ✅ PDF successfully configured for block {working_block_id}")
+            if getattr(self, 'pdf_file_path', ''):
+                log.info(f"[PdfxXBlock] ✅ PDF source: Uploaded file (stored at: {self.pdf_file_path})")
+            elif pdf_url.startswith('data:application/pdf'):
+                log.info(f"[PdfxXBlock] ✅ PDF source: Uploaded file (data URL, length: {len(pdf_url)})")
+            else:
+                log.info(f"[PdfxXBlock] ✅ PDF source: External URL - {pdf_url}")
+            log.info(f"[PdfxXBlock] ✅ PDF file name: {self.pdf_file_name}")
         else:
-            log.info(f"[PdfxXBlock] ✅ PDF source: External URL - {pdf_url}")
-        log.info(f"[PdfxXBlock] ✅ PDF file name: {self.pdf_file_name}")
+            log.warning(f"[PdfxXBlock] ⚠️ PDF NOT configured for block {working_block_id} - will render with empty PDF URL")
+
         log.info(f"[PdfxXBlock] ✅ Allow download: {self.allow_download}")
         log.info(f"[PdfxXBlock] ✅ Allow annotation: {self.allow_annotation}")
 
@@ -606,7 +574,21 @@ class PdfxXBlock(XBlock):
             'is_staff': is_staff,
             'course_id': course_info.get('id', ''),
             'handler_url': save_url,
+            # Add JSON data for JavaScript
+            'saved_annotations_json': annotations_json,
+            'drawing_strokes_json': drawing_strokes_json,
+            'highlights_json': highlights_json,
         }
+
+        # Debug the template context
+        log.info(f"[PdfxXBlock] TEMPLATE CONTEXT:")
+        log.info(f"  - block_id: '{template_context['block_id']}'")
+        log.info(f"  - pdf_url: '{template_context['pdf_url']}'")
+        log.info(f"  - allow_download: {template_context['allow_download']}")
+        log.info(f"  - allow_annotation: {template_context['allow_annotation']}")
+        log.info(f"  - user_id: '{template_context['user_id']}'")
+        log.info(f"  - course_id: '{template_context['course_id']}'")
+        log.info(f"  - current_page: {template_context['current_page']}")
 
         rendered_html = template.render(**template_context)
         frag = Fragment(rendered_html)
@@ -626,175 +608,8 @@ class PdfxXBlock(XBlock):
         # Add the PDF XBlock implementation
         frag.add_javascript(self.resource_string("static/js/build/pdfx-xblock.js"))
 
-        # Add initialization script
-        frag.add_javascript(f"""
-        // PDF XBlock Initialization
-        (function() {{
-            'use strict';
-
-            console.log('[PdfxXBlock] 🚀 STUDENT_VIEW JavaScript initializing for block {working_block_id}');
-
-            // Wait for dependencies to load
-            function waitForDependencies() {{
-                return new Promise((resolve) => {{
-                    let checkCount = 0;
-                    const maxChecks = 50; // 5 seconds max wait
-
-                    function checkDependencies() {{
-                        checkCount++;
-
-                        if (typeof window.pdfjsLib !== 'undefined' && typeof window.fabric !== 'undefined') {{
-                            console.log('[PdfxXBlock] ✅ All dependencies loaded');
-                            resolve();
-                        }} else if (checkCount >= maxChecks) {{
-                            console.error('[PdfxXBlock] ❌ Timeout waiting for dependencies');
-                            console.log('pdfjsLib:', typeof window.pdfjsLib);
-                            console.log('fabric:', typeof window.fabric);
-                            resolve(); // Continue anyway
-                        }} else {{
-                            console.log(`[PdfxXBlock] ⏳ Waiting for dependencies... (${{checkCount}}/${{maxChecks}})`);
-                            setTimeout(checkDependencies, 100);
-                        }}
-                    }}
-
-                    // Start checking immediately
-                    checkDependencies();
-
-                    // Also listen for the PDF.js ready event
-                    document.addEventListener('pdfjsReady', function() {{
-                        if (typeof window.fabric !== 'undefined') {{
-                            console.log('[PdfxXBlock] ✅ Dependencies ready via event');
-                            resolve();
-                        }}
-                    }}, {{ once: true }});
-                }});
-            }}
-
-            function initializePdfxXBlock() {{
-                try {{
-                    console.log('[PdfxXBlock] 🔧 Starting PdfxXBlock initialization...');
-
-                    // Check dependencies one more time
-                    if (typeof window.pdfjsLib === 'undefined') {{
-                        console.error('[PdfxXBlock] ❌ PDF.js not available at initialization');
-                        return;
-                    }}
-
-                    if (typeof window.fabric === 'undefined') {{
-                        console.error('[PdfxXBlock] ❌ Fabric.js not available at initialization');
-                        return;
-                    }}
-
-                    // Initialize the PDF XBlock
-                    const runtime = {{
-                        handlerUrl: function(element, handler) {{
-                            console.log('[PdfxXBlock] 🔗 Handler URL requested:', handler);
-                            return '{save_url}';
-                        }}
-                    }};
-
-                    const element = document.querySelector('#pdfx-block-{working_block_id}') ||
-                                   document.querySelector('[data-block-id="{working_block_id}"]') ||
-                                   document.querySelector('[data-block-type="pdfx"]') ||
-                                   document.querySelector('.xblock-student_view') ||
-                                   document.body;
-
-                    if (!element) {{
-                        console.error('[PdfxXBlock] ❌ Could not find container element');
-                        console.log('[PdfxXBlock] 🔍 Searched for:');
-                        console.log('  - #pdfx-block-{working_block_id}');
-                        console.log('  - [data-block-id="{working_block_id}"]');
-                        console.log('  - [data-block-type="pdfx"]');
-                        console.log('  - .xblock-student_view');
-                        return;
-                    }}
-
-                    console.log('[PdfxXBlock] ✅ Found container element:', element);
-                    console.debug(`[PdfxXBlock] 🚀 Initializing for block {working_block_id}`);
-
-                    const initArgs = {{
-                        blockId: '{working_block_id}',
-                        pdfUrl: '{pdf_url}',
-                        allowDownload: {allow_download_json},
-                        allowAnnotation: {allow_annotation_json},
-                        currentPage: {self.current_page or 1},
-                        savedAnnotations: {annotations_json},
-                        drawingStrokes: {drawing_strokes_json},
-                        highlights: {highlights_json},
-                        userId: '{user_info.get('id', 'anonymous')}',
-                        courseId: '{course_info.get('id', '')}'
-                    }};
-
-                    console.log('[PdfxXBlock] 📋 Initialization arguments:', initArgs);
-
-                    // Initialize using the global PdfxXBlock function
-                    if (typeof window.PdfxXBlock === 'function') {{
-                        console.log('[PdfxXBlock] 🎯 Calling PdfxXBlock constructor...');
-                        const instance = window.PdfxXBlock(runtime, element, initArgs);
-                        console.log('[PdfxXBlock] ✅ Initialized successfully with ES6 modules');
-
-                        // Store instance globally for debugging
-                        window.PdfxInstances = window.PdfxInstances || {{}};
-                        window.PdfxInstances['{working_block_id}'] = instance;
-                        console.log('[PdfxXBlock] 💾 Instance stored globally as PdfxInstances["{working_block_id}"]');
-                    }} else {{
-                        console.error('[PdfxXBlock] ❌ PdfxXBlock constructor not available');
-                        console.log('[PdfxXBlock] 🔍 Available functions:', Object.keys(window).filter(k => k.includes('Pdf')));
-                    }}
-                }} catch (error) {{
-                    console.error('[PdfxXBlock] ❌ Initialization error:', error);
-                    console.error('[PdfxXBlock] 📊 Stack trace:', error.stack);
-                }}
-            }}
-
-            // Start the initialization process
-            console.log('[PdfxXBlock] 📄 Document ready state:', document.readyState);
-            if (document.readyState === 'loading') {{
-                console.log('[PdfxXBlock] ⏳ Waiting for DOMContentLoaded...');
-                document.addEventListener('DOMContentLoaded', function() {{
-                    console.log('[PdfxXBlock] ✅ DOMContentLoaded fired');
-                    waitForDependencies().then(initializePdfxXBlock);
-                }});
-            }} else {{
-                console.log('[PdfxXBlock] ✅ DOM already ready, proceeding...');
-                waitForDependencies().then(initializePdfxXBlock);
-            }}
-
-            // Simple container visibility fix - don't recreate UI elements
-            setTimeout(function() {{
-                console.debug('[PdfxXBlock] 👀 Ensuring PDF containers are visible...');
-
-                // Find all possible PDF containers
-                const containers = document.querySelectorAll('[id*="pdf-main-"]');
-                const loadingIndicators = document.querySelectorAll('[id*="pdf-loading-"]');
-
-                containers.forEach(function(container) {{
-                    if (container && container.style.display === 'none') {{
-                        container.style.display = 'block';
-                        console.debug('[PdfxXBlock] ✅ Showed container:', container.id);
-                    }}
-                }});
-
-                loadingIndicators.forEach(function(loading) {{
-                    if (loading && loading.style.display !== 'none') {{
-                        loading.style.display = 'none';
-                        console.debug('[PdfxXBlock] ✅ Hidden loading:', loading.id);
-                    }}
-                }});
-
-                // Hide any remaining loading overlays
-                const allLoadingElements = document.querySelectorAll('[class*="loading"], [id*="loading"], .loading-indicator');
-                allLoadingElements.forEach(function(overlay) {{
-                    overlay.style.display = 'none';
-                    overlay.style.visibility = 'hidden';
-                    overlay.style.opacity = '0';
-                    console.debug('[PdfxXBlock] ✅ Hidden loading element:', overlay.className || overlay.id);
-                }});
-
-                console.log('[PdfxXBlock] 🎉 Container visibility check completed');
-            }}, 1000); // Wait 1 second for everything to load
-        }})();
-        """)
+        # Add the initialization script
+        frag.add_javascript(self.resource_string("static/js/pdfx-init.js"))
 
         # Add data element for JavaScript access
         data_html = f"""

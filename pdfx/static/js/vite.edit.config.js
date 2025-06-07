@@ -19,6 +19,10 @@ export default defineConfig({
     sourcemap: true,
     minify: 'terser',
     outDir: './build/',
-    emptyOutDir: false  // Don't clear the output directory
+    emptyOutDir: false,  // Don't clear the output directory
+    preserveEntrySignatures: 'strict',
+    write: true,
+    copyPublicDir: false,
+    manifest: false
   }
 });

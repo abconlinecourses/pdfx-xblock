@@ -45,7 +45,9 @@ export class UIManager extends EventEmitter {
         }
 
         try {
-            console.debug('[UIManager] Initializing UI components');
+            console.debug('[UIManager] 🔥 INITIALIZING UI COMPONENTS - STARTING NOW!');
+            console.debug(`[UIManager] 🔥 Block ID: ${this.blockId}`);
+            console.debug(`[UIManager] 🔥 Container:`, this.container);
 
             // Initialize core UI components
             this._initializeLoadingIndicator();
@@ -307,10 +309,13 @@ export class UIManager extends EventEmitter {
                     <i class="fas fa-search-plus"></i>
                 </button>
                 <button class="zoom-button" data-zoom="fit" title="Fit to Page">
-                    <i class="fas fa-expand"></i>
+                    <i class="fas fa-compress-alt"></i>
                 </button>
                 <button class="zoom-button" data-zoom="fit-width" title="Fit Width">
                     <i class="fas fa-arrows-alt-h"></i>
+                </button>
+                <button class="zoom-button" data-action="fullscreen" title="Fullscreen">
+                    <i class="fas fa-expand"></i>
                 </button>
             </div>
         `;
@@ -332,6 +337,8 @@ export class UIManager extends EventEmitter {
      */
     _setupNavigationEvents() {
         console.debug(`[UIManager] 🔍 DEBUG: Setting up navigation events for:`, this.navigation);
+        console.debug(`[UIManager] 🔍 DEBUG: Block ID: ${this.blockId}`);
+        console.debug(`[UIManager] 🔍 DEBUG: Navigation HTML:`, this.navigation?.outerHTML?.substring(0, 200));
 
         if (!this.navigation) {
             console.error('[UIManager] ❌ Navigation element not found! Cannot set up navigation events.');
@@ -361,6 +368,8 @@ export class UIManager extends EventEmitter {
                 event.stopPropagation();
                 console.debug(`[UIManager] 🚀 Navigation button clicked! Action: ${action}`);
                 console.debug(`[UIManager] 🚀 Current page: ${this.currentPage}, Total: ${this.totalPages}`);
+                console.debug(`[UIManager] 🚀 Button element:`, button);
+                console.debug(`[UIManager] 🚀 Event:`, event);
                 this._handleNavigation(action);
             });
 
@@ -422,7 +431,9 @@ export class UIManager extends EventEmitter {
 
         zoomButtons.forEach((button, index) => {
             const action = button.dataset.zoom;
-            console.debug(`[UIManager] 🔍 DEBUG: Setting up zoom button ${index}: action="${action}", element:`, button);
+            console.debug(`[UIManager] 🔍 DEBUG: Setting up zoom button ${index}: action="${action}"`);
+            console.debug(`[UIManager] 🔍 DEBUG: Button HTML:`, button.outerHTML.substring(0, 200));
+            console.debug(`[UIManager] 🔍 DEBUG: Button dataset:`, button.dataset);
 
             if (!action) {
                 console.warn(`[UIManager] ⚠️ Zoom button ${index} has no data-zoom attribute!`, button);
@@ -462,12 +473,46 @@ export class UIManager extends EventEmitter {
             });
         });
 
+        // Action buttons (including fullscreen)
+        const actionButtons = this.navigation.querySelectorAll('[data-action]');
+        console.debug(`[UIManager] 🔍 DEBUG: Found ${actionButtons.length} action buttons:`, actionButtons);
+
+        actionButtons.forEach((button, index) => {
+            const action = button.dataset.action;
+            console.debug(`[UIManager] 🔍 DEBUG: Setting up action button ${index}: action="${action}"`);
+
+            if (!action) {
+                console.warn(`[UIManager] ⚠️ Action button ${index} has no data-action attribute!`, button);
+                return;
+            }
+
+            // Add visual feedback for debugging
+            button.style.cursor = 'pointer';
+            button.style.userSelect = 'none';
+
+            this._addEventHandler(button, 'click', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                console.debug(`[UIManager] 🚀 Action button clicked! Action: ${action}`);
+                this._handleAction(action);
+            });
+
+            // Add touch support
+            this._addEventHandler(button, 'touchend', (event) => {
+                event.preventDefault();
+                event.stopPropagation();
+                console.debug(`[UIManager] 🚀 Action button touched! Action: ${action}`);
+                this._handleAction(action);
+            });
+        });
+
         // Add debugging info to the DOM
         if (this.navigation) {
             this.navigation.setAttribute('data-debug-events', 'true');
             this.navigation.setAttribute('data-nav-buttons', navButtons.length.toString());
             this.navigation.setAttribute('data-zoom-buttons', zoomButtons.length.toString());
-            console.debug(`[UIManager] ✅ Navigation events setup complete. Nav buttons: ${navButtons.length}, Zoom buttons: ${zoomButtons.length}`);
+            this.navigation.setAttribute('data-action-buttons', actionButtons.length.toString());
+            console.debug(`[UIManager] ✅ Navigation events setup complete. Nav buttons: ${navButtons.length}, Zoom buttons: ${zoomButtons.length}, Action buttons: ${actionButtons.length}`);
         }
     }
 
@@ -510,6 +555,48 @@ export class UIManager extends EventEmitter {
     _setupEventListeners() {
         // Global keyboard shortcuts
         this._addEventHandler(document, 'keydown', this._handleKeyboardShortcuts.bind(this));
+
+        // Fullscreen change events
+        this._setupFullscreenEventListeners();
+    }
+
+    /**
+     * Set up fullscreen event listeners
+     */
+    _setupFullscreenEventListeners() {
+        const fullscreenEvents = [
+            'fullscreenchange',
+            'webkitfullscreenchange',
+            'mozfullscreenchange',
+            'msfullscreenchange'
+        ];
+
+        fullscreenEvents.forEach(eventName => {
+            this._addEventHandler(document, eventName, () => {
+                const pdfBlock = this.container.closest('.pdfx-block');
+                if (!pdfBlock) return;
+
+                if (document.fullscreenElement) {
+                    // Entered fullscreen
+                    console.debug('[UIManager] 🔍 Fullscreen change: ENTERED');
+                    pdfBlock.classList.add('fullscreen');
+
+                    // Recalculate PDF scale for fullscreen
+                    setTimeout(() => {
+                        this.emit('zoomRequested', { zoom: 'fit-width' });
+                    }, 200);
+                } else {
+                    // Exited fullscreen
+                    console.debug('[UIManager] 🔍 Fullscreen change: EXITED');
+                    pdfBlock.classList.remove('fullscreen');
+
+                    // Recalculate PDF scale for normal mode
+                    setTimeout(() => {
+                        this.emit('zoomRequested', { zoom: 'fit-width' });
+                    }, 200);
+                }
+            });
+        });
     }
 
     /**
@@ -557,6 +644,10 @@ export class UIManager extends EventEmitter {
                 break;
             case 'download':
                 this.emit('downloadRequested');
+                break;
+            case 'fullscreen':
+                console.debug(`[UIManager] 🔍 DEBUG: Requesting fullscreen mode`);
+                this._toggleFullscreen();
                 break;
         }
     }
@@ -641,7 +732,7 @@ export class UIManager extends EventEmitter {
     /**
      * Update zoom button states
      */
-    updateZoomState(zoomMode) {
+    updateZoomState(zoomMode, scale) {
         const zoomButtons = this.navigation?.querySelectorAll('.zoom-button');
         if (zoomButtons) {
             zoomButtons.forEach(button => {
@@ -652,6 +743,23 @@ export class UIManager extends EventEmitter {
                     button.classList.remove('active');
                 }
             });
+        }
+
+        // Update zoom info display
+        if (scale) {
+            this.updateZoomInfo(scale);
+        }
+    }
+
+    /**
+     * Update zoom info display
+     */
+    updateZoomInfo(scale) {
+        const zoomInfo = this.navigation?.querySelector('.zoom-info');
+        if (zoomInfo) {
+            const percentage = Math.round(scale * 100);
+            zoomInfo.textContent = `${percentage}%`;
+            console.debug(`[UIManager] Updated zoom info to: ${percentage}%`);
         }
     }
 
@@ -666,12 +774,10 @@ export class UIManager extends EventEmitter {
 
         switch (action) {
             case 'in':
-                // Emit relative zoom increase
                 console.debug(`[UIManager] 🔍 DEBUG: Emitting zoom in request`);
                 this.emit('zoomRequested', { zoom: 'in' });
                 break;
             case 'out':
-                // Emit relative zoom decrease
                 console.debug(`[UIManager] 🔍 DEBUG: Emitting zoom out request`);
                 this.emit('zoomRequested', { zoom: 'out' });
                 break;
@@ -683,6 +789,103 @@ export class UIManager extends EventEmitter {
                 console.debug(`[UIManager] 🔍 DEBUG: Emitting fit to width request`);
                 this.emit('zoomRequested', { zoom: 'fit-width' });
                 break;
+            default:
+                console.error(`[UIManager] ❌ Unknown zoom action: "${action}"`);
+        }
+    }
+
+    /**
+     * Toggle fullscreen mode
+     */
+    _toggleFullscreen() {
+        // Try to find the PDF main container
+        let pdfMainContainer = this.container.querySelector(`#pdf-main-${this.blockId}`);
+
+        // If not found with blockId, try with class selector as fallback
+        if (!pdfMainContainer) {
+            pdfMainContainer = this.container.querySelector('.pdf-main-container');
+        }
+
+        // Try to find the PDF block container
+        const pdfBlock = this.container.closest('.pdfx-block');
+
+        if (!pdfMainContainer || !pdfBlock) {
+            console.error('[UIManager] ❌ PDF containers not found for fullscreen');
+            console.debug('[UIManager] 🔍 pdfMainContainer:', pdfMainContainer);
+            console.debug('[UIManager] 🔍 pdfBlock:', pdfBlock);
+            return;
+        }
+
+        const isCurrentlyFullscreen = document.fullscreenElement || pdfBlock.classList.contains('fullscreen');
+
+        if (!isCurrentlyFullscreen) {
+            // Enter fullscreen
+            console.debug('[UIManager] 🔍 DEBUG: Entering fullscreen mode');
+
+            // Add fullscreen class immediately for CSS styling
+            pdfBlock.classList.add('fullscreen');
+
+            // Enable floating mode for menus
+            this._enableFloatingMenus();
+
+            // Request native fullscreen
+            const requestFullscreen = pdfMainContainer.requestFullscreen ||
+                                    pdfMainContainer.webkitRequestFullscreen ||
+                                    pdfMainContainer.mozRequestFullScreen ||
+                                    pdfMainContainer.msRequestFullscreen;
+
+            if (requestFullscreen) {
+                requestFullscreen.call(pdfMainContainer).then(() => {
+                    console.debug('[UIManager] ✅ Entered fullscreen successfully');
+                    // Force PDF to recalculate scale for fullscreen
+                    setTimeout(() => {
+                        this.emit('zoomRequested', { zoom: 'fit-width' });
+                    }, 100);
+                }).catch((err) => {
+                    console.warn('[UIManager] ⚠️ Native fullscreen failed, using CSS fallback:', err.message);
+                    // Keep the fullscreen class for CSS fallback
+                    // Force PDF to recalculate scale for CSS fullscreen
+                    setTimeout(() => {
+                        this.emit('zoomRequested', { zoom: 'fit-width' });
+                    }, 100);
+                });
+            } else {
+                console.warn('[UIManager] ⚠️ Fullscreen API not supported, using CSS fallback');
+                // Force PDF to recalculate scale for CSS fullscreen
+                setTimeout(() => {
+                    this.emit('zoomRequested', { zoom: 'fit-width' });
+                }, 100);
+            }
+        } else {
+            // Exit fullscreen
+            console.debug('[UIManager] 🔍 DEBUG: Exiting fullscreen mode');
+
+            // If we're in native fullscreen, try to exit it
+            if (document.fullscreenElement) {
+                const exitFullscreen = document.exitFullscreen ||
+                                      document.webkitExitFullscreen ||
+                                      document.mozCancelFullScreen ||
+                                      document.msExitFullscreen;
+
+                if (exitFullscreen) {
+                    exitFullscreen.call(document).then(() => {
+                        console.debug('[UIManager] ✅ Exited native fullscreen successfully');
+                    }).catch((err) => {
+                        console.warn('[UIManager] ⚠️ Failed to exit native fullscreen:', err.message);
+                    });
+                }
+            }
+
+            // Always remove fullscreen class (for both native and CSS fullscreen)
+            pdfBlock.classList.remove('fullscreen');
+
+            // Disable floating mode for menus
+            this._disableFloatingMenus();
+
+            // Force PDF to recalculate scale for normal mode
+            setTimeout(() => {
+                this.emit('zoomRequested', { zoom: 'fit-width' });
+            }, 100);
         }
     }
 
@@ -705,6 +908,10 @@ export class UIManager extends EventEmitter {
 
         // Set fit-width as default active zoom mode
         this.updateZoomState('fit-width');
+
+        // Automatically trigger fit-width zoom when document loads
+        console.debug('[UIManager] 🔧 Auto-triggering fit-width zoom for document load');
+        this.emit('zoomRequested', { zoom: 'fit-width' });
 
         // Update status
         this.updateStatus(`Document loaded: ${this.totalPages} pages`);
@@ -853,6 +1060,149 @@ export class UIManager extends EventEmitter {
         this.hideError = this.hideError.bind(this);
         this.setLoading = this.setLoading.bind(this);
         this.updateStatus = this.updateStatus.bind(this);
+    }
+
+    /**
+     * Enable floating menus in fullscreen
+     */
+    _enableFloatingMenus() {
+        if (this.toolbar) {
+            this.toolbar.classList.add('floating');
+            this._makeDraggable(this.toolbar);
+        }
+        if (this.navigation) {
+            this.navigation.classList.add('floating');
+            this._makeDraggable(this.navigation);
+        }
+    }
+
+    /**
+     * Disable floating menus
+     */
+    _disableFloatingMenus() {
+        if (this.toolbar) {
+            this.toolbar.classList.remove('floating', 'dragging');
+            this.toolbar.style.transform = '';
+            this.toolbar.style.top = '';
+            this.toolbar.style.left = '';
+            this.toolbar.style.bottom = '';
+            this.toolbar.style.right = '';
+        }
+        if (this.navigation) {
+            this.navigation.classList.remove('floating', 'dragging');
+            this.navigation.style.transform = '';
+            this.navigation.style.top = '';
+            this.navigation.style.left = '';
+            this.navigation.style.bottom = '';
+            this.navigation.style.right = '';
+        }
+    }
+
+    /**
+     * Make an element draggable
+     */
+    _makeDraggable(element) {
+        let isDragging = false;
+        let startX, startY, startLeft, startTop;
+
+        const onMouseDown = (e) => {
+            // Only allow dragging if clicking directly on the element or its padding area
+            if (e.target.closest('button') || e.target.closest('input')) return;
+
+            isDragging = true;
+            element.classList.add('dragging');
+
+            const rect = element.getBoundingClientRect();
+            startX = e.clientX;
+            startY = e.clientY;
+            startLeft = rect.left;
+            startTop = rect.top;
+
+            e.preventDefault();
+        };
+
+        const onMouseMove = (e) => {
+            if (!isDragging) return;
+
+            const deltaX = e.clientX - startX;
+            const deltaY = e.clientY - startY;
+
+            let newLeft = startLeft + deltaX;
+            let newTop = startTop + deltaY;
+
+            // Keep within viewport bounds
+            const rect = element.getBoundingClientRect();
+            newLeft = Math.max(0, Math.min(window.innerWidth - rect.width, newLeft));
+            newTop = Math.max(0, Math.min(window.innerHeight - rect.height, newTop));
+
+            element.style.left = `${newLeft}px`;
+            element.style.top = `${newTop}px`;
+            element.style.right = 'auto';
+            element.style.bottom = 'auto';
+        };
+
+        const onMouseUp = () => {
+            if (isDragging) {
+                isDragging = false;
+                element.classList.remove('dragging');
+            }
+        };
+
+        // Add event listeners
+        this._addEventHandler(element, 'mousedown', onMouseDown);
+        this._addEventHandler(document, 'mousemove', onMouseMove);
+        this._addEventHandler(document, 'mouseup', onMouseUp);
+
+        // Touch support for mobile
+        const onTouchStart = (e) => {
+            if (e.target.closest('button') || e.target.closest('input')) return;
+
+            const touch = e.touches[0];
+            isDragging = true;
+            element.classList.add('dragging');
+
+            const rect = element.getBoundingClientRect();
+            startX = touch.clientX;
+            startY = touch.clientY;
+            startLeft = rect.left;
+            startTop = rect.top;
+
+            e.preventDefault();
+        };
+
+        const onTouchMove = (e) => {
+            if (!isDragging) return;
+
+            const touch = e.touches[0];
+            const deltaX = touch.clientX - startX;
+            const deltaY = touch.clientY - startY;
+
+            let newLeft = startLeft + deltaX;
+            let newTop = startTop + deltaY;
+
+            // Keep within viewport bounds
+            const rect = element.getBoundingClientRect();
+            newLeft = Math.max(0, Math.min(window.innerWidth - rect.width, newLeft));
+            newTop = Math.max(0, Math.min(window.innerHeight - rect.height, newTop));
+
+            element.style.left = `${newLeft}px`;
+            element.style.top = `${newTop}px`;
+            element.style.right = 'auto';
+            element.style.bottom = 'auto';
+
+            e.preventDefault();
+        };
+
+        const onTouchEnd = () => {
+            if (isDragging) {
+                isDragging = false;
+                element.classList.remove('dragging');
+            }
+        };
+
+        this._addEventHandler(element, 'touchstart', onTouchStart);
+        this._addEventHandler(document, 'touchmove', onTouchMove);
+        this._addEventHandler(document, 'touchend', onTouchEnd);
     }
 
     /**

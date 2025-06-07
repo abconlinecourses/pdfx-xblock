@@ -22,8 +22,13 @@ export default defineConfig({
       }
     },
     sourcemap: true,
-    minify: 'terser',
-    outDir: './build/'
+    minify: false,
+    outDir: './build/',
+    emptyOutDir: false,
+    preserveEntrySignatures: 'strict',
+    write: true,
+    copyPublicDir: false,
+    manifest: false
   },
   server: {
     port: 3000,

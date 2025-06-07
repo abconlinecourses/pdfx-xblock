@@ -32,6 +32,8 @@ export class PDFManager extends EventEmitter {
         // State
         this.isLoading = false;
         this.isDocumentLoaded = false;
+        this.currentRenderTask = null; // Track current render task to prevent conflicts
+        this.isManualZoom = false; // Track if user is using manual zoom vs auto-fit
 
         // Initialize PDF.js
         this._initializePDFJS();
@@ -238,9 +240,16 @@ export class PDFManager extends EventEmitter {
 
         } catch (error) {
             this.isLoading = false;
-            console.error('[PDFManager] Error loading PDF:', error);
-            this.emit('error', error);
-            throw error;
+            // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
+            if (error.name === 'RenderingCancelledException') {
+                console.debug('[PDFManager] PDF loading render task cancelled (expected behavior)');
+                // Don't emit error event for cancelled renders
+                throw error; // Re-throw to maintain the cancellation flow
+            } else {
+                console.error('[PDFManager] Error loading PDF:', error);
+                this.emit('error', error);
+                throw error;
+            }
         }
     }
 
@@ -348,10 +357,21 @@ export class PDFManager extends EventEmitter {
                 }
             }
 
-            // Calculate scale based on container size (default to fit-width)
-            this._calculateOptimalScale(page, 'fit-width');
+                                    // Only calculate optimal scale if we're not in manual zoom mode
+            if (!this.isManualZoom) {
+                console.debug(`[PDFManager] Auto-fit mode, recalculating with fit-width`);
+                this._calculateOptimalScale(page, 'fit-width');
+                console.debug(`[PDFManager] 🔧 Calculated scale: ${this.scale} for fit-width mode`);
+            } else {
+                console.debug(`[PDFManager] Manual zoom mode, keeping existing scale: ${this.scale}`);
+            }
 
-            console.debug(`[PDFManager] 🔧 Calculated scale: ${this.scale} for fit-width mode`);
+            // Emit scale change event so UI can update zoom info
+            this.emit('scaleChanged', {
+                scale: this.scale,
+                mode: 'fit-width',
+                percentage: Math.round(this.scale * 100)
+            });
 
             // Get viewport
             const viewport = page.getViewport({
@@ -370,6 +390,16 @@ export class PDFManager extends EventEmitter {
             // Clear canvas
             this.context.clearRect(0, 0, viewport.width, viewport.height);
 
+            // Cancel any previous rendering task to prevent conflicts
+            if (this.currentRenderTask) {
+                try {
+                    await this.currentRenderTask.cancel();
+                    console.debug('[PDFManager] Cancelled previous render task');
+                } catch (e) {
+                    console.debug('[PDFManager] Previous render task already completed');
+                }
+            }
+
             // Render the page
             const renderContext = {
                 canvasContext: this.context,
@@ -378,8 +408,9 @@ export class PDFManager extends EventEmitter {
                 renderInteractiveForms: true
             };
 
-            const renderTask = page.render(renderContext);
-            await renderTask.promise;
+            this.currentRenderTask = page.render(renderContext);
+            await this.currentRenderTask.promise;
+            this.currentRenderTask = null; // Clear the reference
 
             // Render text layer
             await this._renderTextLayer(page, viewport);
@@ -421,9 +452,16 @@ export class PDFManager extends EventEmitter {
             });
 
         } catch (error) {
-            console.error(`[PDFManager] Error rendering page ${pageNum}:`, error);
-            this.emit('error', error);
-            throw error;
+            // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
+            if (error.name === 'RenderingCancelledException') {
+                console.debug(`[PDFManager] Render task cancelled for page ${pageNum} (expected behavior)`);
+                // Don't emit error event for cancelled renders
+                throw error; // Re-throw to maintain the cancellation flow
+            } else {
+                console.error(`[PDFManager] Error rendering page ${pageNum}:`, error);
+                this.emit('error', error);
+                throw error;
+            }
         }
     }
 
@@ -502,6 +540,10 @@ export class PDFManager extends EventEmitter {
             return;
         }
 
+        // Check if we're in fullscreen mode
+        const pdfBlock = this.container.closest('.pdfx_block');
+        const isFullscreen = pdfBlock && (pdfBlock.classList.contains('fullscreen') || document.fullscreenElement);
+
         // Get container dimensions with fallback
         let containerWidth = container.offsetWidth || container.clientWidth;
         let containerHeight = container.offsetHeight || container.clientHeight;
@@ -516,6 +558,13 @@ export class PDFManager extends EventEmitter {
                 containerWidth = 800;
                 containerHeight = 600;
             }
+        }
+
+        // In fullscreen mode, use more of the available space
+        if (isFullscreen) {
+            containerWidth = Math.max(containerWidth, window.innerWidth - 40);
+            containerHeight = Math.max(containerHeight, window.innerHeight - 120);
+            console.debug(`[PDFManager] 🔧 Fullscreen mode detected - using dimensions: ${containerWidth}x${containerHeight}`);
         }
 
         console.debug(`[PDFManager] 🔧 calculateOptimalScale - Container: ${containerWidth}x${containerHeight}, Mode: ${mode}`);
@@ -606,23 +655,31 @@ export class PDFManager extends EventEmitter {
     /**
      * Set zoom level
      */
-    async setZoom(scale) {
+        async setZoom(scale) {
+        console.debug(`[PDFManager] setZoom called with scale: ${scale}`);
+
         if (!this.pdfDocument) {
             console.warn('[PDFManager] No document loaded for zoom');
             return;
         }
 
         const page = await this.pdfDocument.getPage(this.currentPage);
+        const oldScale = this.scale;
 
         if (typeof scale === 'string') {
             if (scale === 'fit') {
+                console.debug(`[PDFManager] Zoom fit: calling _calculateOptimalScale with "fit"`);
+                this.isManualZoom = false; // Reset to auto-fit mode
                 this._calculateOptimalScale(page, 'fit');
             } else if (scale === 'fit-width') {
+                console.debug(`[PDFManager] Zoom fit-width: calling _calculateOptimalScale with "fit-width"`);
+                this.isManualZoom = false; // Reset to auto-fit mode
                 this._calculateOptimalScale(page, 'fit-width');
             } else if (scale === 'in') {
                 // Zoom in by 25%
                 this.scale = Math.min(5.0, this.scale * 1.25);
-                console.debug(`[PDFManager] Zoom in: new scale = ${this.scale}`);
+                this.isManualZoom = true; // Mark as manual zoom
+                console.debug(`[PDFManager] Zoom in: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)} (increased by 25%)`);
                 // Remove fit-width class when using manual zoom
                 const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
                 if (container) {
@@ -631,7 +688,8 @@ export class PDFManager extends EventEmitter {
             } else if (scale === 'out') {
                 // Zoom out by 20%
                 this.scale = Math.max(0.1, this.scale * 0.8);
-                console.debug(`[PDFManager] Zoom out: new scale = ${this.scale}`);
+                this.isManualZoom = true; // Mark as manual zoom
+                console.debug(`[PDFManager] Zoom out: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)} (decreased by 20%)`);
                 // Remove fit-width class when using manual zoom
                 const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
                 if (container) {
@@ -640,6 +698,8 @@ export class PDFManager extends EventEmitter {
             }
         } else {
             this.scale = Math.max(0.1, Math.min(5.0, scale));
+            this.isManualZoom = true; // Mark as manual zoom
+            console.debug(`[PDFManager] Zoom numeric: Set scale to ${this.scale}`);
             // Remove fit-width class when using manual zoom
             const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
             if (container) {
@@ -648,6 +708,13 @@ export class PDFManager extends EventEmitter {
         }
 
         await this.renderPage(this.currentPage);
+
+        // Emit scale change event so UI can update
+        this.emit('scaleChanged', {
+            scale: this.scale,
+            mode: typeof scale === 'string' ? scale : 'manual',
+            percentage: Math.round(this.scale * 100)
+        });
     }
 
     /**
@@ -721,6 +788,17 @@ export class PDFManager extends EventEmitter {
      */
     async destroy() {
         console.debug('[PDFManager] Destroying PDF manager');
+
+        // Cancel any ongoing render task
+        if (this.currentRenderTask) {
+            try {
+                await this.currentRenderTask.cancel();
+                console.debug('[PDFManager] Cancelled ongoing render task during destroy');
+            } catch (e) {
+                console.debug('[PDFManager] Render task already completed during destroy');
+            }
+            this.currentRenderTask = null;
+        }
 
         await this._cleanupDocument();
 

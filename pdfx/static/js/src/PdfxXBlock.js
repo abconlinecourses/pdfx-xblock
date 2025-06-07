@@ -154,14 +154,22 @@ export class PdfxXBlock extends EventEmitter {
                 allowAnnotation: this.config.allowAnnotation
             });
 
+            // Initialize UI components FIRST (before PDF loading)
+            console.debug('[PdfxXBlock] 🔥 ABOUT TO CALL UIManager.init()');
+            try {
+                await this.uiManager.init();
+                console.debug('[PdfxXBlock] ✅ UIManager.init() completed successfully');
+            } catch (uiError) {
+                console.error('[PdfxXBlock] ❌ UIManager.init() failed:', uiError);
+                console.error('[PdfxXBlock] ❌ UIManager init stack trace:', uiError.stack);
+                // Continue anyway, but log the error
+            }
+
             // Set up event listeners between managers
             this._setupEventListeners();
 
             // Load the PDF document
             await this.pdfManager.loadDocument(this.config.pdfUrl);
-
-            // Initialize UI components
-            await this.uiManager.init();
 
             // Initialize tools if annotation is allowed
             if (this.config.allowAnnotation) {
@@ -190,10 +198,17 @@ export class PdfxXBlock extends EventEmitter {
             return this;
 
         } catch (error) {
-            console.error('[PdfxXBlock] Initialization error:', error);
-            this.isLoading = false;
-            this.emit('error', error);
-            throw error;
+            // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
+            if (error.name === 'RenderingCancelledException') {
+                console.debug('[PdfxXBlock] Initialization render task cancelled (expected behavior)');
+                // Don't emit error or set loading to false for cancelled renders
+                throw error; // Re-throw to maintain the cancellation flow
+            } else {
+                console.error('[PdfxXBlock] Initialization error:', error);
+                this.isLoading = false;
+                this.emit('error', error);
+                throw error;
+            }
         }
     }
 
@@ -251,6 +266,11 @@ export class PdfxXBlock extends EventEmitter {
         this.pdfManager.on('error', (error) => {
             this.emit('error', error);
             this.uiManager.showError(error.message);
+        });
+
+        this.pdfManager.on('scaleChanged', (data) => {
+            this.emit('scaleChanged', data);
+            this.uiManager.updateZoomState(data.mode, data.scale);
         });
 
         // Tool Manager events
@@ -412,7 +432,12 @@ window.PdfxXBlock = function(runtime, element, initArgs) {
 
     // Initialize the instance
     instance.init().catch(error => {
-        console.error('[PdfxXBlock] Failed to initialize:', error);
+        // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
+        if (error.name === 'RenderingCancelledException') {
+            console.debug('[PdfxXBlock] Initialization render task cancelled (expected behavior)');
+        } else {
+            console.error('[PdfxXBlock] Failed to initialize:', error);
+        }
     });
 
     return instance;

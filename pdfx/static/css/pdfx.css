@@ -24,11 +24,28 @@
     padding: 0;
     box-sizing: border-box;
     overflow: hidden;
-    height: 800px !important; /* Use !important to override inline styles */
+    /* Responsive height based on viewport size */
+    height: min(70vh, 600px) !important; /* Use 70% of viewport height or max 600px */
+    min-height: 400px !important; /* Minimum height for usability */
     position: relative;
     display: flex;
     flex-direction: column;
     contain: content; /* CSS containment to improve isolation and performance */
+}
+
+/* Large screen adjustments */
+@media (min-width: 1200px) {
+    .pdfx_block {
+        height: min(60vh, 650px) !important; /* Slightly larger for big screens but still controlled */
+        max-height: 650px !important;
+    }
+}
+
+@media (min-width: 1440px) {
+    .pdfx_block {
+        height: min(55vh, 700px) !important; /* Even more controlled on very large screens */
+        max-height: 700px !important;
+    }
 }
 
 .pdf-title {
@@ -709,49 +726,228 @@ html body .canvas-container .upper-canvas {
 }
 
 /* Full screen styles */
-.pdfx_block.fullscreen {
+.pdfx-block.fullscreen {
     position: fixed;
     top: 0;
     left: 0;
     right: 0;
     bottom: 0;
     width: 100vw;
-    height: 100vh !important; /* Use !important to override the default */
+    height: 100vh !important;
     z-index: 9999;
     margin: 0;
-    padding: 10px;
-    background: #f4f4f4;
+    padding: 0;
+    background: #2d3748;
+    display: flex;
+    flex-direction: column;
 }
 
-.pdfx_block.fullscreen .pdf-viewer-container {
-    height: calc(100vh - 100px);
+.pdfx-block.fullscreen .pdf-main-container {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.pdfx-block.fullscreen .pdf-toolbar {
+    order: 1; /* Toolbar at top */
+}
+
+.pdfx-block.fullscreen .pdf-viewer-area {
+    order: 2; /* Viewer in middle */
+    flex: 1;
+}
+
+.pdfx-block.fullscreen .pdf-navigation {
+    order: 3; /* Navigation at bottom */
+    flex-shrink: 0;
+}
+
+.pdfx-block.fullscreen .pdf-viewer-container {
+    height: calc(100vh - 95px); /* Account for toolbar (45px) and navigation (50px) */
     width: 100%;
     border: none;
+    background: #2d3748;
 }
 
-.pdfx_block.fullscreen .pdf-viewer {
+.pdfx-block.fullscreen .pdf-viewer-area {
+    flex: 1;
+    height: 100%;
+    padding: 10px;
+    background: #2d3748;
     display: flex;
-    align-items: center; /* Center vertically in fullscreen mode */
+    align-items: center;
     justify-content: center;
-    padding: 0;
 }
 
-.pdfx_block.fullscreen .pdf-container {
-    max-width: 95vw;
-    max-height: calc(100vh - 150px);
+.pdfx-block.fullscreen .pdf-container {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 115px);
+    background: white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Toolbar and navigation in fullscreen */
+.pdfx-block.fullscreen .pdf-toolbar {
+    height: 45px;
+    min-height: 45px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 1001;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.pdfx-block.fullscreen .pdf-navigation {
+    height: 50px;
+    min-height: 50px;
+    padding: 8px 16px;
+    background: rgba(248, 249, 250, 0.95);
+    backdrop-filter: blur(10px);
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    bottom: 0;
+    z-index: 1001;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.pdfx-block.fullscreen .pdf-status-bar {
+    display: none; /* Hide status bar in fullscreen */
+}
+
+/* Floating mode for fullscreen menus */
+.pdfx-block.fullscreen .pdf-toolbar.floating,
+.pdfx-block.fullscreen .pdf-navigation.floating {
+    position: fixed;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    user-select: none;
+    cursor: move;
+    transition: all 0.2s ease;
+}
+
+.pdfx-block.fullscreen .pdf-toolbar.floating {
+    top: 20px;
+    left: 20px;
+    width: auto;
+    max-width: calc(100vw - 40px);
+}
+
+.pdfx-block.fullscreen .pdf-navigation.floating {
+    bottom: 20px;
+    right: 20px;
+    width: auto;
+    max-width: calc(100vw - 40px);
+}
+
+.pdfx-block.fullscreen .pdf-toolbar.floating:hover,
+.pdfx-block.fullscreen .pdf-navigation.floating:hover {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Dragging states */
+.pdfx-block.fullscreen .pdf-toolbar.dragging,
+.pdfx-block.fullscreen .pdf-navigation.dragging {
+    opacity: 0.8;
+    transform: scale(1.05);
+    z-index: 1002;
+}
+
+/* Responsive adjustments for fullscreen */
+@media (max-width: 768px) {
+    .pdfx-block.fullscreen .pdf-toolbar.floating,
+    .pdfx-block.fullscreen .pdf-navigation.floating {
+        left: 10px;
+        right: 10px;
+        width: calc(100vw - 20px);
+        max-width: none;
+    }
+
+    .pdfx-block.fullscreen .pdf-toolbar.floating {
+        top: 10px;
+    }
+
+    .pdfx-block.fullscreen .pdf-navigation.floating {
+        bottom: 10px;
+    }
+}
+
+/* Native browser fullscreen detection */
+:fullscreen .pdfx-block,
+:-webkit-full-screen .pdfx-block,
+:-moz-full-screen .pdfx-block,
+:-ms-fullscreen .pdfx-block {
+    width: 100vw;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    background: #2d3748;
+}
+
+:fullscreen .pdf-main-container,
+:-webkit-full-screen .pdf-main-container,
+:-moz-full-screen .pdf-main-container,
+:-ms-fullscreen .pdf-main-container {
+    height: 100vh;
+    width: 100vw;
+}
+
+:fullscreen .pdf-viewer-area,
+:-webkit-full-screen .pdf-viewer-area,
+:-moz-full-screen .pdf-viewer-area,
+:-ms-fullscreen .pdf-viewer-area {
+    background: #2d3748;
+    padding: 10px;
+}
+
+:fullscreen .pdf-container,
+:-webkit-full-screen .pdf-container,
+:-moz-full-screen .pdf-container,
+:-ms-fullscreen .pdf-container {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 115px);
+    background: white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+:fullscreen .pdf-navigation,
+:-webkit-full-screen .pdf-navigation,
+:-moz-full-screen .pdf-navigation,
+:-ms-fullscreen .pdf-navigation {
+    display: flex !important;
+    height: 50px;
+    background: rgba(248, 249, 250, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    z-index: 1000;
 }
 
 /* Ensure content remains centered in fullscreen in all browsers */
 @supports (-moz-appearance:none) or (-webkit-appearance:none) or (-ms-ime-align:auto) {
-    .pdfx_block.fullscreen .pdf-viewer {
+    .pdfx-block.fullscreen .pdf-viewer {
         display: flex;
         align-items: center; /* Override the flex-start from the general rule */
         justify-content: center;
     }
 
-    .pdfx_block.fullscreen .pdf-container,
-    .pdfx_block.fullscreen #pdf-container,
-    .pdfx_block.fullscreen [id^="pdf-container-"] {
+    .pdfx-block.fullscreen .pdf-container,
+    .pdfx-block.fullscreen #pdf-container,
+    .pdfx-block.fullscreen [id^="pdf-container-"] {
         display: flex;
         align-items: center; /* Override the flex-start from the general rule */
         justify-content: center;
@@ -812,11 +1008,12 @@ html body .canvas-container .upper-canvas {
 @media (max-width: 768px) {
     .pdfx_block {
         padding: 10px;
-        height: 600px;
+        height: min(60vh, 500px) !important; /* Smaller on mobile devices */
+        min-height: 350px !important;
     }
 
     .pdf-viewer-container {
-        height: 450px;
+        height: calc(100% - 60px); /* Adjust based on container height */
     }
 
     .sidebar {
@@ -854,11 +1051,11 @@ html body .canvas-container .upper-canvas {
         width: 95%;
     }
 
-    .pdfx_block.fullscreen {
+    .pdfx-block.fullscreen {
         padding: 5px;
     }
 
-    .pdfx_block.fullscreen .pdf-viewer-container {
+    .pdfx-block.fullscreen .pdf-viewer-container {
         height: calc(100vh - 60px);
     }
 
@@ -872,7 +1069,8 @@ html body .canvas-container .upper-canvas {
 @media (max-width: 768px) and (orientation: landscape) {
     /* Additional styles for small screens in landscape mode */
     .pdfx_block {
-        height: 500px;
+        height: min(80vh, 450px) !important; /* Use more height in landscape */
+        min-height: 300px !important;
     }
 
     /* Ensure PDF fits horizontally in landscape */
@@ -889,7 +1087,8 @@ html body .canvas-container .upper-canvas {
 @media (max-width: 768px) and (orientation: portrait) {
     /* Additional styles for small screens in portrait mode */
     .pdfx_block {
-        height: 700px;
+        height: min(65vh, 550px) !important; /* Balanced height for portrait */
+        min-height: 400px !important;
     }
 
     /* Ensure PDF fits vertically in portrait */
@@ -1444,7 +1643,8 @@ html body [id^="marker-tool-"].active {
 
 @media (max-width: 480px) {
     .pdfx_block {
-        height: 500px !important;
+        height: min(50vh, 400px) !important; /* Compact for very small screens */
+        min-height: 300px !important;
     }
 
     .sidebar {
@@ -1769,11 +1969,10 @@ canvas[data-main-rotation] {
     position: relative;
     flex: 1;
     overflow: auto;
-    background: #f8f9fa;
-    padding: 20px;
     display: flex;
     justify-content: center;
     align-items: flex-start;
+    height: 800px;
 }
 
 /* Main PDF Container Layout - Ensure proper ordering */

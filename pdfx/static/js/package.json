@@ -12,7 +12,7 @@
     "build:edit": "vite build --config vite.edit.config.js",
     "watch:main": "vite build --config vite.config.js --watch",
     "watch:edit": "vite build --config vite.edit.config.js --watch",
-    "watch": "run-p watch:*",
+    "watch": "npm run build && run-p --print-label watch:*",
     "preview": "vite preview",
     "serve": "vite preview"
   },

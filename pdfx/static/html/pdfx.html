@@ -1,24 +1,36 @@
 <!DOCTYPE html>
-<div class="pdfx-block" id="pdfx-block-${block.block_id}" data-block-type="pdfx" data-block-id="${block.block_id}">
+<div class="pdfx-block" id="pdfx-block-${block_id}"
+     data-block-type="pdfx"
+     data-block-id="${block_id}"
+     data-pdf-url="${pdf_url}"
+     data-allow-download="${allow_download}"
+     data-allow-annotation="${allow_annotation}"
+     data-current-page="${current_page}"
+     data-user-id="${user_id}"
+     data-course-id="${course_id}"
+     data-handler-url="${handler_url}"
+     data-saved-annotations="${saved_annotations_json}"
+     data-drawing-strokes="${drawing_strokes_json}"
+     data-highlights="${highlights_json}">
     <!-- PDF XBlock Container -->
     <div class="pdf-container-wrapper">
         <!-- Loading Indicator -->
-        <div class="loading-indicator" id="loading-${block.block_id}">
+        <div class="loading-indicator" id="loading-${block_id}">
             <div class="loading-spinner"></div>
             <div class="loading-text">Loading PDF...</div>
         </div>
 
         <!-- Error Display -->
-        <div class="pdf-error" id="error-${block.block_id}" style="display: none;">
+        <div class="pdf-error" id="error-${block_id}" style="display: none;">
             <div class="error-icon">⚠️</div>
             <div class="error-message">An error occurred while loading the PDF</div>
             <button class="error-retry">Retry</button>
         </div>
 
         <!-- Main PDF Container -->
-        <div class="pdf-main-container" id="pdf-main-${block.block_id}" style="display: none;">
+        <div class="pdf-main-container" id="pdf-main-${block_id}" style="display: none;">
             <!-- Toolbar with FontAwesome Icons (No Text Labels) -->
-            <div class="pdf-toolbar" id="toolbar-${block.block_id}">
+            <div class="pdf-toolbar" id="toolbar-${block_id}">
                 <div class="toolbar-section tools-section">
                     <div class="tool-buttons">
                         <button class="tool-button" data-tool="highlight" title="Highlight Text">
@@ -41,15 +53,15 @@
 
                 <div class="toolbar-section settings-section">
                     <div class="setting-controls">
-                        <label for="color-input-${block.block_id}">
+                        <label for="color-input-${block_id}">
                             <i class="fas fa-palette"></i>
                         </label>
-                        <input type="color" id="color-input-${block.block_id}" value="#FF0000" class="color-picker">
+                        <input type="color" id="color-input-${block_id}" value="#FF0000" class="color-picker">
 
-                        <label for="size-input-${block.block_id}">
+                        <label for="size-input-${block_id}">
                             <i class="fas fa-expand-arrows-alt"></i>
                         </label>
-                        <input type="range" id="size-input-${block.block_id}" min="1" max="20" value="5" class="size-slider">
+                        <input type="range" id="size-input-${block_id}" min="1" max="20" value="5" class="size-slider">
                     </div>
                 </div>
 
@@ -70,23 +82,23 @@
 
             <!-- PDF Viewer -->
             <div class="pdf-viewer-area">
-                <div class="pdf-container" id="pdf-container-${block.block_id}">
+                <div class="pdf-container" id="pdf-container-${block_id}">
                     <!-- PDF Canvas -->
-                    <canvas id="pdf-canvas-${block.block_id}" class="pdf-canvas"></canvas>
+                    <canvas id="pdf-canvas-${block_id}" class="pdf-canvas"></canvas>
 
                     <!-- Text Layer -->
-                    <div id="text-layer-${block.block_id}" class="textLayer"></div>
+                    <div id="text-layer-${block_id}" class="textLayer"></div>
 
                     <!-- Drawing Container -->
-                    <div id="draw-container-${block.block_id}" class="draw-container"></div>
+                    <div id="draw-container-${block_id}" class="draw-container"></div>
 
                     <!-- Highlight Container -->
-                    <div id="highlight-container-${block.block_id}" class="highlight-container"></div>
+                    <div id="highlight-container-${block_id}" class="highlight-container"></div>
                 </div>
             </div>
 
             <!-- Navigation with FontAwesome Icons (Moved to Bottom) -->
-            <div class="pdf-navigation" id="navigation-${block.block_id}">
+            <div class="pdf-navigation" id="navigation-${block_id}">
                 <div class="nav-section">
                     <button class="nav-button" data-nav="first" title="First Page">
                         <i class="fas fa-step-backward"></i>
@@ -116,16 +128,19 @@
                         <i class="fas fa-search-plus"></i>
                     </button>
                     <button class="zoom-button" data-zoom="fit" title="Fit to Page">
-                        <i class="fas fa-expand"></i>
+                        <i class="fas fa-compress-alt"></i>
                     </button>
                     <button class="zoom-button" data-zoom="fit-width" title="Fit Width">
                         <i class="fas fa-arrows-alt-h"></i>
+                    </button>
+                    <button class="zoom-button" data-action="fullscreen" title="Fullscreen">
+                        <i class="fas fa-expand"></i>
                     </button>
                 </div>
             </div>
 
             <!-- Status Bar -->
-            <div class="pdf-status-bar" id="status-bar-${block.block_id}">
+            <div class="pdf-status-bar" id="status-bar-${block_id}">
                 <div class="status-section">
                     <span class="status-text">Ready</span>
                 </div>
