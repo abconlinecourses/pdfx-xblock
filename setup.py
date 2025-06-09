@@ -21,27 +21,23 @@ def package_data(pkg, roots):
 
 setup(
     name='pdfx-xblock',
-    version='0.1.0',
-    description='PDF Viewer XBlock for Open edX - A rich PDF annotation and viewing XBlock',
-    long_description="""A rich PDF viewer XBlock for Open edX that allows students to view,
-    annotate, and interact with PDF documents. Features include drawing tools, highlighting,
-    commenting, text tools, and more.""",
-    author='Open edX Community',
-    url='https://github.com/openedx/pdfx-xblock',
-    license='AGPL v3',
+    version='0.2.0',
+    description='PDF Viewer XBlock for Open edX',
+    license='MIT',
     packages=[
         'pdfx',
     ],
     install_requires=[
         'XBlock',
-        'web-fragments',
+        'xblock-utils',
+        'pymongo>=3.12.0',
     ],
     entry_points={
         'xblock.v1': [
-            'pdfx = pdfx.pdfx:PdfxXBlock',
+            'pdfx = pdfx:PdfxXBlock',
         ]
     },
-    package_data=package_data("pdfx", ["static", "translations"]),
+    package_data=package_data("pdfx", ["static", "public", "translations"]),
     classifiers=[
         'Development Status :: 3 - Alpha',
         'Environment :: Web Environment',

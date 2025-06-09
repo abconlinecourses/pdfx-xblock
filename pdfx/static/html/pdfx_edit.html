@@ -1,54 +1,133 @@
 <!-- PDF Viewer XBlock Studio Edit View -->
-<div class="editor-with-buttons">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+
     <div class="wrapper-comp-settings is-active editor-with-buttons" id="settings-tab">
-        <ul class="list-input settings-list">
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="display_name">Display Name</label>
-                    <input class="input setting-input" name="display_name" id="display_name" value="{self.display_name}" type="text">
-                </div>
-                <span class="tip setting-help">The name that appears in the course ribbon</span>
-            </li>
+        <form id="pdf-form">
+            <!-- Hidden Block ID field -->
+            <input type="hidden" name="block_id" id="pdf-block-id" value="${block.block_id}" />
 
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="pdf_url">PDF URL</label>
-                    <input class="input setting-input" name="pdf_url" id="pdf_url" value="{self.pdf_url}" type="text">
-                </div>
-                <span class="tip setting-help">URL or path to the PDF file to display</span>
-            </li>
+            <!-- Hidden PDF file name field for uploaded files -->
+            <input type="hidden" name="pdf_file_name" id="pdf-file-name" value="${block.pdf_file_name}" />
 
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="allow_download">Allow Download</label>
-                    <select class="input setting-input" name="allow_download" id="allow_download">
-                        <option value="true" {%if self.allow_download%}selected{%endif%}>Yes</option>
-                        <option value="false" {%if not self.allow_download%}selected{%endif%}>No</option>
-                    </select>
-                </div>
-                <span class="tip setting-help">Allow students to download the annotated PDF</span>
-            </li>
+            <!-- Hidden PDF asset key field for uploaded files -->
+            <input type="hidden" name="pdf_file_asset_key" id="pdf-file-asset-key" value="${block.pdf_file_asset_key}" />
 
-            <li class="field comp-setting-entry is-set">
-                <div class="wrapper-comp-setting">
-                    <label class="label setting-label" for="allow_annotation">Allow Annotation</label>
-                    <select class="input setting-input" name="allow_annotation" id="allow_annotation">
-                        <option value="true" {%if self.allow_annotation%}selected{%endif%}>Yes</option>
-                        <option value="false" {%if not self.allow_annotation%}selected{%endif%}>No</option>
-                    </select>
-                </div>
-                <span class="tip setting-help">Allow students to annotate the PDF</span>
-            </li>
-        </ul>
-        <div class="xblock-actions">
-            <ul>
-                <li class="action-item">
-                    <a href="#" class="button action-primary save-button">Save</a>
+            <!-- Hidden PDF file path field for uploaded files (legacy) -->
+            <input type="hidden" name="pdf_file_path" id="pdf-file-path" value="${block.pdf_file_path}" />
+
+            <ul class="list-input settings-list">
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label" for="pdf-display-name">Display Name</label>
+                        <input class="input setting-input" name="display_name" id="pdf-display-name" value="${block.display_name}" type="text" />
+                    </div>
+                    <span class="tip setting-help">The name that appears in the course ribbon</span>
                 </li>
-                <li class="action-item">
-                    <a href="#" class="button cancel-button">Cancel</a>
+
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label">PDF Source</label>
+                        <div class="pdf-source-tabs">
+                            <button type="button" class="button action-primary" data-tab="upload">Upload PDF</button>
+                            <button type="button" class="button" data-tab="url">External URL</button>
+                        </div>
+
+                        <div class="tab-content" id="upload-tab">
+                            <div class="file-upload-wrapper" id="drop-zone">
+                                <div class="upload-icon"><i class="fas fa-cloud-upload-alt"></i></div>
+                                <input type="file" id="pdf-file" accept="application/pdf" style="display: none;">
+                                <button type="button" class="button action-primary" id="upload-trigger">Choose PDF File</button>
+                                <div class="file-info" id="file-info">
+                                    % if block.pdf_file_name:
+                                        <span class="filename">${block.pdf_file_name}</span>
+                                    % else:
+                                        <span class="placeholder">No file chosen</span>
+                                    % endif
+                                </div>
+                                <div class="uploaded-file-info" id="uploaded-file-info">
+                                    % if block.pdf_file_asset_key:
+                                        <div class="uploaded-file-details">
+                                            <i class="fas fa-check-circle" style="color: #28a745;"></i>
+                                            <span class="upload-status">File uploaded successfully</span>
+                                            <div class="asset-url" style="contain: content;">
+                                                <small>Asset URL: <code>${block.pdf_file_asset_key}</code></small>
+                                            </div>
+                                        </div>
+                                    % elif block.pdf_file_name:
+                                        <div class="uploaded-file-details">
+                                            <i class="fas fa-info-circle" style="color: #17a2b8;"></i>
+                                            <span class="upload-status">File configured: ${block.pdf_file_name}</span>
+                                        </div>
+                                    % endif
+                                </div>
+                                <div class="drag-text">or drag and drop a PDF file here</div>
+                            </div>
+                        </div>
+
+                        <div class="tab-content" id="url-tab">
+                            <input class="input setting-input" name="pdf_url" id="pdf-url" value="${block.pdf_url}" type="text" placeholder="Enter PDF URL" />
+                            <div class="url-help-text">
+                                <i class="fas fa-info-circle"></i> Enter a full URL to an external PDF (e.g., https://example.com/document.pdf)
+                            </div>
+                        </div>
+                    </div>
+                    <span class="tip setting-help">Upload a PDF file or provide a URL to an external PDF</span>
+                </li>
+
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label" for="pdf-allow-download">Allow Download</label>
+                        <select class="input setting-input" name="allow_download" id="pdf-allow-download">
+                            % if block.allow_download:
+                                <option value="true" selected>True</option>
+                                <option value="false">False</option>
+                            % else:
+                                <option value="true">True</option>
+                                <option value="false" selected>False</option>
+                            % endif
+                        </select>
+                    </div>
+                    <span class="tip setting-help">Allow students to download the annotated PDF</span>
+                </li>
+
+                <li class="field comp-setting-entry is-set">
+                    <div class="wrapper-comp-setting">
+                        <label class="label setting-label pdf-setting-label" for="pdf-allow-annotation">Allow Annotation</label>
+                        <select class="input setting-input" name="allow_annotation" id="pdf-allow-annotation">
+                            % if block.allow_annotation:
+                                <option value="true" selected>True</option>
+                                <option value="false">False</option>
+                            % else:
+                                <option value="true">True</option>
+                                <option value="false" selected>False</option>
+                            % endif
+                        </select>
+                    </div>
+                    <span class="tip setting-help">Allow students to annotate the PDF</span>
                 </li>
             </ul>
-        </div>
+            <div class="xblock-actions">
+                <ul>
+                    <li class="action-item">
+                        <button id="pdf-submit-options" type="submit" class="button action-primary save-button">Save</button>
+                    </li>
+                    <li class="action-item">
+                        <button type="button" class="button cancel-button">Cancel</button>
+                    </li>
+                </ul>
+            </div>
+        </form>
     </div>
-</div>
+
+<script>
+// Add this script to fix potential font awesome loading issues
+(function() {
+    // Check if Font Awesome is loaded properly
+    if (typeof FontAwesome === 'undefined') {
+        var cssLink = document.createElement('link');
+        cssLink.rel = 'stylesheet';
+        cssLink.href = 'https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css';
+        document.head.appendChild(cssLink);
+    }
+})();
+</script>

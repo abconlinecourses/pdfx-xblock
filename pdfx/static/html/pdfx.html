@@ -1,217 +1,159 @@
-<!-- PDF Viewer XBlock -->
-<div class="pdfx_block">
-    <!-- Left Sidebar -->
-    <div class="sidebar">
-        <div class="tool-section">
-            <button class="tool-btn active" id="pen-tool" title="Marker (⌥/Alt + M)">
-                <i class="fas fa-pen"></i>
-                <span>Marker</span>
-            </button>
-            <button class="tool-btn" id="highlighter-tool" title="Highlighter (⌥/Alt + H)">
-                <i class="fas fa-highlighter"></i>
-                <span>Highlight</span>
-            </button>
-            <button class="tool-btn" id="text-tool" title="Text (⌥/Alt + T)">
-                <i class="fas fa-font"></i>
-                <span>Text</span>
-            </button>
+<!DOCTYPE html>
+<div class="pdfx-block" id="pdfx-block-${block_id}"
+     data-block-type="pdfx"
+     data-block-id="${block_id}"
+     data-pdf-url="${pdf_url}"
+     data-allow-download="${allow_download}"
+     data-allow-annotation="${allow_annotation}"
+     data-current-page="${current_page}"
+     data-user-id="${user_id}"
+     data-course-id="${course_id}"
+     data-handler-url="${handler_url}"
+     data-saved-annotations="${saved_annotations_json}"
+     data-drawing-strokes="${drawing_strokes_json}"
+     data-highlights="${highlights_json}"
+     data-marker-strokes="${marker_strokes_json}"
+     data-text-annotations="${text_annotations_json}"
+     data-shape-annotations="${shape_annotations_json}"
+     data-note-annotations="${note_annotations_json}">
+    <!-- PDF XBlock Container -->
+    <div class="pdf-container-wrapper">
+        <!-- Loading Indicator -->
+        <div class="loading-indicator" id="loading-${block_id}">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">Loading PDF...</div>
         </div>
-        <div class="tool-section">
-            <button class="tool-btn" id="shape-tool" title="Shape (⌥/Alt + S)">
-                <i class="fas fa-shapes"></i>
-                <span>Shape</span>
-            </button>
-            <button class="tool-btn" id="sticky-note-tool" title="Note (⌥/Alt + N)">
-                <i class="fas fa-sticky-note"></i>
-                <span>Note</span>
-            </button>
-            <button class="tool-btn" id="comment-tool" title="Comment (⌥/Alt + C)">
-                <i class="fas fa-comment"></i>
-                <span>Comment</span>
-            </button>
-        </div>
-        <div class="tool-section">
-            <button class="tool-btn" id="select-tool" title="Select Tool">
-                <i class="fas fa-mouse-pointer"></i>
-                <span>Select</span>
-            </button>
-            <button class="tool-btn" id="eraser-tool" title="Eraser (⌥/Alt + E)">
-                <i class="fas fa-eraser"></i>
-                <span>Eraser</span>
-            </button>
-        </div>
-        <div class="separator horizontal-separator"></div>
-        <button class="tool-btn" id="undo-btn" title="Undo (⌘/Ctrl + Z)">
-            <i class="fas fa-undo"></i>
-            <span>Undo</span>
-        </button>
-        <button class="tool-btn" id="redo-btn" title="Redo (⌘/Ctrl + Shift + Z)">
-            <i class="fas fa-redo"></i>
-            <span>Redo</span>
-        </button>
-    </div>
 
-    <!-- Shape Selection Menu -->
-    <div class="shape-menu" id="shape-menu">
-        <div class="shape-option" data-shape="rect">
-            <i class="fas fa-square"></i>
-            <span>Rectangle</span>
+        <!-- Error Display -->
+        <div class="pdf-error" id="error-${block_id}" style="display: none;">
+            <div class="error-icon">⚠️</div>
+            <div class="error-message">An error occurred while loading the PDF</div>
+            <button class="error-retry">Retry</button>
         </div>
-        <div class="shape-option" data-shape="circle">
-            <i class="fas fa-circle"></i>
-            <span>Circle</span>
-        </div>
-        <div class="shape-option" data-shape="line">
-            <i class="fas fa-minus"></i>
-            <span>Line</span>
-        </div>
-        <div class="shape-option" data-shape="arrow">
-            <i class="fas fa-long-arrow-alt-right"></i>
-            <span>Arrow</span>
-        </div>
-    </div>
 
-    <!-- Main Content Area -->
-    <div class="content-area">
-        <!-- Top Toolbar -->
-        <div class="top-toolbar">
-            <div class="tool-group">
-                <div class="drawing-controls">
-                    <input type="color" id="color-input" value="#FF0000" title="Color">
-                    <input type="range" id="width-input" min="1" max="20" value="5" title="Line Width">
-                    <span id="width-value">5px</span>
+        <!-- Main PDF Container -->
+        <div class="pdf-main-container" id="pdf-main-${block_id}" style="display: none;">
+            <!-- Toolbar with FontAwesome Icons (No Text Labels) -->
+            <div class="pdf-toolbar" id="toolbar-${block_id}">
+                <div class="toolbar-section tools-section">
+                    <div class="tool-buttons">
+                        <button class="tool-button" data-tool="highlight" title="Highlight Text">
+                            <i class="fas fa-highlighter"></i>
+                        </button>
+                        <button class="tool-button" data-tool="scribble" title="Draw/Scribble">
+                            <i class="fas fa-pen"></i>
+                        </button>
+                        <button class="tool-button" data-tool="text" title="Add Text">
+                            <i class="fas fa-font"></i>
+                        </button>
+                        <button class="tool-button" data-tool="shape" title="Draw Shape">
+                            <i class="fas fa-shapes"></i>
+                        </button>
+                        <button class="tool-button" data-tool="note" title="Add Note">
+                            <i class="fas fa-sticky-note"></i>
+                        </button>
+                    </div>
+                </div>
+
+                <div class="toolbar-section settings-section">
+                    <div class="setting-controls">
+                        <label for="color-input-${block_id}">
+                            <i class="fas fa-palette"></i>
+                        </label>
+                        <input type="color" id="color-input-${block_id}" value="#FF0000" class="color-picker">
+
+                        <label for="size-input-${block_id}">
+                            <i class="fas fa-expand-arrows-alt"></i>
+                        </label>
+                        <input type="range" id="size-input-${block_id}" min="1" max="20" value="5" class="size-slider">
+                    </div>
+                </div>
+
+                <div class="toolbar-section actions-section">
+                    <div class="action-buttons">
+                        <button class="action-button" data-action="clear" title="Clear All">
+                            <i class="fas fa-trash"></i>
+                        </button>
+                        <button class="action-button" data-action="undo" title="Undo">
+                            <i class="fas fa-undo"></i>
+                        </button>
+                        % if allow_download:
+                        <button class="action-button" data-action="download" title="Download PDF">
+                            <i class="fas fa-download"></i>
+                        </button>
+                        % endif
+                    </div>
                 </div>
             </div>
-            <div class="separator"></div>
-            <div class="tool-group">
-                <button class="tool-btn" id="clear-tool" title="Clear All">
-                    <i class="fas fa-trash"></i>
-                    <span>Clear</span>
-                </button>
-            </div>
-            <div class="separator"></div>
-            <div class="tool-group playback-controls">
-                <button class="tool-btn" id="play-drawing" title="Play Drawing">
-                    <i class="fas fa-play"></i>
-                    <span>Play</span>
-                </button>
-                <button class="tool-btn" id="pause-drawing" title="Pause" style="display: none;">
-                    <i class="fas fa-pause"></i>
-                    <span>Pause</span>
-                </button>
-                <button class="tool-btn" id="reset-drawing" title="Reset">
-                    <i class="fas fa-undo"></i>
-                    <span>Reset</span>
-                </button>
-                <div class="playback-speed">
-                    <span>Speed:</span>
-                    <select id="playback-speed">
-                        <option value="0.5">0.5x</option>
-                        <option value="1" selected>1x</option>
-                        <option value="2">2x</option>
-                        <option value="4">4x</option>
-                    </select>
+
+            <!-- PDF Viewer -->
+            <div class="pdf-viewer-area">
+                <div class="pdf-container" id="pdf-container-${block_id}">
+                    <!-- PDF Canvas -->
+                    <canvas id="pdf-canvas-${block_id}" class="pdf-canvas"></canvas>
+
+                    <!-- Text Layer -->
+                    <div id="text-layer-${block_id}" class="textLayer"></div>
+
+                    <!-- Drawing Container -->
+                    <div id="draw-container-${block_id}" class="draw-container"></div>
+
+                    <!-- Highlight Container -->
+                    <div id="highlight-container-${block_id}" class="highlight-container"></div>
                 </div>
             </div>
-            <div class="separator"></div>
-            <div class="brightness-controls">
-                <button class="tool-btn" id="brightness-down" title="Decrease Brightness">
-                    <i class="fas fa-sun"></i>
-                    <i class="fas fa-minus"></i>
-                    <span>Darker</span>
-                </button>
-                <span id="brightness-level">100%</span>
-                <button class="tool-btn" id="brightness-up" title="Increase Brightness">
-                    <i class="fas fa-sun"></i>
-                    <i class="fas fa-plus"></i>
-                    <span>Brighter</span>
-                </button>
+
+            <!-- Navigation with FontAwesome Icons (Moved to Bottom) -->
+            <div class="pdf-navigation" id="navigation-${block_id}">
+                <div class="nav-section">
+                    <button class="nav-button" data-nav="first" title="First Page">
+                        <i class="fas fa-step-backward"></i>
+                    </button>
+                    <button class="nav-button" data-nav="prev" title="Previous Page">
+                        <i class="fas fa-chevron-left"></i>
+                    </button>
+                    <span class="page-info">
+                        <input type="number" class="page-input" value="1" min="1">
+                        <span class="page-separator">of</span>
+                        <span class="total-pages">1</span>
+                    </span>
+                    <button class="nav-button" data-nav="next" title="Next Page">
+                        <i class="fas fa-chevron-right"></i>
+                    </button>
+                    <button class="nav-button" data-nav="last" title="Last Page">
+                        <i class="fas fa-step-forward"></i>
+                    </button>
+                </div>
+
+                <div class="zoom-section">
+                    <button class="zoom-button" data-zoom="out" title="Zoom Out">
+                        <i class="fas fa-search-minus"></i>
+                    </button>
+                    <span class="zoom-info">100%</span>
+                    <button class="zoom-button" data-zoom="in" title="Zoom In">
+                        <i class="fas fa-search-plus"></i>
+                    </button>
+                    <button class="zoom-button" data-zoom="fit" title="Fit to Page">
+                        <i class="fas fa-compress-alt"></i>
+                    </button>
+                    <button class="zoom-button" data-zoom="fit-width" title="Fit Width">
+                        <i class="fas fa-arrows-alt-h"></i>
+                    </button>
+                    <button class="zoom-button" data-action="fullscreen" title="Fullscreen">
+                        <i class="fas fa-expand"></i>
+                    </button>
+                </div>
             </div>
-            <div class="separator"></div>
-            <div class="filter-controls">
-                <button class="tool-btn" id="grayscale-toggle" title="Toggle Grayscale">
-                    <i class="fas fa-adjust"></i>
-                    <span>Grayscale</span>
-                </button>
-                <button class="tool-btn" id="ink-mode-toggle" title="E-ink Mode">
-                    <i class="fas fa-moon"></i>
-                    <span>E-ink</span>
-                </button>
-            </div>
-            <div style="margin-left: auto;">
-                <button class="tool-btn" id="download-tool" title="Download">
-                    <i class="fas fa-download"></i>
-                    <span>Download</span>
-                </button>
+
+            <!-- Status Bar -->
+            <div class="pdf-status-bar" id="status-bar-${block_id}">
+                <div class="status-section">
+                    <span class="status-text">Ready</span>
+                </div>
+                <div class="tool-status">
+                    <span class="active-tool-label">No tool active</span>
+                </div>
             </div>
         </div>
-
-        <!-- PDF Viewer -->
-        <div class="pdf-viewer">
-            <div id="pdf-container">
-                <canvas id="pdf-canvas"></canvas>
-                <div id="text-layer"></div>
-                <div id="draw-container"></div>
-            </div>
-        </div>
-
-        <!-- Bottom Toolbar -->
-        <div class="bottom-toolbar">
-            <div class="page-controls">
-                <button class="page-btn" id="prev-page" title="Previous Page (←)">
-                    <i class="fas fa-chevron-left"></i>
-                </button>
-                <span class="page-info">Page <span id="current-page">1</span> / <span id="page-count">1</span></span>
-                <button class="page-btn" id="next-page" title="Next Page (→)">
-                    <i class="fas fa-chevron-right"></i>
-                </button>
-            </div>
-            <div class="separator"></div>
-            <div class="zoom-controls">
-                <button class="page-btn" id="zoom-out" title="Zoom Out (⌘/Ctrl + -)">
-                    <i class="fas fa-search-minus"></i>
-                    <span>Zoom Out</span>
-                </button>
-                <span id="zoom-level">100%</span>
-                <button class="page-btn" id="zoom-in" title="Zoom In (⌘/Ctrl + +)">
-                    <i class="fas fa-search-plus"></i>
-                    <span>Zoom In</span>
-                </button>
-            </div>
-            <div class="separator"></div>
-            <div class="view-controls">
-                <button class="page-btn" id="fullscreen-btn" title="Fullscreen (F11)">
-                    <i class="fas fa-expand"></i>
-                    <span>Fullscreen</span>
-                </button>
-                <button class="page-btn" id="page-fit-btn" title="Fit Page (⌘/Ctrl + F)">
-                    <i class="fas fa-compress"></i>
-                    <span>Fit Page</span>
-                </button>
-                <button class="page-btn" id="page-list-btn" title="Page List">
-                    <i class="fas fa-th"></i>
-                    <span>Page List</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Page List Modal -->
-    <div id="page-list-modal" class="modal">
-        <div class="modal-content">
-            <div class="modal-header">
-                <h2>Page List</h2>
-                <span class="close">&times;</span>
-            </div>
-            <div class="modal-body">
-                <div id="page-thumbnails" class="thumbnails-container"></div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Debug Panel (Hidden by Default) -->
-    <button id="debug-toggle">Show Debug</button>
-    <div id="debug-panel">
-        <div id="debug-content"></div>
     </div>
 </div>

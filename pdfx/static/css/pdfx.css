@@ -9,20 +9,68 @@
 }
 
 /* PDF Viewer XBlock Styles */
-
-.pdfx_block {
+* {
     box-sizing: border-box;
     margin: 0;
     padding: 0;
-    font-family: Arial, sans-serif;
-    height: 800px;
-    background: #f0f0f0;
+}
+
+/* Main block container */
+.pdfx_block {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    width: 100%;
+    max-width: 100%;
+    margin: 1em 0;
+    padding: 0;
+    box-sizing: border-box;
+    overflow: hidden;
+    /* Responsive height based on viewport size */
+    height: min(70vh, 600px) !important; /* Use 70% of viewport height or max 600px */
+    min-height: 400px !important; /* Minimum height for usability */
+    position: relative;
     display: flex;
+    flex-direction: column;
+    contain: content; /* CSS containment to improve isolation and performance */
+}
+
+/* Large screen adjustments */
+@media (min-width: 1200px) {
+    .pdfx_block {
+        height: min(60vh, 650px) !important; /* Slightly larger for big screens but still controlled */
+        max-height: 650px !important;
+    }
+}
+
+@media (min-width: 1440px) {
+    .pdfx_block {
+        height: min(55vh, 700px) !important; /* Even more controlled on very large screens */
+        max-height: 700px !important;
+    }
+}
+
+.pdf-title {
+    margin-bottom: 10px;
+    font-size: 24px;
+    font-weight: 600;
+    color: #333;
+    text-align: center;
+}
+
+/* Main Layout */
+.pdf-viewer-container {
+    display: flex;
+    flex: 1;
+    height: calc(100% - 60px); /* Subtract title height */
+    width: 100%;
+    background: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    overflow: hidden;
     position: relative;
 }
 
 /* Left Sidebar */
-.pdfx_block .sidebar {
+.sidebar {
     width: 60px;
     height: 100%;
     background: #f5f5f5;
@@ -33,43 +81,48 @@
     z-index: 100;
 }
 
-.pdfx_block .tool-btn {
+.tool-btn {
     width: 100%;
-    height: 60px;
+    height: 42px;
     display: flex;
-    flex-direction: column;
     align-items: center;
     justify-content: center;
     cursor: pointer;
     border: none;
     background: none;
-    color: #333;
+    color: #555;
     font-size: 12px;
-    padding: 8px 0;
+    padding: 5px;
     transition: all 0.2s;
+    border-radius: 4px;
+    min-width: 36px;
+    margin-bottom: 5px; /* Add spacing between buttons */
 }
 
-.pdfx_block .tool-btn:hover {
+.tool-btn:hover {
     background: #e0e0e0;
 }
 
-.pdfx_block .tool-btn.active {
-    background: #4CAF50;
-    color: white;
+.tool-btn.active {
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    transform: scale(1.05);
+    position: relative;
 }
 
-.pdfx_block .tool-btn i {
-    font-size: 20px;
-    margin-bottom: 5px;
+.tool-btn i {
+    font-size: 18px;
+    padding: 8px;
 }
 
-.pdfx_block .tool-section {
+.tool-section {
     border-bottom: 1px solid #ddd;
     padding-bottom: 8px;
     margin-bottom: 8px;
 }
 
-.pdfx_block .horizontal-separator {
+.horizontal-separator {
     width: 80%;
     height: 1px;
     background: #ddd;
@@ -77,7 +130,7 @@
 }
 
 /* Shape Selection Menu */
-.pdfx_block .shape-menu {
+.shape-menu {
     position: absolute;
     left: 65px;
     background: white;
@@ -90,11 +143,11 @@
     padding: 10px;
 }
 
-.pdfx_block .shape-menu.visible {
+.shape-menu.visible {
     display: block;
 }
 
-.pdfx_block .shape-option {
+.shape-option {
     display: flex;
     align-items: center;
     padding: 8px 10px;
@@ -102,28 +155,136 @@
     border-radius: 4px;
 }
 
-.pdfx_block .shape-option:hover {
+.shape-option:hover {
     background: #f0f0f0;
 }
 
-.pdfx_block .shape-option i {
+.shape-option i {
     margin-right: 10px;
     width: 20px;
     text-align: center;
 }
 
+/* Sticky Note */
+.sticky-note {
+    position: absolute;
+    background: #FFEB3B;
+    border: 1px solid #FBC02D;
+    padding: 10px;
+    min-width: 150px;
+    min-height: 50px;
+    box-shadow: 2px 2px 5px rgba(0,0,0,0.2);
+    z-index: 20;
+    cursor: move;
+    font-family: Arial, sans-serif;
+    font-size: 14px;
+    resize: both;
+    overflow: auto;
+    border-radius: 2px;
+}
+
+.sticky-note-header {
+    display: flex;
+    justify-content: space-between;
+    margin-bottom: 5px;
+    cursor: move;
+}
+
+.sticky-note-close {
+    cursor: pointer;
+    color: #555;
+}
+
+.sticky-note-content {
+    min-height: 30px;
+    outline: none;
+}
+
+/* Comment Styles */
+.comment-container {
+    position: absolute;
+    z-index: 20;
+}
+
+.comment-icon {
+    background: #2196F3;
+    color: white;
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    font-size: 12px;
+    box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+}
+
+.comment-popup {
+    position: absolute;
+    left: 30px;
+    top: 0;
+    background: white;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    width: 250px;
+    display: none;
+}
+
+.comment-header {
+    display: flex;
+    justify-content: space-between;
+    padding: 8px 10px;
+    background: #f8f8f8;
+    border-bottom: 1px solid #ddd;
+}
+
+.comment-content {
+    padding: 10px;
+}
+
+.comment-input {
+    width: 100%;
+    min-height: 60px;
+    margin-bottom: 10px;
+    padding: 5px;
+    border: 1px solid #ddd;
+    resize: vertical;
+}
+
+.comment-actions {
+    display: flex;
+    justify-content: flex-end;
+}
+
+.comment-save {
+    background: #4CAF50;
+    color: white;
+    border: none;
+    padding: 5px 10px;
+    border-radius: 4px;
+    cursor: pointer;
+}
+
+.comment-save:hover {
+    background: #45a049;
+}
+
 /* Main Content Area */
-.pdfx_block .content-area {
+.content-area {
     flex: 1;
     height: 100%;
     display: flex;
     flex-direction: column;
     overflow: hidden;
+    position: relative;
+    justify-content: center;
 }
 
 /* Top Toolbar */
-.pdfx_block .top-toolbar {
-    height: 60px;
+.top-toolbar {
+    height: 50px;
     background: white;
     border-bottom: 1px solid #ddd;
     display: flex;
@@ -132,65 +293,87 @@
     gap: 15px;
 }
 
-.pdfx_block .tool-group {
+.top-toolbar .tool-btn {
+    height: 36px;
+    min-width: 36px;
+}
+
+.tool-group {
     display: flex;
     gap: 10px;
     align-items: center;
 }
 
-.pdfx_block .separator {
+.separator {
     width: 1px;
-    height: 30px;
+    height: 24px;
     background: #ddd;
-    margin: 0 10px;
+    margin: 0 5px;
 }
 
 /* Drawing Controls */
-.pdfx_block .drawing-controls {
+.drawing-controls {
     display: flex;
     gap: 15px;
     align-items: center;
 }
 
-.pdfx_block input[type="color"] {
-    width: 30px;
+input[type="color"] {
+    width: 40px;
     height: 30px;
-    border: none;
+    border: 2px solid #ccc;
     border-radius: 4px;
-    padding: 0;
     cursor: pointer;
+    padding: 0;
+    background: transparent;
+    transition: transform 0.2s ease;
 }
 
-.pdfx_block input[type="range"] {
+input[type="color"]:hover {
+    transform: scale(1.1);
+    border-color: #3498db;
+}
+
+input[type="range"] {
     width: 100px;
 }
 
-/* PDF Viewer */
-.pdfx_block .pdf-viewer {
-    flex: 1;
-    position: relative;
-    overflow: auto;
-    background: #f4f4f4;
+/* PDF Viewer - core styling */
+.pdf-viewer {
     display: flex;
     align-items: flex-start;
     justify-content: center;
+    flex: 1;
     padding: 20px;
+    position: relative;
+    background: #f4f4f4;
+    overflow: auto;
 }
 
-.pdfx_block #pdf-container {
+/* PDF Container - core positioning */
+.pdf-container, #pdf-container, [id^="pdf-container-"] {
     position: relative;
     margin: 0 auto;
-    box-shadow: 0 0 10px rgba(0,0,0,0.2);
     background: white;
-    filter: brightness(1) grayscale(0%) contrast(100%);
-    transition: filter 0.3s ease;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    max-width: 100%;
 }
 
-.pdfx_block #pdf-canvas {
+/* Canvas styling */
+.pdf-canvas, #pdf-canvas, [id^="pdf-canvas-"] {
     display: block;
+    width: 100%;
+    height: 100%;
+    max-width: 100%;
+    margin: 0 auto;
+    filter: brightness(1) grayscale(0) !important; /* Override to ensure PDF renders in normal colors by default */
 }
 
-.pdfx_block #text-layer {
+/* PDF.js text layer classes - supporting both older and newer versions */
+.textLayer, .text-layer, #text-layer, [id^="text-layer-"] {
     position: absolute;
     left: 0;
     top: 0;
@@ -200,18 +383,21 @@
     opacity: 0.2;
     line-height: 1.0;
     user-select: text;
-    z-index: 5;
+    -webkit-user-select: text;
+    -moz-user-select: text;
+    -ms-user-select: text;
     --scale-factor: 1;
     pointer-events: none;
+    z-index: 3; /* Text layer on top for selection */
 }
 
-.pdfx_block #text-layer.active {
+.textLayer.active, .text-layer.active, #text-layer.active, [id^="text-layer-"].active {
     pointer-events: auto;
     cursor: text;
     opacity: 1;
 }
 
-.pdfx_block #text-layer > span {
+.textLayer span, .text-layer > span, #text-layer > span, [id^="text-layer-"] > span {
     color: transparent;
     position: absolute;
     white-space: pre;
@@ -221,186 +407,1767 @@
     pointer-events: all;
 }
 
-.pdfx_block #text-layer.active > span {
+.text-layer.active > span, #text-layer.active > span, [id^="text-layer-"].active > span {
     color: rgba(0, 0, 0, 0.0);
     background-color: rgba(255, 255, 255, 0.0);
 }
 
-.pdfx_block #text-layer.active > span::selection {
+.text-layer.active > span::selection, #text-layer.active > span::selection, [id^="text-layer-"].active > span::selection,
+.textLayer ::selection {
     background: rgba(255, 255, 0, 0.3);
 }
 
-.pdfx_block #draw-container {
+/* PDF.js 3.x specific highlight classes */
+.textLayer .highlight {
+    margin: -1px;
+    padding: 1px;
+    background-color: rgba(255, 255, 0, 0.3);
+    border-radius: 4px;
+}
+
+.textLayer .highlight.begin {
+    border-radius: 4px 0 0 4px;
+}
+
+.textLayer .highlight.end {
+    border-radius: 0 4px 4px 0;
+}
+
+.textLayer .highlight.middle {
+    border-radius: 0;
+}
+
+.textLayer .highlight.selected {
+    background-color: rgba(0, 100, 0, 0.3);
+}
+
+/* Style for Links in the Text Layer */
+.textLayer a {
+    color: transparent;
+    text-decoration: none;
+    pointer-events: all;
+}
+
+/* Highlight layer - separate from text layer */
+.highlight-layer, #highlight-layer, [id^="highlight-layer-"] {
     position: absolute;
-    top: 0;
     left: 0;
-    z-index: 10;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    z-index: 2; /* Between canvas and text layer */
+    pointer-events: none;
+    background-color: transparent !important;
+}
+
+/* BULLETPROOF FIX: Hide highlight containers by default */
+.highlight-container, #highlight-container, [id^="highlight-container-"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    z-index: 2;
+    pointer-events: none;
+    background-color: transparent !important;
+    visibility: hidden !important; /* Hide by default */
+    opacity: 0 !important; /* Make invisible by default */
+}
+
+/* Show highlight container only when it has content */
+.highlight-container:not(:empty), #highlight-container:not(:empty), [id^="highlight-container-"]:not(:empty) {
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Individual highlight elements */
+.highlight, .highlight-element, [class^="highlight-"] {
+    position: absolute;
+    background-color: rgba(255, 235, 0, 0.4); /* Light yellow with better visibility */
+    border-radius: 2px;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    pointer-events: none;
+    cursor: default;
+    display: block !important; /* Show by default */
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Ensure highlights are always visible when created */
+.highlight.active,
+.highlight-element.active,
+[class^="highlight-"].active,
+.highlight-tool-active .highlight,
+.highlight-tool-active .highlight-element,
+.highlight-tool-active [class^="highlight-"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Show highlight elements when they are created */
+.highlight-container .highlight-element,
+#highlight-container .highlight-element,
+[id^="highlight-container-"] .highlight-element {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+    pointer-events: none !important;
+    z-index: 5 !important;
+}
+
+/* Update draw container styles */
+.draw-container, #draw-container, [id^="draw-container-"] {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 25 !important; /* Higher than text layer but lower than UI */
+    pointer-events: none; /* Default state is no pointer events */
+}
+
+/* Super-specific override for draw container when in drawing mode */
+html body .pdfx_block .draw-container.draw-mode,
+html body .pdfx_block [id^="draw-container-"].draw-mode {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+    z-index: 50 !important; /* Highest priority */
+}
+
+/* Force pointer events for draw mode regardless of other styles */
+.draw-mode {
+    pointer-events: auto !important;
+}
+
+/* Ensure upper canvas can receive events when in draw mode */
+html body .upper-canvas,
+html body .canvas-container .upper-canvas {
+    cursor: crosshair !important;
+}
+
+/* Active state for scribble tool button */
+#marker-tool-active, [id^="marker-tool-"].active {
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    font-weight: normal !important;
+}
+
+/* Enhanced scribble stroke style */
+.marker-stroke {
+    position: absolute;
+    opacity: 0.7;
+    mix-blend-mode: multiply;
+    border-radius: 2px;
+    transition: opacity 0.2s;
     pointer-events: none;
 }
 
-.pdfx_block #draw-container .canvas-container {
-    pointer-events: auto;
-}
-
 /* Bottom Toolbar */
-.pdfx_block .bottom-toolbar {
-    height: 50px;
-    background: white;
-    border-top: 1px solid #ddd;
+.bottom-toolbar {
+    height: 40px;
+    padding: 0 10px;
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 30px;
+    background: white;
+    border-top: 1px solid #ddd;
+    gap: 10px;
 }
 
-.pdfx_block .page-controls {
+.page-controls {
     display: flex;
     align-items: center;
     gap: 15px;
 }
 
-.pdfx_block .page-btn {
+.page-btn {
     background: none;
     border: none;
-    font-size: 18px;
     cursor: pointer;
     color: #555;
     display: flex;
-    flex-direction: column;
     align-items: center;
-    padding: 5px 8px;
-}
-
-.pdfx_block .page-btn:hover {
-    background-color: #f0f0f0;
+    justify-content: center;
+    padding: 5px;
     border-radius: 4px;
+    min-width: 36px;
+    height: 36px;
 }
 
-.pdfx_block .page-btn span {
-    font-size: 10px;
-    margin-top: 2px;
+.page-btn:hover {
+    background-color: #e0e0e0;
 }
 
-.pdfx_block .page-info {
+.page-btn span {
+    display: none;
+}
+
+.page-btn i {
+    font-size: 18px;
+    padding: 8px;
+}
+
+.page-info {
     font-size: 14px;
     color: #555;
 }
 
-/* Modal Styles */
-.pdfx_block .modal {
-    display: none;
-    position: fixed;
-    z-index: 1000;
-    left: 0;
-    top: 0;
-    width: 100%;
-    height: 100%;
-    overflow: auto;
-    background-color: rgba(0,0,0,0.7);
-}
-
-.pdfx_block .modal-content {
-    background-color: #fefefe;
-    margin: 5% auto;
-    padding: 0;
-    border: 1px solid #888;
-    width: 80%;
-    max-width: 1000px;
-    border-radius: 8px;
-    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
-    max-height: 90vh;
+.zoom-controls {
     display: flex;
-    flex-direction: column;
-}
-
-.pdfx_block .modal-header {
-    padding: 15px 20px;
-    background-color: #f8f8f8;
-    border-bottom: 1px solid #ddd;
-    display: flex;
-    justify-content: space-between;
     align-items: center;
-    border-radius: 8px 8px 0 0;
+    gap: 20px;
 }
 
-.pdfx_block .modal-header h2 {
-    margin: 0;
-    font-size: 18px;
-    color: #333;
+.view-controls {
+    display: flex;
+    align-items: center;
+    gap: 20px;
 }
 
-.pdfx_block .close {
-    color: #aaa;
-    font-size: 28px;
-    font-weight: bold;
-    cursor: pointer;
+/* Adjust zoom level display */
+.zoom-level {
+    min-width: 50px;
+    text-align: center;
+    font-size: 14px;
 }
 
-.pdfx_block .close:hover,
-.pdfx_block .close:focus {
-    color: #555;
-    text-decoration: none;
-}
-
-.pdfx_block .modal-body {
+/* Error Messages */
+.pdf-error {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
     padding: 20px;
-    overflow-y: auto;
-    flex: 1;
+    background: white;
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    text-align: center;
+    z-index: 100;
+    max-width: 80%;
+    color: red;
 }
 
-/* Debug Panel */
-.pdfx_block #debug-panel {
-    position: fixed;
-    bottom: 0;
-    right: 0;
-    width: 300px;
-    height: 200px;
-    background: rgba(0,0,0,0.8);
-    color: #fff;
-    font-family: monospace;
-    font-size: 12px;
+.error-title {
+    font-weight: bold;
+    color: #c00;
+    margin-bottom: 10px;
+}
+
+.error-message {
+    margin-bottom: 10px;
+    word-break: break-word;
+}
+
+/* Debug Info */
+.pdf-debug {
+    margin-top: 10px;
     padding: 10px;
-    overflow-y: auto;
-    z-index: 1000;
-    display: none;
+    background-color: #f0f0f0;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    font-size: 12px;
 }
 
-.pdfx_block #debug-toggle {
-    position: fixed;
-    bottom: 10px;
-    right: 10px;
-    z-index: 1001;
-    background: #555;
+.debug-btn {
+    background: #0075b4;
     color: white;
     border: none;
     border-radius: 4px;
     padding: 5px 10px;
+    margin: 5px 5px 0 0;
     cursor: pointer;
+    font-size: 12px;
 }
 
-/* Responsive Design */
+.debug-btn:hover {
+    background: #00588a;
+}
+
+.loading-indicator {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    padding: 20px;
+    background: rgba(255, 255, 255, 0.9);
+    border-radius: 5px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    z-index: 100;
+}
+
+/* Button state when fullscreen is active */
+.fullscreen-btn.active i:before, #fullscreen-btn.active i:before, [id^="fullscreen-btn-"].active i:before {
+    content: "\f066"; /* FA icon for compress */
+}
+
+.grayscale-toggle.active, #grayscale-toggle.active, [id^="grayscale-toggle-"].active {
+    background: #4CAF50;
+    color: white;
+}
+
+/* Full screen styles */
+.pdfx-block.fullscreen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100vh !important;
+    z-index: 9999;
+    margin: 0;
+    padding: 0;
+    background: #2d3748;
+    display: flex;
+    flex-direction: column;
+}
+
+.pdfx-block.fullscreen .pdf-main-container {
+    height: 100vh;
+    width: 100vw;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+}
+
+.pdfx-block.fullscreen .pdf-toolbar {
+    order: 1; /* Toolbar at top */
+}
+
+.pdfx-block.fullscreen .pdf-viewer-area {
+    order: 2; /* Viewer in middle */
+    flex: 1;
+}
+
+.pdfx-block.fullscreen .pdf-navigation {
+    order: 3; /* Navigation at bottom */
+    flex-shrink: 0;
+}
+
+.pdfx-block.fullscreen .pdf-viewer-container {
+    height: calc(100vh - 95px); /* Account for toolbar (45px) and navigation (50px) */
+    width: 100%;
+    border: none;
+    background: #2d3748;
+}
+
+.pdfx-block.fullscreen .pdf-viewer-area {
+    flex: 1;
+    height: 100%;
+    padding: 10px;
+    background: #2d3748;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pdfx-block.fullscreen .pdf-container {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 115px);
+    background: white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    border-radius: 4px;
+    overflow: hidden;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* Toolbar and navigation in fullscreen */
+.pdfx-block.fullscreen .pdf-toolbar {
+    height: 45px;
+    min-height: 45px;
+    padding: 8px 16px;
+    background: rgba(255, 255, 255, 0.95);
+    backdrop-filter: blur(10px);
+    position: sticky;
+    top: 0;
+    z-index: 1001;
+    border-bottom: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.pdfx-block.fullscreen .pdf-navigation {
+    height: 50px;
+    min-height: 50px;
+    padding: 8px 16px;
+    background: rgba(248, 249, 250, 0.95);
+    backdrop-filter: blur(10px);
+    display: flex !important;
+    align-items: center;
+    justify-content: space-between;
+    position: sticky;
+    bottom: 0;
+    z-index: 1001;
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+}
+
+.pdfx-block.fullscreen .pdf-status-bar {
+    display: none; /* Hide status bar in fullscreen */
+}
+
+/* Floating mode for fullscreen menus */
+.pdfx-block.fullscreen .pdf-toolbar.floating,
+.pdfx-block.fullscreen .pdf-navigation.floating {
+    position: fixed;
+    background: rgba(255, 255, 255, 0.98);
+    backdrop-filter: blur(15px);
+    border: 1px solid rgba(0, 0, 0, 0.1);
+    border-radius: 8px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    user-select: none;
+    cursor: move;
+    transition: all 0.2s ease;
+}
+
+.pdfx-block.fullscreen .pdf-toolbar.floating {
+    top: 20px;
+    left: 20px;
+    width: auto;
+    max-width: calc(100vw - 40px);
+}
+
+.pdfx-block.fullscreen .pdf-navigation.floating {
+    bottom: 20px;
+    right: 20px;
+    width: auto;
+    max-width: calc(100vw - 40px);
+}
+
+.pdfx-block.fullscreen .pdf-toolbar.floating:hover,
+.pdfx-block.fullscreen .pdf-navigation.floating:hover {
+    background: rgba(255, 255, 255, 1);
+    box-shadow: 0 6px 30px rgba(0, 0, 0, 0.2);
+    transform: translateY(-2px);
+}
+
+/* Dragging states */
+.pdfx-block.fullscreen .pdf-toolbar.dragging,
+.pdfx-block.fullscreen .pdf-navigation.dragging {
+    opacity: 0.8;
+    transform: scale(1.05);
+    z-index: 1002;
+}
+
+/* Responsive adjustments for fullscreen */
 @media (max-width: 768px) {
-    .pdfx_block .sidebar {
-        width: 50px;
+    .pdfx-block.fullscreen .pdf-toolbar.floating,
+    .pdfx-block.fullscreen .pdf-navigation.floating {
+        left: 10px;
+        right: 10px;
+        width: calc(100vw - 20px);
+        max-width: none;
     }
 
-    .pdfx_block .tool-btn {
-        height: 50px;
+    .pdfx-block.fullscreen .pdf-toolbar.floating {
+        top: 10px;
+    }
+
+    .pdfx-block.fullscreen .pdf-navigation.floating {
+        bottom: 10px;
+    }
+}
+
+/* Native browser fullscreen detection */
+:fullscreen .pdfx-block,
+:-webkit-full-screen .pdfx-block,
+:-moz-full-screen .pdfx-block,
+:-ms-fullscreen .pdfx-block {
+    width: 100vw;
+    height: 100vh;
+    padding: 0;
+    margin: 0;
+    background: #2d3748;
+}
+
+:fullscreen .pdf-main-container,
+:-webkit-full-screen .pdf-main-container,
+:-moz-full-screen .pdf-main-container,
+:-ms-fullscreen .pdf-main-container {
+    height: 100vh;
+    width: 100vw;
+}
+
+:fullscreen .pdf-viewer-area,
+:-webkit-full-screen .pdf-viewer-area,
+:-moz-full-screen .pdf-viewer-area,
+:-ms-fullscreen .pdf-viewer-area {
+    background: #2d3748;
+    padding: 10px;
+}
+
+:fullscreen .pdf-container,
+:-webkit-full-screen .pdf-container,
+:-moz-full-screen .pdf-container,
+:-ms-fullscreen .pdf-container {
+    max-width: calc(100vw - 20px);
+    max-height: calc(100vh - 115px);
+    background: white;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+}
+
+:fullscreen .pdf-navigation,
+:-webkit-full-screen .pdf-navigation,
+:-moz-full-screen .pdf-navigation,
+:-ms-fullscreen .pdf-navigation {
+    display: flex !important;
+    height: 50px;
+    background: rgba(248, 249, 250, 0.95);
+    backdrop-filter: blur(10px);
+    border-top: 1px solid rgba(0, 0, 0, 0.1);
+    z-index: 1000;
+}
+
+/* Ensure content remains centered in fullscreen in all browsers */
+@supports (-moz-appearance:none) or (-webkit-appearance:none) or (-ms-ime-align:auto) {
+    .pdfx-block.fullscreen .pdf-viewer {
+        display: flex;
+        align-items: center; /* Override the flex-start from the general rule */
+        justify-content: center;
+    }
+
+    .pdfx-block.fullscreen .pdf-container,
+    .pdfx-block.fullscreen #pdf-container,
+    .pdfx-block.fullscreen [id^="pdf-container-"] {
+        display: flex;
+        align-items: center; /* Override the flex-start from the general rule */
+        justify-content: center;
+    }
+}
+
+/* Font Awesome webfont path overrides */
+@font-face {
+    font-family: 'Font Awesome 5 Free';
+    font-style: normal;
+    font-weight: 900;
+    font-display: block;
+    src: url('../static/vendor/webfonts/fa-solid-900.eot');
+    src: url('../static/vendor/webfonts/fa-solid-900.eot?#iefix') format('embedded-opentype'),
+         url('../static/vendor/webfonts/fa-solid-900.woff2') format('woff2'),
+         url('../static/vendor/webfonts/fa-solid-900.woff') format('woff'),
+         url('../static/vendor/webfonts/fa-solid-900.ttf') format('truetype'),
+         url('../static/vendor/webfonts/fa-solid-900.svg#fontawesome') format('svg');
+}
+
+@font-face {
+    font-family: 'Font Awesome 5 Free';
+    font-style: normal;
+    font-weight: 400;
+    font-display: block;
+    src: url('../static/vendor/webfonts/fa-regular-400.eot');
+    src: url('../static/vendor/webfonts/fa-regular-400.eot?#iefix') format('embedded-opentype'),
+         url('../static/vendor/webfonts/fa-regular-400.woff2') format('woff2'),
+         url('../static/vendor/webfonts/fa-regular-400.woff') format('woff'),
+         url('../static/vendor/webfonts/fa-regular-400.ttf') format('truetype'),
+         url('../static/vendor/webfonts/fa-regular-400.svg#fontawesome') format('svg');
+}
+
+/* Make sure PDF display adapts to left panel state */
+@media (min-width: 769px) {
+    .pdf-viewer-container {
+        transition: width 0.3s ease;
+        flex: 1;
+    }
+}
+
+/* Fix for Firefox, Safari, and Edge */
+@supports (-moz-appearance:none) or (-webkit-appearance:none) or (-ms-ime-align:auto) {
+    .pdf-viewer {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+    }
+
+    .pdf-container, #pdf-container, [id^="pdf-container-"] {
+        display: flex;
+        align-items: flex-start;
+        justify-content: center;
+    }
+}
+
+/* Additional responsive styles */
+@media (max-width: 768px) {
+    .pdfx_block {
+        padding: 10px;
+        height: min(60vh, 500px) !important; /* Smaller on mobile devices */
+        min-height: 350px !important;
+    }
+
+    .pdf-viewer-container {
+        height: calc(100% - 60px); /* Adjust based on container height */
+    }
+
+    .sidebar {
+        width: 45px;
+    }
+
+    .tool-btn {
+        height: 45px;
         font-size: 10px;
     }
 
-    .pdfx_block .tool-btn i {
+    .tool-btn i {
         font-size: 16px;
     }
 
-    .pdfx_block .top-toolbar {
-        height: 50px;
-        padding: 0 10px;
+    .top-toolbar {
+        height: 40px;
+        padding: 0 5px;
+    }
+
+    .separator {
+        margin: 0 5px;
+    }
+
+    .bottom-toolbar {
+        height: 40px;
+        justify-content: center;
+    }
+
+    .page-btn span {
+        display: none;
+    }
+
+    .modal-content {
+        width: 95%;
+    }
+
+    .pdfx-block.fullscreen {
+        padding: 5px;
+    }
+
+    .pdfx-block.fullscreen .pdf-viewer-container {
+        height: calc(100vh - 60px);
+    }
+
+    /* Optimize space on small screens */
+    .pdf-viewer {
+        padding: 5px;
+    }
+}
+
+/* Orientation-specific media queries */
+@media (max-width: 768px) and (orientation: landscape) {
+    /* Additional styles for small screens in landscape mode */
+    .pdfx_block {
+        height: min(80vh, 450px) !important; /* Use more height in landscape */
+        min-height: 300px !important;
+    }
+
+    /* Ensure PDF fits horizontally in landscape */
+    .pdf-container.landscape, #pdf-container.landscape, [id^="pdf-container-"].landscape {
+        padding: 5px;
+    }
+
+    /* Reduce some UI elements to maximize view area */
+    .top-toolbar, .bottom-toolbar {
+        height: 35px;
+    }
+}
+
+@media (max-width: 768px) and (orientation: portrait) {
+    /* Additional styles for small screens in portrait mode */
+    .pdfx_block {
+        height: min(65vh, 550px) !important; /* Balanced height for portrait */
+        min-height: 400px !important;
+    }
+
+    /* Ensure PDF fits vertically in portrait */
+    .pdf-container.portrait, #pdf-container.portrait, [id^="pdf-container-"].portrait {
+        padding: 5px;
+    }
+}
+
+/* Adding active state for fit buttons */
+.fit-to-width.active, #fit-to-width.active, [id^="fit-to-width-"].active,
+.fit-to-page.active, #fit-to-page.active, [id^="fit-to-page-"].active,
+.zoom-button.active {
+    background: #4CAF50;
+    color: white;
+}
+
+.fit-to-width.active span, #fit-to-width.active span, [id^="fit-to-width-"].active span,
+.fit-to-page.active span, #fit-to-page.active span, [id^="fit-to-page-"].active span,
+.zoom-button.active span {
+    color: white;
+}
+
+/* Add new styles for fabric.js canvas */
+.pdf-container {
+    position: relative;
+    background-color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.2);
+    margin: 0 auto;
+    transition: transform 0.3s ease;
+    overflow: hidden;
+    filter: none !important;
+}
+
+.draw-container {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 2;
+    pointer-events: auto;
+}
+
+/* Make sure the canvas doesn't interfere with text selection */
+.draw-container.draw-mode {
+    pointer-events: auto;
+}
+
+.draw-container.select-mode {
+    pointer-events: auto;
+}
+
+.highlight-layer {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 1;
+    pointer-events: none;
+}
+
+/* Styles for PDF text layer */
+.text-layer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    opacity: 0.5;
+    line-height: 1.0;
+    z-index: 10;
+    background-color: transparent !important; /* Ensure no yellow background */
+}
+
+.text-layer.active {
+    pointer-events: auto;
+    cursor: text;
+}
+
+.text-layer span {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text !important; /* Force text cursor */
+    pointer-events: auto !important; /* Make sure spans are interactive */
+    transform-origin: 0% 0%;
+    user-select: text !important; /* Make text selectable */
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    background-color: transparent !important; /* Ensure no yellow background on spans */
+}
+
+/* Make text layer visible when debugging */
+.debug-text-visible .text-layer {
+    color: rgba(0, 0, 255, 0.5);
+    opacity: 0.5;
+    background-color: rgba(255, 255, 0, 0.1);
+}
+
+.debug-text-visible .text-layer span {
+    color: rgba(0, 0, 255, 0.5);
+    border: 1px solid rgba(0, 0, 255, 0.2);
+}
+
+/* Tool buttons */
+.tool-btn.active {
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    transform: scale(1.05);
+    position: relative;
+}
+
+/* PDF view modes */
+.pdf-container.landscape {
+    width: 100%;
+}
+
+.pdf-container.portrait {
+    width: auto;
+}
+
+/* Highlight styles */
+.highlight-rect {
+    opacity: 0.4 !important;
+    mix-blend-mode: multiply;
+    cursor: pointer;
+    transition: opacity 0.2s ease;
+}
+
+.highlight-rect:hover {
+    opacity: 0.7 !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.5);
+}
+
+/* Clear any filter from PDF container */
+.pdf-container, #pdf-container, [id^="pdf-container-"] {
+    filter: none !important;
+}
+
+/* Make sure the canvas is clean without a yellow background */
+.pdf-canvas, #pdf-canvas, [id^="pdf-canvas-"] {
+    display: block;
+    width: 100%;
+    height: 100%;
+    filter: brightness(1) grayscale(0) !important;
+    background-color: transparent !important;
+}
+
+/* Ensure highlight layers don't affect the entire PDF with yellow background */
+.highlight-layer, #highlight-layer, [id^="highlight-layer-"] {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    z-index: 2; /* Between canvas and text layer */
+    pointer-events: none;
+    background-color: transparent !important;
+}
+
+/* Marker tool styles */
+.tool-btn#marker-tool-active {
+    background-color: #eee;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+}
+
+/* Marker stroke style */
+.marker-stroke {
+    position: absolute;
+    pointer-events: none;
+    opacity: 0.7;
+    mix-blend-mode: multiply;
+    border-radius: 2px;
+    transition: opacity 0.2s;
+}
+
+/* Active tool highlight */
+.tool-btn.active {
+    background-color: #e0e0e0;
+    box-shadow: inset 0 0 5px rgba(0, 0, 0, 0.2);
+    color: #2c5d98;
+}
+
+/* Drawing container in scribble mode */
+.draw-container[data-current-tool="marker"],
+#draw-container[data-current-tool="marker"],
+[id^="draw-container-"][data-current-tool="marker"] {
+    pointer-events: auto !important;
+    z-index: 20 !important; /* Ensure it's above text layer */
+}
+
+/* Upper canvas in draw mode */
+.draw-mode .upper-canvas {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+}
+
+/* Make sure the text layer doesn't interfere with scribble drawing */
+.draw-mode ~ .text-layer,
+.draw-mode ~ #text-layer,
+.draw-mode ~ [id^="text-layer-"] {
+    pointer-events: none !important;
+}
+
+/* When scribble tool is active */
+.tool-btn#marker-tool-active,
+[id^="marker-tool-"].active {
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    font-weight: normal !important;
+}
+
+/* Canvas container in drawing mode */
+.draw-mode .canvas-container {
+    pointer-events: auto !important;
+}
+
+/* Scribble tool styles (formerly marker) */
+body .pdfx_block .draw-container.draw-mode,
+body #draw-container.draw-mode,
+body [id^="draw-container-"].draw-mode {
+    pointer-events: auto !important;
+    z-index: 30 !important; /* Very high z-index to ensure it captures events */
+}
+
+/* Even more specific rules for containers with scribble tool */
+body .pdfx_block [id^="draw-container-"][data-current-tool="marker"],
+body .pdfx_block [id^="draw-container-"].draw-mode {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+    z-index: 50 !important; /* Highest priority */
+}
+
+/* Prevent text layer from capturing events when in drawing mode */
+body .pdfx_block [id^="text-layer-"] {
+    pointer-events: none !important;
+    z-index: 5 !important;
+}
+
+/* Canvas styles with high specificity */
+body .pdfx_block .draw-mode .canvas-container,
+body .pdfx_block [id^="draw-container-"][data-current-tool="marker"] .canvas-container {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+}
+
+/* Override for fabric upper canvas */
+body .pdfx_block .upper-canvas {
+    position: absolute !important;
+    pointer-events: none;
+    z-index: 30 !important;
+}
+
+body .pdfx_block .draw-mode .upper-canvas,
+body .pdfx_block [id^="draw-container-"][data-current-tool="marker"] .upper-canvas {
+    pointer-events: auto !important;
+    cursor: crosshair !important;
+}
+
+/* Make sure scribble tool button shows active state */
+body .pdfx_block [id^="marker-tool-"].active {
+    background-color: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+    font-weight: normal !important;
+}
+
+/* When scribble tool is active, force the button to show active state */
+html body [id^="marker-tool-"].active {
+    background-color: #3498db !important;
+    color: white !important;
+    font-weight: normal !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3) !important;
+}
+
+/* BULLETPROOF FIX: Remove any yellow background from text layer and PDF elements */
+.textLayer, .text-layer, #text-layer, [id^="text-layer-"], [class*="textLayer"], .pdf-text-layer {
+    background-color: transparent !important;
+    background: none !important;
+    opacity: 0 !important; /* Make text layer completely invisible to remove yellow tint */
+}
+
+.textLayer span,
+.text-layer span,
+[class*="textLayer"] span,
+[id*="textLayer"] span,
+[class*="text-layer"] span,
+[id*="text-layer"] span {
+    background-color: transparent !important;
+    background: none !important;
+    color: transparent !important;
+}
+
+/* Fix PDF.js text layer yellow background issue */
+.textLayer {
+    background-color: transparent !important;
+    mix-blend-mode: normal !important;
+}
+
+.textLayer > span, .textLayer span {
+    background-color: transparent !important;
+    color: transparent !important;
+}
+
+/* Ensure PDF canvas has no yellow tint */
+.pdf-canvas, #pdf-canvas, [id^="pdf-canvas-"], canvas {
+    background-color: transparent !important;
+    filter: none !important;
+}
+
+/* Add subtle highlight effect on text layer hover to indicate it's selectable */
+.text-layer:hover {
+    background-color: rgba(0, 0, 0, 0.01) !important; /* Very subtle gray background, not yellow */
+}
+
+.text-layer span:hover {
+    background-color: rgba(0, 0, 255, 0.02) !important; /* Very subtle blue highlight, not yellow */
+}
+
+/* Highlight tool active state for text layer */
+.text-layer.active,
+.text-layer.highlight-tool-active {
+    cursor: text !important;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+}
+
+.text-layer.highlight-tool-active span {
+    cursor: text !important;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    transition: background-color 0.2s ease;
+}
+
+.text-layer.highlight-tool-active span:hover {
+    background-color: rgba(255, 255, 0, 0.2) !important;
+    border-radius: 2px;
+}
+
+/* Canvas cursor styles */
+.upper-canvas {
+    cursor: default;
+}
+
+.upper-canvas.drawing-mode {
+    cursor: crosshair !important;
+}
+
+/* Active tool indicator in sidebar */
+.sidebar .tool-section {
+    position: relative;
+}
+
+.sidebar .tool-btn {
+    position: relative;
+    transition: all 0.2s ease;
+}
+
+.sidebar .tool-btn.active::after {
+    content: '';
+    position: absolute;
+    top: 0;
+    right: 0;
+    width: 8px;
+    height: 8px;
+    background-color: #2ecc71;
+    border-radius: 50%;
+}
+
+/* Tool-specific cursor styles */
+.draw-container[data-current-tool="marker"] {
+    cursor: crosshair !important;
+}
+
+.draw-container[data-current-tool="highlight"] ~ .text-layer,
+.draw-container[data-current-tool="highlighter"] ~ .text-layer,
+.text-layer.highlight-tool-active {
+    cursor: text !important;
+}
+
+/* Ensure highlight tool overrides crosshair cursor and drawing modes */
+.text-layer.highlight-tool-active,
+.text-layer.highlight-tool-active span,
+.text-layer.highlight-tool-active * {
+    cursor: text !important;
+}
+
+/* Override any draw-mode styles when highlight tool is active */
+.draw-container.draw-mode .text-layer.highlight-tool-active,
+.draw-container[data-current-tool="highlight"] .text-layer,
+.draw-container[data-current-tool="highlight"] .text-layer span {
+    cursor: text !important;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+}
+
+/* CRITICAL: Boost text layer z-index when highlight tool is active */
+.text-layer.highlight-tool-active {
+    z-index: 100 !important; /* Higher than draw container */
+    pointer-events: auto !important;
+}
+
+/* Ensure draw container doesn't interfere when highlight tool is active */
+.draw-container[data-current-tool="highlight"] {
+    pointer-events: none !important;
+    z-index: 1 !important; /* Lower than text layer */
+}
+
+/* When highlight tool is active, text layer should capture all events */
+.text-layer.highlight-tool-active,
+.text-layer.highlight-tool-active span,
+.text-layer.highlight-tool-active * {
+    z-index: 100 !important;
+    pointer-events: auto !important;
+}
+
+.draw-container[data-current-tool="select"] {
+    cursor: pointer !important;
+}
+
+.draw-container[data-current-tool="eraser"] {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M16.24 3.56l4.95 4.94c.78.79.78 2.05 0 2.84L12 20.53a4.008 4.008 0 0 1-5.66 0L2.81 17a2.998 2.998 0 0 1 0-4.24l9.24-9.21c1.21-1.21 3.17-1.21 4.19.01zm-5.66 15.66l.83-.82-1.41-1.41-.83.82c-.78.78-2.05.78-2.83 0l-3.53-3.53c-.39-.39-.39-1.03 0-1.42L11.8 4.24c.39-.39 1.04-.39 1.43 0l4.95 4.95c.39.39.39 1.02 0 1.41L8.99 19.71l1.59-1.59 1.59 1.59 1.59-1.59-1.59-1.59 1.59-1.59 1.59 1.59 1.59-1.59-1.59-1.59 1.59-1.59 1.59 1.59zM7.12 19.12c.39.39 1.02.39 1.41 0l.7-.7-1.41-1.41-.7.7c-.39.39-.39 1.03 0 1.41z"/></svg>') 12 12, auto !important;
+}
+
+.draw-container[data-current-tool="shape"] {
+    cursor: crosshair !important;
+}
+
+.draw-container[data-current-tool="text"] {
+    cursor: text !important;
+}
+
+.draw-container[data-current-tool="note"] {
+    cursor: cell !important;
+}
+
+/* Modern Confirmation Dialog */
+.pdfx-modal-overlay {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.5);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    z-index: 200;
+}
+
+.pdfx-modal-dialog {
+    background-color: white;
+    border-radius: 4px;
+    width: 100%;
+    max-width: 400px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.15);
+    padding: 24px;
+    text-align: center;
+    animation: pdfx-fade-in 0.3s ease-out;
+    position: relative;
+    z-index: 201;
+}
+
+@keyframes pdfx-fade-in {
+    from { opacity: 0; transform: translateY(-20px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+.pdfx-modal-icon {
+    display: flex;
+    justify-content: center;
+    margin-bottom: 16px;
+}
+
+.pdfx-modal-icon-circle {
+    width: 48px;
+    height: 48px;
+    border-radius: 50%;
+    background-color: rgba(255, 65, 54, 0.1);
+    display: flex;
+    justify-content: center;
+    align-items: center;
+}
+
+.pdfx-modal-icon-exclamation {
+    color: #ff4136;
+    font-size: 24px;
+    font-weight: bold;
+}
+
+.pdfx-modal-title {
+    font-size: 20px;
+    font-weight: 600;
+    margin-bottom: 8px;
+    color: #333;
+}
+
+.pdfx-modal-message {
+    font-size: 14px;
+    color: #666;
+    margin-bottom: 24px;
+}
+
+.pdfx-modal-buttons {
+    display: flex;
+    justify-content: center;
+    gap: 16px;
+}
+
+.pdfx-modal-button {
+    padding: 10px 20px;
+    border-radius: 4px;
+    font-size: 14px;
+    font-weight: 500;
+    cursor: pointer;
+    border: none;
+    transition: background-color 0.2s;
+}
+
+.pdfx-modal-button-cancel {
+    background-color: #f0f0f0;
+    color: #333;
+}
+
+.pdfx-modal-button-cancel:hover {
+    background-color: #e0e0e0;
+}
+
+.pdfx-modal-button-delete {
+    background-color: #ff4136;
+    color: white;
+}
+
+.pdfx-modal-button-delete:hover {
+    background-color: #e03a30;
+}
+
+/* Success Notification */
+.pdfx-notification {
+    position: absolute;
+    top: 20px;
+    right: 20px;
+    background-color: #4CAF50;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 4px;
+    box-shadow: 0 2px 10px rgba(0, 0, 0, 0.1);
+    z-index: 201;
+    animation: pdfx-slide-in 0.3s ease-out;
+    font-size: 14px;
+}
+
+@keyframes pdfx-slide-in {
+    from { transform: translateX(100%); opacity: 0; }
+    to { transform: translateX(0); opacity: 1; }
+}
+
+/* Responsive Design for Small Screens */
+@media (max-width: 768px) {
+    .pdfx_block {
+        height: 600px !important;
+    }
+
+    .sidebar {
+        width: 45px;
+    }
+
+    .tool-btn {
+        height: 35px;
+        min-width: 30px;
+    }
+
+    .tool-btn i {
+        font-size: 14px;
+        padding: 6px;
+    }
+
+    .bottom-toolbar {
+        height: 35px;
+        padding: 0 5px;
+    }
+
+    .page-btn {
+        min-width: 30px;
+        height: 30px;
+    }
+
+    .pdf-title {
+        font-size: 20px;
+        margin-bottom: 8px;
+    }
+}
+
+@media (max-width: 480px) {
+    .pdfx_block {
+        height: min(50vh, 400px) !important; /* Compact for very small screens */
+        min-height: 300px !important;
+    }
+
+    .sidebar {
+        width: 40px;
+    }
+
+    .tool-btn {
+        height: 30px;
+        min-width: 25px;
+    }
+
+    .tool-btn i {
+        font-size: 12px;
+        padding: 4px;
+    }
+
+    .bottom-toolbar {
+        height: 30px;
+        padding: 0;
+    }
+
+    .page-btn {
+        min-width: 25px;
+        height: 25px;
+    }
+
+    .pdf-title {
+        font-size: 18px;
+        margin-bottom: 5px;
+    }
+}
+
+/* BULLETPROOF FIX FOR YELLOW OVERLAY AND LOADING ISSUES */
+
+/* Ensure all PDF.js text layers are transparent */
+.textLayer,
+.text-layer,
+[class*="textLayer"],
+[id*="textLayer"],
+[class*="text-layer"],
+[id*="text-layer"] {
+    background-color: transparent !important;
+    background: none !important;
+    opacity: 0 !important; /* Make text layer completely invisible to remove yellow tint */
+}
+
+/* Hide all text spans that might cause yellow overlay */
+.textLayer span,
+.text-layer span,
+[class*="textLayer"] span,
+[id*="textLayer"] span,
+[class*="text-layer"] span,
+[id*="text-layer"] span {
+    background-color: transparent !important;
+    background: none !important;
+    color: transparent !important;
+}
+
+/* Force loading indicators to be hidden */
+.loading-indicator,
+.loading-spinner,
+.loading-text,
+[class*="loading"],
+[id*="loading"] {
+    display: none !important;
+    visibility: hidden !important;
+    opacity: 0 !important;
+    z-index: -1 !important;
+}
+
+/* Ensure main PDF containers are visible */
+.pdf-main-container,
+.pdf-container,
+[class*="pdf-main"],
+[class*="pdf-container"],
+[id*="pdf-main"],
+[id*="pdf-container"] {
+    display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Additional fix for PDF.js 5.x text layer rendering */
+.page .textLayer {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    background: transparent !important;
+}
+
+/* Remove any yellow/highlighter background from PDF rendering */
+canvas[data-main-rotation] {
+    background-color: white !important;
+    filter: none !important;
+}
+
+/* PDF Toolbar with FontAwesome Icons - No Text Labels */
+.pdf-toolbar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    min-height: 50px;
+}
+
+.toolbar-section {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+/* Remove any section labels */
+.toolbar-section .section-label {
+    display: none !important;
+}
+
+.tool-buttons,
+.action-buttons {
+    display: flex;
+    gap: 8px;
+}
+
+.tool-button,
+.action-button {
+    width: 40px;
+    height: 40px;
+    border: none;
+    border-radius: 6px;
+    background: #f8f9fa;
+    color: #495057;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 16px;
+    position: relative;
+}
+
+.tool-button:hover,
+.action-button:hover {
+    background: #e9ecef;
+    color: #212529;
+    transform: translateY(-1px);
+    box-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
+}
+
+.tool-button.active {
+    background: #007bff;
+    color: white;
+    box-shadow: 0 2px 8px rgba(0, 123, 255, 0.3);
+}
+
+.tool-button.active:hover {
+    background: #0056b3;
+    transform: translateY(-1px);
+}
+
+/* Setting Controls */
+.setting-controls {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.setting-controls label {
+    display: flex;
+    align-items: center;
+    color: #6c757d;
+    font-size: 14px;
+    cursor: pointer;
+}
+
+.color-picker {
+    width: 32px;
+    height: 32px;
+    border: 2px solid #dee2e6;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    background: transparent;
+}
+
+.color-picker:hover {
+    border-color: #007bff;
+}
+
+.size-slider {
+    width: 80px;
+    height: 4px;
+    border-radius: 2px;
+    background: #dee2e6;
+    outline: none;
+    cursor: pointer;
+}
+
+.size-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+}
+
+.size-slider::-moz-range-thumb {
+    width: 16px;
+    height: 16px;
+    border-radius: 50%;
+    background: #007bff;
+    cursor: pointer;
+    border: none;
+}
+
+/* PDF Navigation with FontAwesome Icons - Now at Bottom */
+.pdf-navigation {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 8px 16px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0; /* Changed from border-bottom to border-top */
+    min-height: 45px;
+    order: 3; /* Ensure it appears after the PDF viewer */
+}
+
+.nav-section,
+.zoom-section {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.nav-button,
+.zoom-button {
+    width: 36px;
+    height: 36px;
+    border: none;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #495057;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.2s ease;
+    font-size: 14px;
+    border: 1px solid #dee2e6;
+}
+
+.nav-button:hover,
+.zoom-button:hover {
+    background: #e9ecef;
+    border-color: #adb5bd;
+    transform: translateY(-1px);
+}
+
+.nav-button:disabled,
+.zoom-button:disabled {
+    opacity: 0.5;
+    cursor: not-allowed;
+    transform: none;
+}
+
+.nav-button:disabled:hover, .zoom-button:disabled:hover {
+    background: #f8f9fa;
+    border-color: #dee2e6;
+}
+
+.zoom-button.active {
+    background: #007bff;
+    color: white;
+    border-color: #007bff;
+}
+
+.page-info {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: #495057;
+}
+
+.page-input {
+    width: 60px;
+    height: 32px;
+    border: 1px solid #dee2e6;
+    border-radius: 4px;
+    text-align: center;
+    font-size: 14px;
+    padding: 4px;
+}
+
+.page-input:focus {
+    outline: none;
+    border-color: #007bff;
+    box-shadow: 0 0 0 2px rgba(0, 123, 255, 0.25);
+}
+
+.page-separator {
+    color: #6c757d;
+    font-size: 14px;
+}
+
+.total-pages {
+    font-weight: 500;
+    color: #495057;
+}
+
+.zoom-info {
+    min-width: 50px;
+    text-align: center;
+    font-size: 14px;
+    color: #495057;
+    font-weight: 500;
+}
+
+/* PDF Viewer Area */
+.pdf-viewer-area {
+    position: relative;
+    flex: 1;
+    overflow: auto;
+    display: flex;
+    justify-content: center;
+    align-items: flex-start;
+    height: 800px;
+}
+
+/* Main PDF Container Layout - Ensure proper ordering */
+.pdf-main-container {
+    display: flex;
+    flex-direction: column;
+    height: 100%;
+}
+
+.pdf-toolbar {
+    order: 1; /* Toolbar at top */
+}
+
+.pdf-viewer-area {
+    order: 2; /* Viewer in middle */
+}
+
+.pdf-navigation {
+    order: 3; /* Navigation at bottom */
+}
+
+.pdf-status-bar {
+    order: 4; /* Status bar at very bottom */
+}
+
+/* Status Bar */
+.pdf-status-bar {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    padding: 6px 16px;
+    background: #f8f9fa;
+    border-top: 1px solid #e0e0e0;
+    min-height: 35px;
+    font-size: 12px;
+    color: #6c757d;
+}
+
+.status-section,
+.tool-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.status-text {
+    font-weight: 500;
+}
+
+.active-tool-label {
+    padding: 2px 8px;
+    background: #e9ecef;
+    border-radius: 12px;
+    font-size: 11px;
+    color: #495057;
+}
+
+/* Responsive Design for Toolbar */
+@media (max-width: 768px) {
+    .pdf-toolbar {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .toolbar-section {
+        width: 100%;
+        justify-content: center;
+    }
+
+    .tool-button,
+    .action-button {
+        width: 36px;
+        height: 36px;
+        font-size: 14px;
+    }
+
+    .pdf-navigation {
+        flex-direction: column;
+        gap: 8px;
+        padding: 8px;
+    }
+
+    .nav-section,
+    .zoom-section {
+        width: 100%;
+        justify-content: center;
+    }
+}
+
+@media (max-width: 480px) {
+    .tool-button,
+    .action-button,
+    .nav-button,
+    .zoom-button {
+        width: 32px;
+        height: 32px;
+        font-size: 12px;
+    }
+
+    .page-input {
+        width: 50px;
+        height: 28px;
+        font-size: 12px;
+    }
+
+    .size-slider {
+        width: 60px;
+    }
+}
+
+/* Fit width mode */
+.pdf-container.fit-width {
+    width: 100%;
+    max-width: 100%;
+}
+
+.pdf-container.fit-width .pdf-canvas {
+    width: 100%;
+    max-width: 100%;
+    height: auto;
+}
+
+/* Responsive Design (consolidated from pdfx.html) */
+@media (max-width: 768px) {
+    .pdf-viewer-area {
+        padding: 10px;
+    }
+
+    .pdf-toolbar {
+        flex-direction: column;
         gap: 10px;
     }
 
-    .pdfx_block .bottom-toolbar {
-        height: 40px;
-        gap: 15px;
+    .pdf-navigation {
+        flex-direction: column;
+        gap: 10px;
+    }
+
+    .nav-section, .zoom-section {
+        justify-content: center;
+    }
+}
+
+/* Print Styles (consolidated from pdfx.html) */
+@media print {
+    .pdf-toolbar,
+    .pdf-navigation,
+    .pdf-status-bar {
+        display: none !important;
+    }
+
+    .pdf-container {
+        box-shadow: none;
+        border: none;
     }
 }
