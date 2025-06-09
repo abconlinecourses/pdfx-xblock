@@ -15,7 +15,6 @@ export class NoteTool extends BaseTool {
     }
 
     async init() {
-        console.debug('[NoteTool] Initializing note tool');
         this.isEnabled = true;
     }
 
@@ -37,7 +36,6 @@ export class NoteTool extends BaseTool {
     }
 
     async cleanup() {
-        console.debug('[NoteTool] Cleaning up note tool');
     }
 }
 

@@ -27,7 +27,7 @@ export class PDFManager extends EventEmitter {
         // Canvas elements
         this.canvas = null;
         this.context = null;
-        this.textLayer = null;
+        this.textLayerBuilder = null;
 
         // State
         this.isLoading = false;
@@ -45,7 +45,6 @@ export class PDFManager extends EventEmitter {
     _initializePDFJS() {
         // Check if PDF.js is available
         if (typeof pdfjsLib === 'undefined') {
-            console.error('[PDFManager] PDF.js library not loaded');
             this.emit('error', new Error('PDF.js library not loaded'));
             return;
         }
@@ -53,7 +52,6 @@ export class PDFManager extends EventEmitter {
         // Set worker source to latest version 5.0.375
         if (!pdfjsLib.GlobalWorkerOptions.workerSrc) {
             pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/5.0.375/pdf.worker.min.mjs';
-            console.debug('[PDFManager] Set PDF.js worker source to v5.0.375');
         }
 
         // Configure PDF.js
@@ -66,7 +64,6 @@ export class PDFManager extends EventEmitter {
      */
     async loadDocument(url) {
         if (this.isLoading) {
-            console.warn('[PDFManager] Already loading a document');
             return;
         }
 
@@ -80,8 +77,6 @@ export class PDFManager extends EventEmitter {
         this.pdfUrl = url;
 
         try {
-            console.debug(`[PDFManager] Loading PDF from: ${url}`);
-
             // Clean up previous document
             if (this.pdfDocument) {
                 await this._cleanupDocument();
@@ -116,8 +111,6 @@ export class PDFManager extends EventEmitter {
             this.isLoading = false;
             this.isDocumentLoaded = true;
 
-            console.debug(`[PDFManager] PDF loaded successfully. Pages: ${this.pdfDocument.numPages}`);
-
             // Set up canvas and rendering context
             this._setupCanvas();
 
@@ -129,12 +122,8 @@ export class PDFManager extends EventEmitter {
                 metadata: await this._getDocumentMetadata()
             });
 
-            console.debug('[PDFManager] documentLoaded event emitted, rendering current page...');
             // Render the current page
             await this.renderPage(this.currentPage);
-
-            // BULLETPROOF FIX: Force hide loading indicators and show main content
-            console.debug('[PDFManager] 🔥 BULLETPROOF FIX: Force hiding all loading indicators...');
 
             // Hide all possible loading indicators
             const loadingSelectors = [
@@ -155,7 +144,6 @@ export class PDFManager extends EventEmitter {
                     element.style.display = 'none';
                     element.style.visibility = 'hidden';
                     element.style.opacity = '0';
-                    console.debug(`[PDFManager] ✅ Hidden loading element: ${element.className || element.id}`);
                 });
             });
 
@@ -173,13 +161,10 @@ export class PDFManager extends EventEmitter {
                     element.style.display = 'block';
                     element.style.visibility = 'visible';
                     element.style.opacity = '1';
-                    console.debug(`[PDFManager] ✅ Shown main element: ${element.className || element.id}`);
                 });
             });
 
-            // BULLETPROOF FIX: Hide highlight containers and elements on load to prevent yellow overlay
-            console.debug('[PDFManager] 🔥 BULLETPROOF FIX: Hiding highlight containers to prevent yellow overlay...');
-
+            // Hide highlight containers and elements on load to prevent yellow overlay
             const highlightSelectors = [
                 `#highlight-container-${this.blockId}`,
                 '.highlight-container',
@@ -198,7 +183,6 @@ export class PDFManager extends EventEmitter {
                     element.style.backgroundColor = 'transparent';
                     // Remove any existing yellow background
                     element.classList.remove('active');
-                    console.debug(`[PDFManager] ✅ Hidden highlight element: ${element.className || element.id}`);
                 });
             });
 
@@ -214,39 +198,30 @@ export class PDFManager extends EventEmitter {
                 elements.forEach(element => {
                     element.style.backgroundColor = 'transparent';
                     element.style.background = 'none';
-                    console.debug(`[PDFManager] ✅ Made highlight layer transparent: ${element.className || element.id}`);
                 });
             });
 
-            // DIRECT FIX: Show the main PDF container immediately
-            console.debug('[PDFManager] Directly showing main PDF container...');
-            const mainContainer = document.querySelector(`#pdf-main-${this.blockId}`);
+            // Show the main PDF container immediately
+            const mainContainer = this.container.querySelector(`#pdf-main-${this.blockId}`);
             if (mainContainer) {
                 mainContainer.style.display = 'block';
-                console.debug('[PDFManager] Main PDF container shown directly');
 
                 // Hide loading indicator
-                const loadingIndicator = document.querySelector(`#pdf-loading-${this.blockId}`);
+                const loadingIndicator = this.container.querySelector(`#pdf-loading-${this.blockId}`);
                 if (loadingIndicator) {
                     loadingIndicator.style.display = 'none';
-                    console.debug('[PDFManager] Loading indicator hidden');
                 }
-            } else {
-                console.warn('[PDFManager] Main PDF container not found for direct show');
             }
 
-            console.debug('[PDFManager] loadDocument method completed successfully');
             return this.pdfDocument;
 
         } catch (error) {
             this.isLoading = false;
             // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
             if (error.name === 'RenderingCancelledException') {
-                console.debug('[PDFManager] PDF loading render task cancelled (expected behavior)');
                 // Don't emit error event for cancelled renders
                 throw error; // Re-throw to maintain the cancellation flow
             } else {
-                console.error('[PDFManager] Error loading PDF:', error);
                 this.emit('error', error);
                 throw error;
             }
@@ -302,20 +277,8 @@ export class PDFManager extends EventEmitter {
 
         this.context = this.canvas.getContext('2d');
 
-        // Set up text layer container
-        let textLayerContainer = this.container.querySelector(`#text-layer-${this.blockId}`);
-        if (!textLayerContainer) {
-            textLayerContainer = document.createElement('div');
-            textLayerContainer.id = `text-layer-${this.blockId}`;
-            textLayerContainer.className = 'textLayer';
-
-            const canvasContainer = this.container.querySelector(`#pdf-container-${this.blockId}`);
-            if (canvasContainer) {
-                canvasContainer.appendChild(textLayerContainer);
-            }
-        }
-
-        this.textLayer = textLayerContainer;
+        // Add proper CSS for text layer
+        this._addTextLayerCSS();
     }
 
     /**
@@ -323,8 +286,6 @@ export class PDFManager extends EventEmitter {
      * @param {number} pageNum - Page number (1-based)
      */
     async renderPage(pageNum) {
-        console.debug('🔥 [TEST] PDFManager.renderPage called - MY CODE IS LOADED!');
-
         if (!this.pdfDocument) {
             throw new Error('No PDF document loaded');
         }
@@ -334,12 +295,10 @@ export class PDFManager extends EventEmitter {
         }
 
         try {
-            console.debug(`[PDFManager] Rendering page ${pageNum}`);
-
             // Get the page
             const page = await this.pdfDocument.getPage(pageNum);
 
-            // BULLETPROOF FIX: Ensure proper container sizing before calculating scale
+            // Ensure proper container sizing before calculating scale
             const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
             const viewerArea = this.container.querySelector('.pdf-viewer-area');
 
@@ -348,22 +307,15 @@ export class PDFManager extends EventEmitter {
                 const viewerWidth = viewerArea.offsetWidth || viewerArea.clientWidth || 800;
                 const viewerHeight = viewerArea.offsetHeight || viewerArea.clientHeight || 600;
 
-                console.debug(`[PDFManager] 🔧 Container sizing - Viewer: ${viewerWidth}x${viewerHeight}, Container: ${container.offsetWidth}x${container.offsetHeight}`);
-
                 // Ensure container has proper width for fit-width calculation
                 if (container.offsetWidth < 200) {
                     container.style.width = Math.max(viewerWidth - 40, 600) + 'px';
-                    console.debug(`[PDFManager] 🔧 Fixed container width to: ${container.style.width}`);
                 }
             }
 
-                                    // Only calculate optimal scale if we're not in manual zoom mode
+            // Only calculate optimal scale if we're not in manual zoom mode
             if (!this.isManualZoom) {
-                console.debug(`[PDFManager] Auto-fit mode, recalculating with fit-width`);
                 this._calculateOptimalScale(page, 'fit-width');
-                console.debug(`[PDFManager] 🔧 Calculated scale: ${this.scale} for fit-width mode`);
-            } else {
-                console.debug(`[PDFManager] Manual zoom mode, keeping existing scale: ${this.scale}`);
             }
 
             // Emit scale change event so UI can update zoom info
@@ -379,8 +331,6 @@ export class PDFManager extends EventEmitter {
                 rotation: this.rotation
             });
 
-            console.debug(`[PDFManager] 🔧 Final viewport dimensions: ${viewport.width}x${viewport.height}`);
-
             // Set canvas dimensions
             this.canvas.width = viewport.width;
             this.canvas.height = viewport.height;
@@ -394,9 +344,8 @@ export class PDFManager extends EventEmitter {
             if (this.currentRenderTask) {
                 try {
                     await this.currentRenderTask.cancel();
-                    console.debug('[PDFManager] Cancelled previous render task');
                 } catch (e) {
-                    console.debug('[PDFManager] Previous render task already completed');
+                    // Previous render task already completed
                 }
             }
 
@@ -412,27 +361,23 @@ export class PDFManager extends EventEmitter {
             await this.currentRenderTask.promise;
             this.currentRenderTask = null; // Clear the reference
 
-            // Render text layer
-            await this._renderTextLayer(page, viewport);
+            // Set up and render text layer using proper PDF.js approach
+            await this._setupAndRenderTextLayer(page, viewport);
 
             // Update current page
             this.currentPage = pageNum;
 
-            console.debug(`[PDFManager] Page ${pageNum} rendered successfully`);
-
-            // BULLETPROOF FIX: Always show the main container after successful page render
+            // Always show the main container after successful page render
             setTimeout(() => {
-                const mainContainer = document.querySelector(`#pdf-main-${this.blockId}`);
-                const loadingIndicator = document.querySelector(`#pdf-loading-${this.blockId}`);
+                const mainContainer = this.container.querySelector(`#pdf-main-${this.blockId}`);
+                const loadingIndicator = this.container.querySelector(`#pdf-loading-${this.blockId}`);
 
                 if (mainContainer && mainContainer.style.display === 'none') {
                     mainContainer.style.display = 'block';
-                    console.debug(`[PDFManager] ✅ Main PDF container shown for block ${this.blockId}`);
                 }
 
                 if (loadingIndicator && loadingIndicator.style.display !== 'none') {
                     loadingIndicator.style.display = 'none';
-                    console.debug(`[PDFManager] ✅ Loading indicator hidden for block ${this.blockId}`);
                 }
             }, 100);
 
@@ -441,7 +386,7 @@ export class PDFManager extends EventEmitter {
                 pageNum: pageNum,
                 viewport: viewport,
                 canvas: this.canvas,
-                textLayer: this.textLayer
+                textLayer: this.textLayerBuilder?.div
             });
 
             // Emit page changed event
@@ -454,11 +399,9 @@ export class PDFManager extends EventEmitter {
         } catch (error) {
             // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
             if (error.name === 'RenderingCancelledException') {
-                console.debug(`[PDFManager] Render task cancelled for page ${pageNum} (expected behavior)`);
                 // Don't emit error event for cancelled renders
                 throw error; // Re-throw to maintain the cancellation flow
             } else {
-                console.error(`[PDFManager] Error rendering page ${pageNum}:`, error);
                 this.emit('error', error);
                 throw error;
             }
@@ -466,66 +409,248 @@ export class PDFManager extends EventEmitter {
     }
 
     /**
-     * Render text layer for better text selection and accessibility
+     * Set up and render text layer using proper PDF.js TextLayer
      */
-    async _renderTextLayer(page, viewport) {
-        if (!this.textLayer) return;
-
+    async _setupAndRenderTextLayer(page, viewport) {
         try {
-            // Clear existing text layer
-            this.textLayer.innerHTML = '';
+            console.log(`[TextLayer-${this.blockId}] Starting text layer setup`);
 
-            // Set text layer dimensions
-            this.textLayer.style.width = viewport.width + 'px';
-            this.textLayer.style.height = viewport.height + 'px';
-            this.textLayer.style.position = 'absolute';
-            this.textLayer.style.top = '0';
-            this.textLayer.style.left = '0';
-            this.textLayer.style.pointerEvents = 'none';
-
-            // Get text content
-            const textContent = await page.getTextContent();
-
-            // Render text layer using PDF.js utilities
-            if (typeof pdfjsLib.renderTextLayer !== 'undefined') {
-                const textLayerRender = pdfjsLib.renderTextLayer({
-                    textContent: textContent,
-                    container: this.textLayer,
-                    viewport: viewport,
-                    textDivs: []
-                });
-
-                await textLayerRender.promise;
-            } else {
-                // Fallback: manual text layer rendering
-                this._renderTextLayerManual(textContent, viewport);
+            // Clean up previous text layer
+            if (this.textLayerBuilder) {
+                this.textLayerBuilder.cancel();
+                if (this.textLayerBuilder.div && this.textLayerBuilder.div.parentNode) {
+                    this.textLayerBuilder.div.parentNode.removeChild(this.textLayerBuilder.div);
+                }
+                this.textLayerBuilder = null;
             }
 
+            // Use existing text layer div from HTML template instead of creating new one
+            const existingTextLayer = this.container.querySelector(`#text-layer-${this.blockId}`);
+            if (existingTextLayer) {
+                console.log(`[TextLayer-${this.blockId}] Using existing text layer div from HTML template`);
+
+                // Create text layer builder using the existing div
+                this.textLayerBuilder = this._createTextLayerBuilderWithDiv(page, existingTextLayer);
+            } else {
+                console.log(`[TextLayer-${this.blockId}] No existing text layer found, creating new one`);
+
+                // Fallback: create new text layer builder
+                this.textLayerBuilder = this._createTextLayerBuilder(page);
+
+                // Insert text layer div after canvas
+                const canvasContainer = this.container.querySelector(`#pdf-container-${this.blockId}`);
+                if (canvasContainer && this.textLayerBuilder.div) {
+                    this.textLayerBuilder.div.id = `text-layer-${this.blockId}`;
+                    canvasContainer.appendChild(this.textLayerBuilder.div);
+                }
+            }
+
+            console.log(`[TextLayer-${this.blockId}] Text layer div ready for rendering`);
+
+            // Render the text layer
+            console.log(`[TextLayer-${this.blockId}] Starting text layer render with viewport:`, {
+                width: viewport.width,
+                height: viewport.height,
+                scale: viewport.scale
+            });
+
+            await this.textLayerBuilder.render({
+                        viewport: viewport,
+                textContentParams: {
+                    includeMarkedContent: true,
+                    disableNormalization: true
+                }
+            });
+
+            console.log(`[TextLayer-${this.blockId}] Text layer render completed. Elements in div:`, this.textLayerBuilder.div.children.length);
+
+            // Fix incorrect scaling transforms applied by PDF.js 5.x (same fix as in index.html)
+            const renderedTextSpans = this.textLayerBuilder.div.querySelectorAll('span');
+            console.log(`[TextLayer-${this.blockId}] Fixing transform scaling for ${renderedTextSpans.length} text spans`);
+
+            renderedTextSpans.forEach(span => {
+                const style = span.style;
+                if (style.transform) {
+                    // Only fix the problematic very small scale values, preserve everything else
+                    let transform = style.transform;
+
+                    // Fix scale values that are unreasonably small (like 0.0909091)
+                    transform = transform.replace(/scale\(([\d\.]+)\)/g, (match, value) => {
+                        const scaleValue = parseFloat(value);
+                        if (scaleValue < 0.5) {
+                            return `scale(1)`; // Replace tiny scales with 1
+                        }
+                        return match; // Keep reasonable scales
+                    });
+
+                    style.transform = transform;
+                }
+            });
+
+            console.log(`[TextLayer-${this.blockId}] Transform scaling fixes applied`);
+
         } catch (error) {
-            console.error('[PDFManager] Error rendering text layer:', error);
+            console.error(`[TextLayer-${this.blockId}] Error setting up text layer:`, error);
+        }
+    }
+
+        /**
+     * Create text layer builder following PDF.js pattern
+     */
+    _createTextLayerBuilder(page) {
+        return new TextLayerBuilder({
+            pdfPage: page,
+            highlighter: null, // We'll add highlighting support later
+            accessibilityManager: null,
+            enablePermissions: false,
+            onAppend: (textLayerDiv) => {
+                // Text layer has been appended to DOM
+                textLayerDiv.style.position = 'absolute';
+                textLayerDiv.style.top = '0';
+                textLayerDiv.style.left = '0';
+                textLayerDiv.style.zIndex = '3';
+                textLayerDiv.style.pointerEvents = 'none';
+            }
+        });
+    }
+
+    /**
+     * Create text layer builder using existing div from HTML template
+     */
+    _createTextLayerBuilderWithDiv(page, existingDiv) {
+        return new TextLayerBuilder({
+            pdfPage: page,
+            highlighter: null,
+            accessibilityManager: null,
+            enablePermissions: false,
+            existingDiv: existingDiv, // Pass the existing div
+            onAppend: (textLayerDiv) => {
+                // Text layer div already exists in DOM, just style it
+                textLayerDiv.style.position = 'absolute';
+                textLayerDiv.style.top = '0';
+                textLayerDiv.style.left = '0';
+                textLayerDiv.style.zIndex = '3';
+                textLayerDiv.style.pointerEvents = 'none';
+            }
+        });
+    }
+
+    /**
+     * Add CSS for text layer following PDF.js pattern
+     */
+    _addTextLayerCSS() {
+        const styleId = `text-layer-styles-${this.blockId}`;
+
+        // Remove existing style if present
+        const existingStyle = document.getElementById(styleId);
+        if (existingStyle) {
+            existingStyle.remove();
+        }
+
+        // Create new style element with PDF.js text layer CSS
+        const style = document.createElement('style');
+        style.id = styleId;
+        style.textContent = `
+            /* PDF.js Text Layer Styles for ${this.blockId} */
+            #text-layer-${this.blockId} {
+                position: absolute !important;
+                text-align: initial;
+                inset: 0;
+                overflow: clip;
+                opacity: 1;
+                line-height: 1;
+                text-size-adjust: none;
+                forced-color-adjust: none;
+                transform-origin: 0 0;
+                caret-color: CanvasText;
+                z-index: 3;
+            }
+
+            #text-layer-${this.blockId}.highlighting {
+                touch-action: none;
+            }
+
+            #text-layer-${this.blockId} :is(span, br) {
+                color: transparent;
+                position: absolute;
+                white-space: pre;
+                cursor: text;
+                transform-origin: 0% 0%;
+            }
+
+            #text-layer-${this.blockId} > :not(.markedContent),
+            #text-layer-${this.blockId} .markedContent span:not(.markedContent) {
+                z-index: 1;
+            }
+
+            #text-layer-${this.blockId} span.markedContent {
+                top: 0;
+                height: 0;
+            }
+
+            #text-layer-${this.blockId} span[role="img"] {
+                user-select: none;
+                cursor: default;
+            }
+
+            #text-layer-${this.blockId} ::selection {
+                background: rgba(0 0 255 / 0.25);
+            }
+
+            #text-layer-${this.blockId} br::selection {
+                background: transparent;
+            }
+
+            #text-layer-${this.blockId} .endOfContent {
+                display: block;
+                position: absolute;
+                inset: 100% 0 0;
+                z-index: 0;
+                cursor: default;
+                user-select: none;
+            }
+
+            #text-layer-${this.blockId}.selecting .endOfContent {
+                top: 0;
+            }
+
+            /* Highlight tool support */
+            #text-layer-${this.blockId}.highlight-tool-active {
+                pointer-events: auto !important;
+                z-index: 100 !important;
+            }
+
+            #text-layer-${this.blockId}.highlight-tool-active :is(span, br) {
+                cursor: text !important;
+                user-select: text !important;
+            }
+
+            #text-layer-${this.blockId}.highlight-tool-active :is(span, br):hover {
+                background-color: rgba(255, 255, 0, 0.25) !important;
+                border-radius: 2px !important;
+            }
+        `;
+
+        document.head.appendChild(style);
+    }
+
+    /**
+     * Enable text selection for highlighting
+     */
+    enableTextSelection() {
+        if (this.textLayerBuilder && this.textLayerBuilder.div) {
+            this.textLayerBuilder.div.classList.add('highlight-tool-active');
+            this.textLayerBuilder.div.style.pointerEvents = 'auto';
         }
     }
 
     /**
-     * Manual text layer rendering (fallback)
+     * Disable text selection
      */
-    _renderTextLayerManual(textContent, viewport) {
-        const textItems = textContent.items;
-
-        for (const item of textItems) {
-            const tx = pdfjsLib.Util.transform(viewport.transform, item.transform);
-            const style = textContent.styles[item.fontName];
-
-            const div = document.createElement('div');
-            div.textContent = item.str;
-            div.style.position = 'absolute';
-            div.style.left = tx[4] + 'px';
-            div.style.top = (viewport.height - tx[5]) + 'px';
-            div.style.fontSize = (tx[0] * style.ascent) + 'px';
-            div.style.fontFamily = style.fontFamily;
-            div.style.color = 'transparent';
-
-            this.textLayer.appendChild(div);
+    disableTextSelection() {
+        if (this.textLayerBuilder && this.textLayerBuilder.div) {
+            this.textLayerBuilder.div.classList.remove('highlight-tool-active');
+            this.textLayerBuilder.div.style.pointerEvents = 'none';
         }
     }
 
@@ -535,7 +660,6 @@ export class PDFManager extends EventEmitter {
     _calculateOptimalScale(page, mode = 'fit') {
         const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
         if (!container) {
-            console.warn('[PDFManager] Container not found, using default scale 1.0');
             this.scale = 1.0;
             return;
         }
@@ -564,24 +688,17 @@ export class PDFManager extends EventEmitter {
         if (isFullscreen) {
             containerWidth = Math.max(containerWidth, window.innerWidth - 40);
             containerHeight = Math.max(containerHeight, window.innerHeight - 120);
-            console.debug(`[PDFManager] 🔧 Fullscreen mode detected - using dimensions: ${containerWidth}x${containerHeight}`);
         }
-
-        console.debug(`[PDFManager] 🔧 calculateOptimalScale - Container: ${containerWidth}x${containerHeight}, Mode: ${mode}`);
 
         const viewport = page.getViewport({ scale: 1.0 });
         const pageWidth = viewport.width;
         const pageHeight = viewport.height;
-
-        console.debug(`[PDFManager] 🔧 calculateOptimalScale - Page dimensions at scale 1.0: ${pageWidth}x${pageHeight}`);
 
         if (mode === 'fit-width') {
             // Calculate scale to fit width with some padding
             const widthScale = (containerWidth - 40) / pageWidth;
             this.scale = Math.min(widthScale, 3.0); // Cap at 3x zoom for fit-width
             this.scale = Math.max(this.scale, 0.5); // Minimum 0.5x zoom
-
-            console.debug(`[PDFManager] 🔧 calculateOptimalScale - Fit-width scale: ${this.scale} (widthScale: ${widthScale})`);
 
             // Add fit-width class to container
             container.classList.add('fit-width');
@@ -604,33 +721,23 @@ export class PDFManager extends EventEmitter {
             this.scale = Math.min(this.scale, 2.0); // Cap at 2x zoom
             this.scale = Math.max(this.scale, 0.3); // Minimum 0.3x zoom
 
-            console.debug(`[PDFManager] 🔧 calculateOptimalScale - Fit scale: ${this.scale} (widthScale: ${widthScale}, heightScale: ${heightScale}, scaledHeight: ${scaledHeight})`);
-
             // Remove fit-width class from container
             container.classList.remove('fit-width');
         }
-
-        console.debug(`[PDFManager] 🔧 calculateOptimalScale - Final scale: ${this.scale}`);
     }
 
     /**
      * Navigate to a specific page
      */
     async navigateToPage(pageNum) {
-        console.debug(`[PDFManager] 🔍 DEBUG: navigateToPage called with pageNum: ${pageNum}`);
-        console.debug(`[PDFManager] 🔍 DEBUG: Current page: ${this.currentPage}, Document loaded: ${!!this.pdfDocument}`);
-
         if (!this.pdfDocument) {
-            console.error(`[PDFManager] 🔍 DEBUG: No PDF document loaded, cannot navigate`);
             throw new Error('No PDF document loaded');
         }
 
         if (pageNum === this.currentPage) {
-            console.debug(`[PDFManager] 🔍 DEBUG: Already on page ${pageNum}, no navigation needed`);
             return;
         }
 
-        console.debug(`[PDFManager] 🔍 DEBUG: Calling renderPage with pageNum: ${pageNum}`);
         await this.renderPage(pageNum);
     }
 
@@ -655,11 +762,8 @@ export class PDFManager extends EventEmitter {
     /**
      * Set zoom level
      */
-        async setZoom(scale) {
-        console.debug(`[PDFManager] setZoom called with scale: ${scale}`);
-
+    async setZoom(scale) {
         if (!this.pdfDocument) {
-            console.warn('[PDFManager] No document loaded for zoom');
             return;
         }
 
@@ -668,18 +772,15 @@ export class PDFManager extends EventEmitter {
 
         if (typeof scale === 'string') {
             if (scale === 'fit') {
-                console.debug(`[PDFManager] Zoom fit: calling _calculateOptimalScale with "fit"`);
                 this.isManualZoom = false; // Reset to auto-fit mode
                 this._calculateOptimalScale(page, 'fit');
             } else if (scale === 'fit-width') {
-                console.debug(`[PDFManager] Zoom fit-width: calling _calculateOptimalScale with "fit-width"`);
                 this.isManualZoom = false; // Reset to auto-fit mode
                 this._calculateOptimalScale(page, 'fit-width');
             } else if (scale === 'in') {
                 // Zoom in by 25%
                 this.scale = Math.min(5.0, this.scale * 1.25);
                 this.isManualZoom = true; // Mark as manual zoom
-                console.debug(`[PDFManager] Zoom in: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)} (increased by 25%)`);
                 // Remove fit-width class when using manual zoom
                 const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
                 if (container) {
@@ -689,7 +790,6 @@ export class PDFManager extends EventEmitter {
                 // Zoom out by 20%
                 this.scale = Math.max(0.1, this.scale * 0.8);
                 this.isManualZoom = true; // Mark as manual zoom
-                console.debug(`[PDFManager] Zoom out: ${oldScale.toFixed(2)} → ${this.scale.toFixed(2)} (decreased by 20%)`);
                 // Remove fit-width class when using manual zoom
                 const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
                 if (container) {
@@ -699,7 +799,6 @@ export class PDFManager extends EventEmitter {
         } else {
             this.scale = Math.max(0.1, Math.min(5.0, scale));
             this.isManualZoom = true; // Mark as manual zoom
-            console.debug(`[PDFManager] Zoom numeric: Set scale to ${this.scale}`);
             // Remove fit-width class when using manual zoom
             const container = this.container.querySelector(`#pdf-container-${this.blockId}`);
             if (container) {
@@ -787,29 +886,37 @@ export class PDFManager extends EventEmitter {
      * Destroy the PDF manager
      */
     async destroy() {
-        console.debug('[PDFManager] Destroying PDF manager');
-
         // Cancel any ongoing render task
         if (this.currentRenderTask) {
             try {
                 await this.currentRenderTask.cancel();
-                console.debug('[PDFManager] Cancelled ongoing render task during destroy');
             } catch (e) {
-                console.debug('[PDFManager] Render task already completed during destroy');
+                // Render task already completed during destroy
             }
             this.currentRenderTask = null;
         }
 
+        // Clean up text layer
+        if (this.textLayerBuilder) {
+            this.textLayerBuilder.cancel();
+            if (this.textLayerBuilder.div && this.textLayerBuilder.div.parentNode) {
+                this.textLayerBuilder.div.parentNode.removeChild(this.textLayerBuilder.div);
+            }
+            this.textLayerBuilder = null;
+        }
+
         await this._cleanupDocument();
+
+        // Clean up dynamic CSS
+        const styleId = `text-layer-styles-${this.blockId}`;
+        const existingStyle = document.getElementById(styleId);
+        if (existingStyle) {
+            existingStyle.remove();
+        }
 
         // Clear canvas
         if (this.context) {
             this.context.clearRect(0, 0, this.canvas.width, this.canvas.height);
-        }
-
-        // Clear text layer
-        if (this.textLayer) {
-            this.textLayer.innerHTML = '';
         }
 
         // Remove all event listeners
@@ -818,8 +925,282 @@ export class PDFManager extends EventEmitter {
         // Clear references
         this.canvas = null;
         this.context = null;
-        this.textLayer = null;
         this.container = null;
+    }
+}
+
+/**
+ * TextLayerBuilder class implementation following PDF.js pattern
+ */
+class TextLayerBuilder {
+    constructor(options) {
+        this.pdfPage = options.pdfPage;
+        this.highlighter = options.highlighter || null;
+        this.accessibilityManager = options.accessibilityManager || null;
+        this.enablePermissions = options.enablePermissions === true;
+        this.onAppend = options.onAppend || null;
+
+        // Use existing div if provided, otherwise create new one
+        if (options.existingDiv) {
+            this.div = options.existingDiv;
+            this.div.innerHTML = ''; // Clear any existing content
+            console.log(`[TextLayerBuilder] Using existing div:`, this.div.id);
+        } else {
+            this.div = document.createElement('div');
+            this.div.tabIndex = 0;
+            this.div.className = 'textLayer';
+            console.log(`[TextLayerBuilder] Created new div`);
+        }
+
+        // Ensure proper class
+        if (!this.div.classList.contains('textLayer')) {
+            this.div.classList.add('textLayer');
+        }
+
+        this.renderingDone = false;
+        this.textLayer = null;
+
+        console.log(`[TextLayerBuilder] Constructor called, PDF.js TextLayer available:`, typeof pdfjsLib.TextLayer !== 'undefined');
+    }
+
+    async render({ viewport, textContentParams = null }) {
+        console.log(`[TextLayerBuilder] Render called with params:`, { viewport: !!viewport, textContentParams });
+
+        if (this.renderingDone && this.textLayer) {
+            console.log(`[TextLayerBuilder] Updating existing text layer`);
+            this.textLayer.update({
+                viewport,
+                onBefore: this.hide.bind(this)
+            });
+            this.show();
+            return;
+        }
+
+        this.cancel();
+
+        // Check if PDF.js TextLayer is available
+        console.log(`[TextLayerBuilder] PDF.js TextLayer available:`, typeof pdfjsLib.TextLayer !== 'undefined');
+        console.log(`[TextLayerBuilder] PDF.js object:`, typeof pdfjsLib, Object.keys(pdfjsLib || {}));
+
+        // Use PDF.js TextLayer if available
+        if (typeof pdfjsLib.TextLayer !== 'undefined') {
+            console.log(`[TextLayerBuilder] Creating PDF.js TextLayer`);
+
+            // Get text content first to check if there's any text
+            try {
+                const textContent = await this.pdfPage.getTextContent(textContentParams || {
+                    includeMarkedContent: true,
+                    disableNormalization: true
+                });
+
+                if (textContent.items.length === 0) {
+                    console.warn(`[TextLayerBuilder] No text items found in PDF page`);
+                    return;
+                }
+            } catch (textError) {
+                console.error(`[TextLayerBuilder] Error getting text content:`, textError);
+                return;
+            }
+
+            this.textLayer = new pdfjsLib.TextLayer({
+                textContentSource: this.pdfPage.streamTextContent(
+                    textContentParams || {
+                        includeMarkedContent: true,
+                        disableNormalization: true
+                    }
+                ),
+                container: this.div,
+                viewport
+            });
+
+            console.log(`[TextLayerBuilder] PDF.js TextLayer created, starting render`);
+            await this.textLayer.render();
+                        console.log(`[TextLayerBuilder] PDF.js TextLayer render completed`);
+
+            this.renderingDone = true;
+
+            const endOfContent = document.createElement('div');
+            endOfContent.className = 'endOfContent';
+            this.div.append(endOfContent);
+
+            this._bindMouse(endOfContent);
+            this.onAppend?.(this.div);
+
+            console.log(`[TextLayerBuilder] Final text layer div children:`, this.div.children.length);
+
+            // Debug: Check text element positioning and styles
+            const textSpans = this.div.querySelectorAll('span');
+            console.log(`[TextLayerBuilder] Text spans found:`, textSpans.length);
+
+            if (textSpans.length > 0) {
+                const firstFew = Array.from(textSpans).slice(0, 3);
+                console.log(`[TextLayerBuilder] First 3 text spans details:`);
+                firstFew.forEach((span, index) => {
+                    const rect = span.getBoundingClientRect();
+                    const computedStyle = getComputedStyle(span);
+                });
+
+                // Check text layer container positioning
+                const containerRect = this.div.getBoundingClientRect();
+                const containerStyle = getComputedStyle(this.div);
+                console.log(`[TextLayerBuilder] Text layer container position:`, {
+                    boundingRect: {
+                        top: containerRect.top,
+                        left: containerRect.left,
+                        width: containerRect.width,
+                        height: containerRect.height,
+                        right: containerRect.right,
+                        bottom: containerRect.bottom
+                    },
+                    inlineStyle: {
+                        position: this.div.style.position,
+                        top: this.div.style.top,
+                        left: this.div.style.left,
+                        width: this.div.style.width,
+                        height: this.div.style.height,
+                        zIndex: this.div.style.zIndex
+                    },
+                    computedStyle: {
+                        position: containerStyle.position,
+                        top: containerStyle.top,
+                        left: containerStyle.left,
+                        width: containerStyle.width,
+                        height: containerStyle.height,
+                        zIndex: containerStyle.zIndex,
+                        visibility: containerStyle.visibility,
+                        display: containerStyle.display
+                    }
+                });
+
+                // Check parent container for reference
+                const parentContainer = this.div.parentElement;
+                if (parentContainer) {
+                    const parentRect = parentContainer.getBoundingClientRect();
+                }
+
+                                // Debug: Check if any spans have valid positioning
+                let visibleSpans = 0;
+                let positionedSpans = 0;
+                textSpans.forEach(span => {
+                    const rect = span.getBoundingClientRect();
+                    if (rect.width > 0 && rect.height > 0) {
+                        positionedSpans++;
+                        if (rect.top >= 0 && rect.left >= 0 && rect.top < window.innerHeight && rect.left < window.innerWidth) {
+                            visibleSpans++;
+                        }
+                    }
+                });
+                console.log(`[TextLayerBuilder] Spans analysis: total=${textSpans.length}, positioned=${positionedSpans}, visible=${visibleSpans}`);
+
+                // Force visibility and check actual positions
+                console.log(`[TextLayerBuilder] Making ALL text visible for debugging (red on yellow)`);
+
+                // First, ensure the text layer container is properly positioned and sized
+                this.div.style.position = 'absolute';
+                this.div.style.top = '0px';
+                this.div.style.left = '0px';
+                this.div.style.width = viewport.width + 'px';
+                this.div.style.height = viewport.height + 'px';
+                this.div.style.zIndex = '999';
+                this.div.style.pointerEvents = 'none';
+                this.div.style.border = '2px solid blue'; // Debug border
+                this.div.style.overflow = 'visible';
+
+                console.log(`[TextLayerBuilder] Set container dimensions to: ${viewport.width}x${viewport.height}`);
+
+                textSpans.forEach((span, index) => {
+                    // Make text visible
+                    span.style.color = 'red !important';
+                    span.style.backgroundColor = 'yellow !important';
+                    span.style.opacity = '1 !important';
+                    span.style.zIndex = '1000';
+                    span.style.visibility = 'visible !important';
+                    span.style.display = 'block !important';
+
+
+                });
+
+              ;
+
+                setTimeout(() => {
+                    textSpans.forEach(span => {
+                        span.style.color = 'transparent';
+                        span.style.backgroundColor = 'transparent';
+                        span.style.opacity = '1';
+                        span.style.zIndex = '';
+                    });
+                    this.div.style.border = '';
+                    console.log(`[TextLayerBuilder] Text visibility reset to transparent`);
+                }, 8000);
+            }
+        } else {
+            console.error(`[TextLayerBuilder] PDF.js TextLayer not available - falling back to basic text content`);
+            // Fallback: create basic text spans
+            await this._createBasicTextLayer(viewport, textContentParams);
+        }
+    }
+
+    async _createBasicTextLayer(viewport, textContentParams) {
+        try {
+            console.log(`[TextLayerBuilder] Creating basic text layer fallback`);
+            const textContent = await this.pdfPage.getTextContent(textContentParams || {});
+
+            console.log(`[TextLayerBuilder] Basic fallback - text items:`, textContent.items.length);
+
+            for (let i = 0; i < Math.min(textContent.items.length, 10); i++) {
+                const item = textContent.items[i];
+                if (item.str && item.str.trim()) {
+                    const span = document.createElement('span');
+                    span.textContent = item.str;
+                    span.style.position = 'absolute';
+                    span.style.color = 'transparent';
+                    span.style.left = '10px';
+                    span.style.top = (20 + i * 15) + 'px';
+                    this.div.appendChild(span);
+                }
+            }
+
+            console.log(`[TextLayerBuilder] Basic fallback completed with ${this.div.children.length} elements`);
+        } catch (error) {
+            console.error(`[TextLayerBuilder] Error in basic text layer fallback:`, error);
+        }
+    }
+
+    hide() {
+        if (!this.div.hidden && this.renderingDone) {
+            this.div.hidden = true;
+        }
+    }
+
+    show() {
+        if (this.div.hidden && this.renderingDone) {
+            this.div.hidden = false;
+        }
+    }
+
+    cancel() {
+        this.textLayer?.cancel();
+        this.textLayer = null;
+    }
+
+    _bindMouse(end) {
+        const { div } = this;
+
+        div.addEventListener('mousedown', () => {
+            div.classList.add('selecting');
+        });
+
+        div.addEventListener('copy', event => {
+            if (!this.enablePermissions) {
+                const selection = document.getSelection();
+                event.clipboardData.setData(
+                    'text/plain',
+                    selection.toString()
+                );
+            }
+            event.stopPropagation();
+            event.preventDefault();
+        });
     }
 }
 

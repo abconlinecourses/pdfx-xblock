@@ -30,6 +30,7 @@ export class AnnotationStorage extends EventEmitter {
         // Save state
         this.isSaving = false;
         this.saveQueue = [];
+        this.deleteQueue = []; // Track deletions separately
         this.autoSaveTimer = null;
 
         // Bind methods
@@ -67,7 +68,6 @@ export class AnnotationStorage extends EventEmitter {
             }
 
         } catch (error) {
-            console.error('[AnnotationStorage] Error saving annotation:', error);
             this.emit('error', error);
         }
     }
@@ -83,7 +83,15 @@ export class AnnotationStorage extends EventEmitter {
             // Mark page as dirty
             this.dirtyPages.add(annotation.pageNum);
 
-            // Add to save queue
+            // Add to delete queue for server persistence
+            this.deleteQueue.push({
+                id: annotation.id,
+                type: annotation.type,
+                pageNum: annotation.pageNum,
+                timestamp: Date.now()
+            });
+
+            // Add to save queue (to trigger save process)
             this.saveQueue.push({
                 type: 'delete',
                 annotation: annotation,
@@ -98,7 +106,6 @@ export class AnnotationStorage extends EventEmitter {
             }
 
         } catch (error) {
-            console.error('[AnnotationStorage] Error deleting annotation:', error);
             this.emit('error', error);
         }
     }
@@ -108,10 +115,8 @@ export class AnnotationStorage extends EventEmitter {
      */
     async loadAnnotations(existingData = {}) {
         try {
-            console.debug('[AnnotationStorage] Loading annotations from server');
 
             if (!this.handlerUrl) {
-                console.warn('[AnnotationStorage] No handler URL provided, using existing data only');
                 return existingData;
             }
 
@@ -125,18 +130,15 @@ export class AnnotationStorage extends EventEmitter {
                 // Cache loaded annotations
                 this._cacheAnnotations(mergedData);
 
-                console.debug('[AnnotationStorage] Annotations loaded successfully');
 
                 this.emit('annotationsLoaded', mergedData);
 
                 return mergedData;
             } else {
-                console.warn('[AnnotationStorage] Failed to load from server, using existing data');
                 return existingData;
             }
 
         } catch (error) {
-            console.error('[AnnotationStorage] Error loading annotations:', error);
             this.emit('error', error);
             return existingData;
         }
@@ -146,7 +148,7 @@ export class AnnotationStorage extends EventEmitter {
      * Process save queue
      */
     async _processSaveQueue() {
-        if (this.isSaving || this.saveQueue.length === 0) {
+        if (this.isSaving || (this.saveQueue.length === 0 && this.deleteQueue.length === 0)) {
             return;
         }
 
@@ -156,12 +158,12 @@ export class AnnotationStorage extends EventEmitter {
             // Prepare data to save
             const saveData = this._prepareSaveData();
 
-            if (!saveData || Object.keys(saveData).length === 0) {
+            if (!saveData || (Object.keys(saveData).length === 0 && this.deleteQueue.length === 0)) {
                 this.isSaving = false;
                 return;
             }
 
-            console.debug('[AnnotationStorage] Saving annotations to server');
+            console.log('[AnnotationStorage] Saving data to server:', saveData);
 
             // Save to server
             if (this.handlerUrl) {
@@ -173,22 +175,23 @@ export class AnnotationStorage extends EventEmitter {
                     blockId: this.blockId
                 });
 
-                if (response.success) {
-                    // Clear save queue and dirty pages
+                if (response.result === 'success') {
+                    // Clear save queue, delete queue, and dirty pages on success
                     this.saveQueue = [];
+                    this.deleteQueue = [];
                     this.dirtyPages.clear();
 
-                    console.debug('[AnnotationStorage] Annotations saved successfully');
+                    console.log('[AnnotationStorage] Successfully saved annotations and deletions');
 
                     this.emit('annotationsSaved', saveData);
                 } else {
-                    console.error('[AnnotationStorage] Server save failed:', response.error);
-                    this.emit('error', new Error(response.error || 'Save failed'));
+                    console.error('[AnnotationStorage] Save failed:', response.message || 'Unknown error');
+                    this.emit('error', new Error(response.message || 'Save failed'));
                 }
             }
 
         } catch (error) {
-            console.error('[AnnotationStorage] Error processing save queue:', error);
+            console.error('[AnnotationStorage] Error during save:', error);
             this.emit('error', error);
         } finally {
             this.isSaving = false;
@@ -200,6 +203,21 @@ export class AnnotationStorage extends EventEmitter {
      */
     _prepareSaveData() {
         const saveData = {};
+
+        // Check if we only have deletions and no actual annotation changes
+        const hasSaveOperations = this.saveQueue.some(item => item.type !== 'delete');
+        const hasOnlyDeletions = this.deleteQueue.length > 0 && !hasSaveOperations;
+
+        if (hasOnlyDeletions) {
+            // Efficient deletion-only mode: send only deletions
+            console.log('[AnnotationStorage] Deletion-only mode: sending only deletions');
+            saveData._deletions = this.deleteQueue.slice();
+            saveData._deletionOnly = true; // Flag to tell server this is deletion-only
+            return saveData;
+        }
+
+        // Full save mode: include all annotations + deletions
+        console.log('[AnnotationStorage] Full save mode: sending all annotations + deletions');
 
         // Group annotations by type and page
         for (const annotation of this.annotationCache.values()) {
@@ -221,6 +239,11 @@ export class AnnotationStorage extends EventEmitter {
                 data: annotation.data,
                 config: annotation.config
             });
+        }
+
+        // Include deletions if any
+        if (this.deleteQueue.length > 0) {
+            saveData._deletions = this.deleteQueue.slice();
         }
 
         return saveData;
@@ -269,10 +292,46 @@ export class AnnotationStorage extends EventEmitter {
             options.body = JSON.stringify(data);
         }
 
-        // Add CSRF token if available
-        const csrfToken = document.querySelector('meta[name="csrf-token"]');
+        // Add CSRF token if available - try multiple methods for Open edX compatibility
+        let csrfToken = null;
+
+        // Method 1: Meta tag (Django default)
+        const csrfMeta = document.querySelector('meta[name="csrf-token"]');
+        if (csrfMeta) {
+            csrfToken = csrfMeta.getAttribute('content');
+        }
+
+        // Method 2: Django CSRF cookie (Open edX common pattern)
+        if (!csrfToken) {
+            const cookies = document.cookie.split(';');
+            for (let cookie of cookies) {
+                const [name, value] = cookie.trim().split('=');
+                if (name === 'csrftoken') {
+                    csrfToken = decodeURIComponent(value);
+                    break;
+                }
+            }
+        }
+
+        // Method 3: Check for Django CSRF token in form
+        if (!csrfToken) {
+            const csrfInput = document.querySelector('input[name="csrfmiddlewaretoken"]');
+            if (csrfInput) {
+                csrfToken = csrfInput.value;
+            }
+        }
+
+        // Method 4: Check for XBlock runtime CSRF handling
+        if (!csrfToken && window.XBlock && window.XBlock.runtime) {
+            try {
+                csrfToken = window.XBlock.runtime.csrfToken;
+            } catch (e) {
+                // Silent fail
+            }
+        }
+
         if (csrfToken) {
-            options.headers['X-CSRFToken'] = csrfToken.getAttribute('content');
+            options.headers['X-CSRFToken'] = csrfToken;
         }
 
         const response = await fetch(url, options);
@@ -296,7 +355,6 @@ export class AnnotationStorage extends EventEmitter {
             this._processSaveQueue();
         }, this.config.saveInterval);
 
-        console.debug(`[AnnotationStorage] Auto-save started with ${this.config.saveInterval}ms interval`);
     }
 
     /**
@@ -362,6 +420,7 @@ export class AnnotationStorage extends EventEmitter {
         this.annotationCache.clear();
         this.dirtyPages.clear();
         this.saveQueue = [];
+        this.deleteQueue = [];
 
         this.emit('allAnnotationsCleared');
     }
@@ -404,20 +463,19 @@ export class AnnotationStorage extends EventEmitter {
      * Destroy the storage manager
      */
     destroy() {
-        console.debug('[AnnotationStorage] Destroying annotation storage');
 
         // Stop auto-save
         this._stopAutoSave();
 
         // Force save pending changes
         this._processSaveQueue().catch(error => {
-            console.error('[AnnotationStorage] Error in final save:', error);
         });
 
         // Clear cache
         this.annotationCache.clear();
         this.dirtyPages.clear();
         this.saveQueue = [];
+        this.deleteQueue = [];
 
         // Remove all event listeners
         this.removeAllListeners();

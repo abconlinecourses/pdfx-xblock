@@ -482,19 +482,21 @@ input[type="range"] {
     opacity: 1 !important;
 }
 
-/* Individual highlight elements - only show when explicitly created */
+/* Individual highlight elements */
 .highlight, .highlight-element, [class^="highlight-"] {
     position: absolute;
     background-color: rgba(255, 235, 0, 0.4); /* Light yellow with better visibility */
     border-radius: 2px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease;
-    pointer-events: auto;
-    cursor: pointer;
-    display: none !important; /* Hide by default */
+    pointer-events: none;
+    cursor: default;
+    display: block !important; /* Show by default */
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
-/* Only show highlights when they have the 'active' class or are inside an active container */
+/* Ensure highlights are always visible when created */
 .highlight.active,
 .highlight-element.active,
 [class^="highlight-"].active,
@@ -502,36 +504,19 @@ input[type="range"] {
 .highlight-tool-active .highlight-element,
 .highlight-tool-active [class^="highlight-"] {
     display: block !important;
+    visibility: visible !important;
+    opacity: 1 !important;
 }
 
-/* BULLETPROOF FIX: Ensure no highlight elements show on initial load */
-.highlight-container .highlight,
+/* Show highlight elements when they are created */
 .highlight-container .highlight-element,
-.highlight-container [class^="highlight-"],
-#highlight-container .highlight,
 #highlight-container .highlight-element,
-#highlight-container [class^="highlight-"],
-[id^="highlight-container-"] .highlight,
-[id^="highlight-container-"] .highlight-element,
-[id^="highlight-container-"] [class^="highlight-"] {
-    display: none !important;
-    visibility: hidden !important;
-    opacity: 0 !important;
-}
-
-/* Only show when explicitly activated by user */
-.highlight-container.user-created .highlight,
-.highlight-container.user-created .highlight-element,
-.highlight-container.user-created [class^="highlight-"],
-#highlight-container.user-created .highlight,
-#highlight-container.user-created .highlight-element,
-#highlight-container.user-created [class^="highlight-"],
-[id^="highlight-container-"].user-created .highlight,
-[id^="highlight-container-"].user-created .highlight-element,
-[id^="highlight-container-"].user-created [class^="highlight-"] {
+[id^="highlight-container-"] .highlight-element {
     display: block !important;
     visibility: visible !important;
     opacity: 1 !important;
+    pointer-events: none !important;
+    z-index: 5 !important;
 }
 
 /* Update draw container styles */
@@ -1418,10 +1403,26 @@ html body [id^="marker-tool-"].active {
 .text-layer.active,
 .text-layer.highlight-tool-active {
     cursor: text !important;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
 }
 
 .text-layer.highlight-tool-active span {
     cursor: text !important;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    transition: background-color 0.2s ease;
+}
+
+.text-layer.highlight-tool-active span:hover {
+    background-color: rgba(255, 255, 0, 0.2) !important;
+    border-radius: 2px;
 }
 
 /* Canvas cursor styles */
@@ -1459,9 +1460,49 @@ html body [id^="marker-tool-"].active {
     cursor: crosshair !important;
 }
 
+.draw-container[data-current-tool="highlight"] ~ .text-layer,
 .draw-container[data-current-tool="highlighter"] ~ .text-layer,
 .text-layer.highlight-tool-active {
     cursor: text !important;
+}
+
+/* Ensure highlight tool overrides crosshair cursor and drawing modes */
+.text-layer.highlight-tool-active,
+.text-layer.highlight-tool-active span,
+.text-layer.highlight-tool-active * {
+    cursor: text !important;
+}
+
+/* Override any draw-mode styles when highlight tool is active */
+.draw-container.draw-mode .text-layer.highlight-tool-active,
+.draw-container[data-current-tool="highlight"] .text-layer,
+.draw-container[data-current-tool="highlight"] .text-layer span {
+    cursor: text !important;
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+}
+
+/* CRITICAL: Boost text layer z-index when highlight tool is active */
+.text-layer.highlight-tool-active {
+    z-index: 100 !important; /* Higher than draw container */
+    pointer-events: auto !important;
+}
+
+/* Ensure draw container doesn't interfere when highlight tool is active */
+.draw-container[data-current-tool="highlight"] {
+    pointer-events: none !important;
+    z-index: 1 !important; /* Lower than text layer */
+}
+
+/* When highlight tool is active, text layer should capture all events */
+.text-layer.highlight-tool-active,
+.text-layer.highlight-tool-active span,
+.text-layer.highlight-tool-active * {
+    z-index: 100 !important;
+    pointer-events: auto !important;
 }
 
 .draw-container[data-current-tool="select"] {

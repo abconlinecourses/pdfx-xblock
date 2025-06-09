@@ -15,7 +15,6 @@ export class TextTool extends BaseTool {
     }
 
     async init() {
-        console.debug('[TextTool] Initializing text tool');
         this.isEnabled = true;
     }
 
@@ -37,7 +36,6 @@ export class TextTool extends BaseTool {
     }
 
     async cleanup() {
-        console.debug('[TextTool] Cleaning up text tool');
     }
 }
 

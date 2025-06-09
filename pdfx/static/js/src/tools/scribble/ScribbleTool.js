@@ -36,6 +36,9 @@ export class ScribbleTool extends BaseTool {
         // Canvas sizing
         this.canvasWidth = 0;
         this.canvasHeight = 0;
+
+        // Flag to track user-initiated clears vs programmatic clears
+        this._isUserClear = false;
     }
 
     /**
@@ -43,8 +46,6 @@ export class ScribbleTool extends BaseTool {
      */
     async init() {
         try {
-            console.debug('[ScribbleTool] Initializing scribble tool');
-
             // Check if FabricJS is available
             if (typeof fabric === 'undefined') {
                 throw new Error('FabricJS library not loaded');
@@ -58,10 +59,7 @@ export class ScribbleTool extends BaseTool {
 
             this.isEnabled = true;
 
-            console.debug('[ScribbleTool] Scribble tool initialized successfully');
-
         } catch (error) {
-            console.error('[ScribbleTool] Initialization error:', error);
             throw error;
         }
     }
@@ -110,6 +108,7 @@ export class ScribbleTool extends BaseTool {
         this.canvasContainer.appendChild(canvasElement);
 
         // Initialize Fabric canvas
+        console.log('[ScribbleTool] Creating new FabricJS canvas for block:', this.blockId);
         this.fabricCanvas = new fabric.Canvas(canvasElement.id, {
             isDrawingMode: false,
             selection: false,
@@ -197,22 +196,30 @@ export class ScribbleTool extends BaseTool {
 
         // Add to page strokes
         this._addStrokeToPage(this.currentPage, annotation);
-
-        console.debug('[ScribbleTool] Path created and saved as annotation:', annotation.id);
     }
 
-    /**
+        /**
      * Handle canvas cleared event
      */
     _handleCanvasCleared() {
-        // Clear annotations for current page
-        const pageAnnotations = this.getAnnotationsForPage(this.currentPage);
-        for (const annotation of pageAnnotations) {
-            this.deleteAnnotation(annotation.id);
-        }
+        // Don't delete annotations on programmatic canvas clears
+        // Only delete on user-initiated clears
+        if (this._isUserClear) {
+            console.log('[ScribbleTool] User-initiated canvas clear - clearing annotations for page:', this.currentPage);
 
-        // Clear page strokes
-        this.strokesByPage.delete(this.currentPage);
+            // Clear annotations for current page
+            const pageAnnotations = this.getAnnotationsForPage(this.currentPage);
+            for (const annotation of pageAnnotations) {
+                this.deleteAnnotation(annotation.id);
+            }
+
+            // Clear page strokes
+            this.strokesByPage.delete(this.currentPage);
+
+            this._isUserClear = false; // Reset flag
+        } else {
+            console.log('[ScribbleTool] Programmatic canvas clear - keeping annotations for page:', this.currentPage);
+        }
     }
 
     /**
@@ -220,7 +227,6 @@ export class ScribbleTool extends BaseTool {
      */
     enable() {
         this.isEnabled = true;
-        console.debug('[ScribbleTool] Scribble tool enabled');
     }
 
     /**
@@ -231,7 +237,6 @@ export class ScribbleTool extends BaseTool {
             this.deactivate();
         }
         this.isEnabled = false;
-        console.debug('[ScribbleTool] Scribble tool disabled');
     }
 
     /**
@@ -239,11 +244,14 @@ export class ScribbleTool extends BaseTool {
      */
     activate() {
         if (!this.isEnabled) {
-            console.warn('[ScribbleTool] Cannot activate disabled tool');
             return false;
         }
 
         try {
+            // Reset rendering tracking on activation to allow fresh render
+            this._lastRenderedPage = null;
+            this._lastRenderTime = null;
+
             // Enable drawing mode
             this.fabricCanvas.isDrawingMode = true;
             this.fabricCanvas.selection = false;
@@ -262,14 +270,14 @@ export class ScribbleTool extends BaseTool {
             // Ensure canvas is properly sized
             this._resizeCanvas();
 
-            this.isActive = true;
+            // Re-render any existing annotations for the current page
+            this._renderStrokesForPage(this.currentPage);
 
-            console.debug('[ScribbleTool] Scribble tool activated');
+            this.isActive = true;
 
             return true;
 
         } catch (error) {
-            console.error('[ScribbleTool] Error activating tool:', error);
             return false;
         }
     }
@@ -294,10 +302,8 @@ export class ScribbleTool extends BaseTool {
 
             this.isActive = false;
 
-            console.debug('[ScribbleTool] Scribble tool deactivated');
-
         } catch (error) {
-            console.error('[ScribbleTool] Error deactivating tool:', error);
+            // Error deactivating tool - continue silently
         }
     }
 
@@ -307,16 +313,20 @@ export class ScribbleTool extends BaseTool {
     handlePageChange(pageNum) {
         super.handlePageChange(pageNum);
 
+        // Reset rendering tracking for new page
+        this._lastRenderedPage = null;
+        this._lastRenderTime = null;
+
         // Clear canvas
         if (this.fabricCanvas) {
             this.fabricCanvas.clear();
         }
 
-        // Load strokes for new page
-        this._renderStrokesForPage(pageNum);
-
-        // Resize canvas for new page
-        this._resizeCanvas();
+        // Resize canvas for new page FIRST
+        this._resizeCanvas().then(() => {
+            // Then load strokes for new page
+            this._renderStrokesForPage(pageNum);
+        });
     }
 
     /**
@@ -324,6 +334,7 @@ export class ScribbleTool extends BaseTool {
      */
     async _resizeCanvas() {
         if (!this.fabricCanvas || !this.pdfManager) {
+            console.warn('[ScribbleTool] Cannot resize canvas - missing fabricCanvas or pdfManager');
             return;
         }
 
@@ -331,12 +342,14 @@ export class ScribbleTool extends BaseTool {
             // Get PDF container dimensions
             const pdfContainer = this.container.querySelector(`#pdf-container-${this.blockId}`);
             if (!pdfContainer) {
-                console.warn('[ScribbleTool] PDF container not found');
+                console.warn('[ScribbleTool] Cannot resize canvas - PDF container not found');
                 return;
             }
 
             const containerWidth = pdfContainer.offsetWidth || 800;
             const containerHeight = pdfContainer.offsetHeight || 600;
+
+            console.log('[ScribbleTool] Resizing canvas to:', containerWidth, 'x', containerHeight);
 
             // Update canvas dimensions
             this.canvasWidth = containerWidth;
@@ -361,7 +374,7 @@ export class ScribbleTool extends BaseTool {
                 this.canvasContainer.style.height = this.canvasHeight + 'px';
             }
 
-            console.debug(`[ScribbleTool] Canvas resized to ${this.canvasWidth}x${this.canvasHeight}`);
+            console.log('[ScribbleTool] Canvas resized successfully');
 
         } catch (error) {
             console.error('[ScribbleTool] Error resizing canvas:', error);
@@ -400,13 +413,35 @@ export class ScribbleTool extends BaseTool {
      * Render strokes for a specific page
      */
     _renderStrokesForPage(pageNum) {
+        console.log('[ScribbleTool] Rendering strokes for page:', pageNum, '- Block ID:', this.blockId);
+        console.log('[ScribbleTool] Current page:', this.currentPage);
+        console.log('[ScribbleTool] Total annotations in tool:', this.annotations.size);
+        console.log('[ScribbleTool] Annotations by page map:', this.annotationsByPage);
+
+        // Prevent double rendering by checking if we already rendered this page
+        if (this._lastRenderedPage === pageNum && this._lastRenderTime && (Date.now() - this._lastRenderTime) < 1000) {
+            console.log('[ScribbleTool] Skipping render - already rendered recently');
+            return;
+        }
+
         const annotations = this.getAnnotationsForPage(pageNum);
+        console.log('[ScribbleTool] Found', annotations.length, 'annotations for page', pageNum);
+        console.log('[ScribbleTool] Annotations for page', pageNum, ':', annotations);
+
+        // Clear existing canvas objects for this page to prevent duplicates
+        if (this.fabricCanvas) {
+            this.fabricCanvas.clear();
+        }
 
         for (const annotation of annotations) {
             this._renderStrokeFromAnnotation(annotation);
         }
 
-        console.debug(`[ScribbleTool] Rendered ${annotations.length} strokes for page ${pageNum}`);
+        // Track rendering to prevent doubles
+        this._lastRenderedPage = pageNum;
+        this._lastRenderTime = Date.now();
+
+        console.log('[ScribbleTool] Finished rendering page', pageNum, '- canvas now has', this.fabricCanvas ? this.fabricCanvas.getObjects().length : 0, 'objects');
     }
 
     /**
@@ -416,8 +451,31 @@ export class ScribbleTool extends BaseTool {
         try {
             const data = annotation.data;
 
+            if (!this.fabricCanvas) {
+                console.warn('[ScribbleTool] No fabric canvas available for rendering');
+                return;
+            }
+
+            if (!data.pathData) {
+                console.warn('[ScribbleTool] No path data in annotation:', annotation.id);
+                return;
+            }
+
+            // Convert path data to Fabric.js format if needed
+            let pathString = data.pathData;
+
+            // If pathData is an array of commands, convert to SVG path string
+            if (Array.isArray(data.pathData)) {
+                pathString = data.pathData.map(cmd => {
+                    if (Array.isArray(cmd)) {
+                        return cmd.join(' ');
+                    }
+                    return cmd;
+                }).join(' ');
+            }
+
             // Create Fabric path object
-            const path = new fabric.Path(data.pathData, {
+            const path = new fabric.Path(pathString, {
                 left: data.left || 0,
                 top: data.top || 0,
                 strokeWidth: data.strokeWidth || this.config.size,
@@ -432,12 +490,13 @@ export class ScribbleTool extends BaseTool {
 
             // Add to canvas
             this.fabricCanvas.add(path);
+            this.fabricCanvas.renderAll();
 
             // Store reference
             annotation.fabricPath = path;
 
         } catch (error) {
-            console.error('[ScribbleTool] Error rendering stroke:', error);
+            console.error('[ScribbleTool] Error rendering stroke:', error, annotation);
         }
     }
 
@@ -446,10 +505,11 @@ export class ScribbleTool extends BaseTool {
      */
     clearCurrentPage() {
         if (this.fabricCanvas) {
+            this._isUserClear = true; // Mark as user-initiated clear
             this.fabricCanvas.clear();
         }
 
-        // Remove annotations for current page
+        // Remove annotations for current page (this will also happen in _handleCanvasCleared)
         const pageAnnotations = this.getAnnotationsForPage(this.currentPage);
         for (const annotation of pageAnnotations) {
             this.deleteAnnotation(annotation.id);
@@ -485,18 +545,66 @@ export class ScribbleTool extends BaseTool {
      * Load annotations for this tool
      */
     async loadAnnotations(annotationsData) {
-        await super.loadAnnotations(annotationsData);
 
-        // Re-render current page after loading
-        this._renderStrokesForPage(this.currentPage);
+        // Check if data is empty
+        if (!annotationsData || Object.keys(annotationsData).length === 0) {
+            console.warn('[ScribbleTool] No annotation data provided or data is empty');
+            return;
+        }
+
+        console.log('[ScribbleTool] BEFORE super.loadAnnotations - annotations.size:', this.annotations.size);
+
+        try {
+            console.log('[ScribbleTool] Calling super.loadAnnotations...');
+            await super.loadAnnotations(annotationsData);
+            console.log('[ScribbleTool] super.loadAnnotations completed');
+        } catch (error) {
+            console.error('[ScribbleTool] Error in super.loadAnnotations:', error);
+        }
+
+        console.log('[ScribbleTool] IMMEDIATELY after super.loadAnnotations - annotations.size:', this.annotations.size);
+        console.log('[ScribbleTool] After loading, total annotations:', this.annotations.size);
+        console.log('[ScribbleTool] Annotations by page:', this.annotationsByPage);
+        console.log('[ScribbleTool] Current page:', this.currentPage);
+
+        // Add a timeout to check if annotations are still there after a delay
+        setTimeout(() => {
+            console.log('[ScribbleTool] 100ms LATER - annotations.size:', this.annotations.size);
+            console.log('[ScribbleTool] 100ms LATER - annotationsByPage:', this.annotationsByPage);
+        }, 100);
+
+        // Don't render immediately - let handlePageChange handle rendering when canvas is properly sized
+        console.log('[ScribbleTool] Annotations loaded, will render when page changes or canvas is ready');
+    }
+
+    /**
+     * Debug method to check annotation state
+     */
+    debugAnnotationState() {
+        const blockElement = this.container.querySelector(`[data-block-id="${this.blockId}"]`) || this.container.closest(`[data-block-id="${this.blockId}"]`);
+        let parsedData = {};
+
+        if (blockElement) {
+            try {
+                parsedData = JSON.parse(blockElement.dataset.drawingStrokes || '{}');
+            } catch (e) {
+                // Error parsing data
+            }
+        }
+
+        return {
+            totalAnnotations: this.annotations.size,
+            annotationsByPage: this.annotationsByPage,
+            currentPage: this.currentPage,
+            canvasObjects: this.fabricCanvas ? this.fabricCanvas.getObjects().length : 0,
+            parsedData: parsedData
+        };
     }
 
     /**
      * Clean up tool resources
      */
     async cleanup() {
-        console.debug('[ScribbleTool] Cleaning up scribble tool');
-
         if (this.fabricCanvas) {
             this.fabricCanvas.dispose();
             this.fabricCanvas = null;

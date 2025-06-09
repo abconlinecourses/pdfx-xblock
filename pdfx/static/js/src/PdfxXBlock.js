@@ -49,6 +49,9 @@ export class PdfxXBlock extends EventEmitter {
         this.isInitialized = false;
         this.isLoading = false;
 
+        // Pending tool configuration (applied when tools become active)
+        this._pendingToolConfig = {};
+
         // Bind methods to preserve context
         this._bindMethods();
     }
@@ -60,12 +63,9 @@ export class PdfxXBlock extends EventEmitter {
         return new Promise((resolve, reject) => {
             // Check if PDF.js is already available
             if (typeof window.pdfjsLib !== 'undefined') {
-                console.debug('[PdfxXBlock] PDF.js already available');
                 resolve();
                 return;
             }
-
-            console.debug('[PdfxXBlock] Waiting for PDF.js to load...');
 
             let attempts = 0;
             const maxAttempts = 100; // 10 seconds max wait (100ms * 100)
@@ -75,11 +75,9 @@ export class PdfxXBlock extends EventEmitter {
                 attempts++;
 
                 if (typeof window.pdfjsLib !== 'undefined') {
-                    console.debug('[PdfxXBlock] PDF.js loaded successfully');
                     clearInterval(checkInterval);
                     resolve();
                 } else if (attempts >= maxAttempts) {
-                    console.error('[PdfxXBlock] Timeout waiting for PDF.js to load');
                     clearInterval(checkInterval);
                     reject(new Error('PDF.js failed to load within timeout'));
                 }
@@ -88,7 +86,6 @@ export class PdfxXBlock extends EventEmitter {
             // Also listen for the pdfjsReady event
             const onPDFJSReady = () => {
                 if (typeof window.pdfjsLib !== 'undefined') {
-                    console.debug('[PdfxXBlock] PDF.js ready via event');
                     clearInterval(checkInterval);
                     document.removeEventListener('pdfjsReady', onPDFJSReady);
                     resolve();
@@ -104,20 +101,15 @@ export class PdfxXBlock extends EventEmitter {
      */
     async init() {
         if (this.isInitialized) {
-            console.warn('[PdfxXBlock] Already initialized');
             return this;
         }
 
         if (this.isLoading) {
-            console.warn('[PdfxXBlock] Already loading');
             return this;
         }
-
         this.isLoading = true;
 
         try {
-            console.debug(`[PdfxXBlock] Initializing for block ${this.config.blockId}`);
-
             // Wait for PDF.js to be ready first
             await this._waitForPDFJS();
 
@@ -155,28 +147,37 @@ export class PdfxXBlock extends EventEmitter {
             });
 
             // Initialize UI components FIRST (before PDF loading)
-            console.debug('[PdfxXBlock] 🔥 ABOUT TO CALL UIManager.init()');
             try {
                 await this.uiManager.init();
-                console.debug('[PdfxXBlock] ✅ UIManager.init() completed successfully');
             } catch (uiError) {
-                console.error('[PdfxXBlock] ❌ UIManager.init() failed:', uiError);
-                console.error('[PdfxXBlock] ❌ UIManager init stack trace:', uiError.stack);
-                // Continue anyway, but log the error
+                console.warn('[PdfxXBlock] UI initialization error (continuing anyway):', uiError);
             }
 
             // Set up event listeners between managers
             this._setupEventListeners();
 
             // Load the PDF document
-            await this.pdfManager.loadDocument(this.config.pdfUrl);
+            try {
+                await this.pdfManager.loadDocument(this.config.pdfUrl);
+            } catch (pdfError) {
+                if (pdfError.name === 'RenderingCancelledException') {
+                    console.warn('[PdfxXBlock] PDF rendering was cancelled, but continuing with initialization...');
+                } else {
+                    console.error('[PdfxXBlock] PDF loading error:', pdfError);
+                    throw pdfError; // Re-throw non-rendering errors
+                }
+            }
 
             // Initialize tools if annotation is allowed
             if (this.config.allowAnnotation) {
-                await this.toolManager.init();
+                try {
+                    await this.toolManager.init();
 
-                // Load existing annotations
-                await this._loadExistingAnnotations();
+                    // Load existing Annotations
+                    await this._loadExistingAnnotations();
+                } catch (error) {
+                    console.error('[PdfxXBlock] Error during tool initialization or annotation loading for block:', this.config.blockId, error);
+                }
             }
 
             // Navigate to the current page
@@ -193,18 +194,15 @@ export class PdfxXBlock extends EventEmitter {
                 uiManager: this.uiManager
             });
 
-            console.debug(`[PdfxXBlock] Initialization complete for block ${this.config.blockId}`);
-
             return this;
 
         } catch (error) {
             // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
+            console.log('[PdfxXBlock] Error during initialization:', error);
             if (error.name === 'RenderingCancelledException') {
-                console.debug('[PdfxXBlock] Initialization render task cancelled (expected behavior)');
                 // Don't emit error or set loading to false for cancelled renders
                 throw error; // Re-throw to maintain the cancellation flow
             } else {
-                console.error('[PdfxXBlock] Initialization error:', error);
                 this.isLoading = false;
                 this.emit('error', error);
                 throw error;
@@ -217,26 +215,68 @@ export class PdfxXBlock extends EventEmitter {
      */
     async _loadExistingAnnotations() {
         try {
-            // Load highlights
-            if (this.config.highlights && Object.keys(this.config.highlights).length > 0) {
-                const highlightTool = this.toolManager.getTool('highlight');
-                if (highlightTool) {
-                    await highlightTool.loadAnnotations(this.config.highlights);
-                }
-            }
-
-            // Load drawing strokes
+            // Load drawing strokes (scribble annotations)
             if (this.config.drawingStrokes && Object.keys(this.config.drawingStrokes).length > 0) {
                 const scribbleTool = this.toolManager.getTool('scribble');
                 if (scribbleTool) {
+                    console.log('[PdfxXBlock] Loading', Object.keys(this.config.drawingStrokes).length, 'drawing stroke pages for block:', this.config.blockId);
                     await scribbleTool.loadAnnotations(this.config.drawingStrokes);
+                } else {
+                    console.warn('[PdfxXBlock] Scribble tool not available');
+                }
+            }
+
+            // Load highlights
+            if (this.config.highlights && Object.keys(this.config.highlights).length > 0) {
+                console.log('[PdfxXBlock] Loading highlights for', Object.keys(this.config.highlights).length, 'pages');
+                const highlightTool = this.toolManager.getTool('highlight');
+                if (highlightTool) {
+                    await highlightTool.loadAnnotations(this.config.highlights);
+                } else {
+                    console.warn('[PdfxXBlock] Highlight tool not available');
+                }
+            }
+
+            // Load text annotations
+            if (this.config.textAnnotations && Object.keys(this.config.textAnnotations).length > 0) {
+                console.log('[PdfxXBlock] Loading text annotations for', Object.keys(this.config.textAnnotations).length, 'pages');
+                const textTool = this.toolManager.getTool('text');
+                if (textTool) {
+                    await textTool.loadAnnotations(this.config.textAnnotations);
+                } else {
+                    console.warn('[PdfxXBlock] Text tool not available');
+                }
+            }
+
+            // Load shape annotations
+            if (this.config.shapeAnnotations && Object.keys(this.config.shapeAnnotations).length > 0) {
+                console.log('[PdfxXBlock] Loading shape annotations for', Object.keys(this.config.shapeAnnotations).length, 'pages');
+                const shapeTool = this.toolManager.getTool('shape');
+                if (shapeTool) {
+                    await shapeTool.loadAnnotations(this.config.shapeAnnotations);
+                } else {
+                    console.warn('[PdfxXBlock] Shape tool not available');
+                }
+            }
+
+            // Load note annotations
+            if (this.config.noteAnnotations && Object.keys(this.config.noteAnnotations).length > 0) {
+                console.log('[PdfxXBlock] Loading note annotations for', Object.keys(this.config.noteAnnotations).length, 'pages');
+                const noteTool = this.toolManager.getTool('note');
+                if (noteTool) {
+                    await noteTool.loadAnnotations(this.config.noteAnnotations);
+                } else {
+                    console.warn('[PdfxXBlock] Note tool not available');
                 }
             }
 
             // Load other saved annotations
             if (this.config.savedAnnotations && Object.keys(this.config.savedAnnotations).length > 0) {
+                console.log('[PdfxXBlock] Loading saved annotations...');
                 await this.storageManager.loadAnnotations(this.config.savedAnnotations);
             }
+
+            console.log('[PdfxXBlock] Finished loading existing annotations');
 
         } catch (error) {
             console.error('[PdfxXBlock] Error loading existing annotations:', error);
@@ -252,7 +292,6 @@ export class PdfxXBlock extends EventEmitter {
             this.emit('documentLoaded', data);
             this.uiManager.updateDocumentInfo(data);
             this.uiManager.setLoading(false);
-            console.debug('[PdfxXBlock] ✅ BULLETPROOF FIX: Loading indicator hidden via setLoading(false)');
         });
 
         this.pdfManager.on('pageChanged', (data) => {
@@ -278,6 +317,14 @@ export class PdfxXBlock extends EventEmitter {
             this.toolManager.on('toolActivated', (data) => {
                 this.emit('toolActivated', data);
                 this.uiManager.updateToolState(data.toolName, true);
+
+                // Apply any pending tool configuration
+                if (Object.keys(this._pendingToolConfig).length > 0) {
+                    const tool = this.toolManager.getTool(data.toolName);
+                    if (tool) {
+                        tool.setConfig(this._pendingToolConfig);
+                    }
+                }
             });
 
             this.toolManager.on('toolDeactivated', (data) => {
@@ -299,13 +346,20 @@ export class PdfxXBlock extends EventEmitter {
         // UI Manager events
         this.uiManager.on('toolRequested', (data) => {
             if (this.toolManager) {
-                this.toolManager.activateTool(data.toolName);
+                // EMERGENCY FIX: If ToolManager is not initialized, force initialization
+                if (!this.toolManager.isInitialized) {
+                    this.toolManager.init().then(() => {
+                        this.toolManager.activateTool(data.toolName);
+                    }).catch(error => {
+                        // Handle initialization error silently
+                    });
+                } else {
+                    this.toolManager.activateTool(data.toolName);
+                }
             }
         });
 
         this.uiManager.on('pageNavigationRequested', (data) => {
-            console.debug(`[PdfxXBlock] 🔍 DEBUG: Received pageNavigationRequested event with data:`, data);
-            console.debug(`[PdfxXBlock] 🚀 NAVIGATION TEST: Attempting to navigate to page ${data.pageNum}`);
             this.pdfManager.navigateToPage(data.pageNum);
         });
 
@@ -318,6 +372,80 @@ export class PdfxXBlock extends EventEmitter {
                 this._downloadPDF();
             }
         });
+
+        // Handle clear requests
+        this.uiManager.on('clearRequested', () => {
+            if (this.toolManager) {
+                // Clear current page annotations (more user-friendly than clearing everything)
+                this.toolManager.clearCurrentPageAnnotations();
+            }
+        });
+
+        // Handle undo requests
+        this.uiManager.on('undoRequested', () => {
+            if (this.toolManager) {
+                this._handleUndo();
+            }
+        });
+
+        // Handle color changes
+        this.uiManager.on('colorChanged', (data) => {
+            if (this.toolManager) {
+                this._updateActiveToolConfig({ color: data.color });
+            }
+        });
+
+        // Handle size changes
+        this.uiManager.on('sizeChanged', (data) => {
+            if (this.toolManager) {
+                this._updateActiveToolConfig({ size: data.size });
+            }
+        });
+    }
+
+    /**
+     * Handle undo action
+     */
+    _handleUndo() {
+        if (!this.toolManager) {
+            return;
+        }
+
+        const activeTool = this.toolManager.getActiveTool();
+        if (!activeTool) {
+            return;
+        }
+
+        // Check if the active tool has an undo method
+        if (typeof activeTool.undoLastStroke === 'function') {
+            activeTool.undoLastStroke();
+        } else if (typeof activeTool.undo === 'function') {
+            activeTool.undo();
+        } else {
+            // General fallback: remove the last annotation for this tool on current page
+            const annotations = activeTool.getAnnotationsForPage(this.pdfManager.getCurrentPage());
+            if (annotations.length > 0) {
+                const lastAnnotation = annotations[annotations.length - 1];
+                activeTool.deleteAnnotation(lastAnnotation.id);
+            }
+        }
+    }
+
+    /**
+     * Update active tool configuration
+     */
+    _updateActiveToolConfig(config) {
+        if (!this.toolManager) {
+            return;
+        }
+
+        const activeTool = this.toolManager.getActiveTool();
+        if (activeTool) {
+            activeTool.setConfig(config);
+        } else {
+            // Store the config for when a tool becomes active
+            this._pendingToolConfig = { ...this._pendingToolConfig, ...config };
+        }
     }
 
     /**
@@ -325,7 +453,6 @@ export class PdfxXBlock extends EventEmitter {
      */
     _downloadPDF() {
         if (!this.config.pdfUrl) {
-            console.warn('[PdfxXBlock] No PDF URL available for download');
             return;
         }
 
@@ -371,6 +498,8 @@ export class PdfxXBlock extends EventEmitter {
         this._loadExistingAnnotations = this._loadExistingAnnotations.bind(this);
         this._setupEventListeners = this._setupEventListeners.bind(this);
         this._downloadPDF = this._downloadPDF.bind(this);
+        this._handleUndo = this._handleUndo.bind(this);
+        this._updateActiveToolConfig = this._updateActiveToolConfig.bind(this);
     }
 
     /**
@@ -389,40 +518,43 @@ export class PdfxXBlock extends EventEmitter {
     }
 
     /**
-     * Clean up resources
+     * Destroy the XBlock instance
      */
-    destroy() {
-        console.debug(`[PdfxXBlock] Destroying instance for block ${this.config.blockId}`);
+    async destroy() {
+        try {
+            // Destroy all managers
+            if (this.toolManager) {
+                await this.toolManager.destroy();
+            }
 
-        // Clean up managers
-        if (this.toolManager) {
-            this.toolManager.destroy();
+            if (this.uiManager) {
+                await this.uiManager.destroy();
+            }
+
+            if (this.pdfManager) {
+                await this.pdfManager.destroy();
+            }
+
+            if (this.storageManager) {
+                await this.storageManager.destroy();
+            }
+
+            // Clear references
+            this.toolManager = null;
+            this.uiManager = null;
+            this.pdfManager = null;
+            this.storageManager = null;
+
+            // Remove all event listeners
+            this.removeAllListeners();
+
+            this.isInitialized = false;
+
+            this.emit('destroyed', { blockId: this.config.blockId });
+
+        } catch (error) {
+            this.emit('error', error);
         }
-
-        if (this.uiManager) {
-            this.uiManager.destroy();
-        }
-
-        if (this.pdfManager) {
-            this.pdfManager.destroy();
-        }
-
-        if (this.storageManager) {
-            this.storageManager.destroy();
-        }
-
-        // Remove all event listeners
-        this.removeAllListeners();
-
-        // Clear references
-        this.pdfManager = null;
-        this.toolManager = null;
-        this.uiManager = null;
-        this.storageManager = null;
-
-        this.isInitialized = false;
-
-        this.emit('destroyed', { blockId: this.config.blockId });
     }
 }
 
@@ -430,13 +562,17 @@ export class PdfxXBlock extends EventEmitter {
 window.PdfxXBlock = function(runtime, element, initArgs) {
     const instance = new PdfxXBlock(runtime, element, initArgs);
 
+    // Store instance immediately for debugging, even before init
+    window.PdfxInstances = window.PdfxInstances || {};
+    window.PdfxInstances[initArgs?.blockId] = instance;
+
     // Initialize the instance
-    instance.init().catch(error => {
+    instance.init().then(() => {
+        // Initialization completed successfully
+    }).catch(error => {
         // Don't treat RenderingCancelledException as an error - it's expected when cancelling tasks
-        if (error.name === 'RenderingCancelledException') {
-            console.debug('[PdfxXBlock] Initialization render task cancelled (expected behavior)');
-        } else {
-            console.error('[PdfxXBlock] Failed to initialize:', error);
+        if (error.name !== 'RenderingCancelledException') {
+            // Handle initialization error silently
         }
     });
 
@@ -446,26 +582,49 @@ window.PdfxXBlock = function(runtime, element, initArgs) {
 // Store instances globally for debugging and legacy compatibility
 window.PdfxInstances = window.PdfxInstances || {};
 
+// Global debug functions for testing tool activation
+window.testToolActivation = function(blockId, toolName) {
+    // Find the tool button
+    const toolButton = document.querySelector(`#toolbar-${blockId} .tool-button[data-tool="${toolName}"]`);
+    if (!toolButton) {
+        return;
+    }
+
+    // Simulate click
+    toolButton.click();
+};
+
+// Global debug function to check current state
+window.debugPdfxState = function(blockId) {
+    const instance = window.PdfxInstances[blockId];
+    if (!instance) {
+        return;
+    }
+
+    return {
+        instance: instance,
+        initialized: instance.isInitialized,
+        allowAnnotation: instance.config.allowAnnotation,
+        toolManager: instance.toolManager,
+        toolManagerInitialized: instance.toolManager ? instance.toolManager.isInitialized : false,
+        availableTools: instance.toolManager ? Array.from(instance.toolManager.tools.keys()) : [],
+        activeTool: instance.toolManager && instance.toolManager.activeTool ? instance.toolManager.activeTool.name : 'none'
+    };
+};
+
 // Global debug function for testing navigation
 window.testPdfNavigation = function(blockId, action) {
-    console.debug(`[DEBUG] Testing navigation: ${action} for block ${blockId}`);
-
     // Find the navigation element
     const navigation = document.querySelector(`#navigation-${blockId}`);
     if (!navigation) {
-        console.error(`[DEBUG] Navigation element not found for block ${blockId}`);
         return;
     }
 
     // Find the button for the action
     const button = navigation.querySelector(`[data-nav="${action}"]`);
     if (!button) {
-        console.error(`[DEBUG] Navigation button not found for action: ${action}`);
         return;
     }
-
-    console.debug(`[DEBUG] Found button:`, button);
-    console.debug(`[DEBUG] Simulating click...`);
 
     // Simulate click
     button.click();
@@ -473,24 +632,17 @@ window.testPdfNavigation = function(blockId, action) {
 
 // Global debug function for testing zoom
 window.testPdfZoom = function(blockId, action) {
-    console.debug(`[DEBUG] Testing zoom: ${action} for block ${blockId}`);
-
     // Find the navigation element
     const navigation = document.querySelector(`#navigation-${blockId}`);
     if (!navigation) {
-        console.error(`[DEBUG] Navigation element not found for block ${blockId}`);
         return;
     }
 
     // Find the button for the action
     const button = navigation.querySelector(`[data-zoom="${action}"]`);
     if (!button) {
-        console.error(`[DEBUG] Zoom button not found for action: ${action}`);
         return;
     }
-
-    console.debug(`[DEBUG] Found zoom button:`, button);
-    console.debug(`[DEBUG] Simulating click...`);
 
     // Simulate click
     button.click();

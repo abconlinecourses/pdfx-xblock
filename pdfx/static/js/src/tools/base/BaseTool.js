@@ -127,7 +127,6 @@ export class BaseTool extends EventEmitter {
     updateAnnotation(annotationId, data) {
         const annotation = this.annotations.get(annotationId);
         if (!annotation) {
-            console.warn(`[${this.name}Tool] Annotation ${annotationId} not found`);
             return null;
         }
 
@@ -145,7 +144,6 @@ export class BaseTool extends EventEmitter {
     deleteAnnotation(annotationId) {
         const annotation = this.annotations.get(annotationId);
         if (!annotation) {
-            console.warn(`[${this.name}Tool] Annotation ${annotationId} not found`);
             return false;
         }
 
@@ -176,11 +174,19 @@ export class BaseTool extends EventEmitter {
      */
     async loadAnnotations(annotationsData) {
         try {
+            console.log('[BaseTool] Loading annotations for tool:', this.name, '- pages:', Object.keys(annotationsData).length);
+            console.log('[BaseTool] Raw annotations data:', annotationsData);
+
             for (const [pageNum, pageAnnotations] of Object.entries(annotationsData)) {
                 const page = parseInt(pageNum, 10);
+                console.log(`[BaseTool] Processing page ${page}, annotations:`, pageAnnotations);
 
                 if (Array.isArray(pageAnnotations)) {
+                    console.log(`[BaseTool] Page ${page} has ${pageAnnotations.length} annotations`);
+
                     for (const annotationData of pageAnnotations) {
+                        console.log('[BaseTool] Processing annotation:', annotationData);
+
                         const annotation = {
                             id: annotationData.id || this._generateAnnotationId(),
                             type: this.name,
@@ -191,19 +197,26 @@ export class BaseTool extends EventEmitter {
                             config: annotationData.config || this.config
                         };
 
+                        console.log('[BaseTool] Created annotation object:', annotation);
+
                         this.annotations.set(annotation.id, annotation);
                         this._addAnnotationToPage(annotation);
+
+                        console.log('[BaseTool] Added annotation to collections. Total annotations:', this.annotations.size);
                     }
+                } else {
+                    console.warn(`[BaseTool] Page ${page} annotations is not an array:`, typeof pageAnnotations, pageAnnotations);
                 }
             }
+
+            console.log('[BaseTool] Final state - Total annotations:', this.annotations.size);
+            console.log('[BaseTool] Annotations by page:', this.annotationsByPage);
 
             // Render annotations for current page
             this._renderAnnotationsForPage(this.currentPage);
 
-            console.debug(`[${this.name}Tool] Loaded ${this.annotations.size} annotations`);
-
         } catch (error) {
-            console.error(`[${this.name}Tool] Error loading annotations:`, error);
+            console.error('[BaseTool] Error loading annotations:', error);
         }
     }
 
@@ -348,7 +361,6 @@ export class BaseTool extends EventEmitter {
     _renderAnnotationsForPage(pageNum) {
         // Default implementation - subclasses should override
         const annotations = this.getAnnotationsForPage(pageNum);
-        console.debug(`[${this.name}Tool] Rendering ${annotations.length} annotations for page ${pageNum}`);
     }
 
     /**
@@ -372,8 +384,6 @@ export class BaseTool extends EventEmitter {
      * Destroy the tool
      */
     async destroy() {
-        console.debug(`[${this.name}Tool] Destroying tool`);
-
         // Cleanup tool-specific resources
         await this.cleanup();
 

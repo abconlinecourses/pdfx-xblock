@@ -15,7 +15,6 @@ export class ShapeTool extends BaseTool {
     }
 
     async init() {
-        console.debug('[ShapeTool] Initializing shape tool');
         this.isEnabled = true;
     }
 
@@ -37,7 +36,6 @@ export class ShapeTool extends BaseTool {
     }
 
     async cleanup() {
-        console.debug('[ShapeTool] Cleaning up shape tool');
     }
 }
 

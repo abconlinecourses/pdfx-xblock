@@ -40,15 +40,8 @@ export class StudioEditor extends EventEmitter {
      * @returns {Element} Native DOM element
      */
     _ensureDOMElement(element) {
-        console.log('[StudioEditor] Element type:', typeof element);
-        console.log('[StudioEditor] Element constructor:', element?.constructor?.name);
-        console.log('[StudioEditor] Element nodeType:', element?.nodeType);
-        console.log('[StudioEditor] Element jquery property:', element?.jquery);
-        console.log('[StudioEditor] Element length:', element?.length);
-
         // If it's already a native DOM element
         if (element && element.nodeType === Node.ELEMENT_NODE) {
-            console.log('[StudioEditor] Element is already a native DOM element');
             return element;
         }
 
@@ -58,8 +51,7 @@ export class StudioEditor extends EventEmitter {
             (typeof element.get === 'function' && element.length !== undefined) || // jQuery-like object
             (element.constructor && element.constructor.fn && element.constructor.fn.jquery) // jQuery constructor check
         )) {
-            console.log('[StudioEditor] Converting jQuery object to DOM element');
-            console.log('[StudioEditor] jQuery object details:', {
+            console.log('jQuery object detected:', {
                 length: element.length,
                 hasGet: typeof element.get === 'function',
                 hasJquery: !!element.jquery,
@@ -73,20 +65,17 @@ export class StudioEditor extends EventEmitter {
             // If that doesn't work, try element.get(0)
             if (!domElement || domElement.nodeType !== Node.ELEMENT_NODE) {
                 domElement = element.get(0);
-                console.log('[StudioEditor] Got DOM element via element.get(0)');
             } else {
-                console.log('[StudioEditor] Got DOM element via element[0]');
+                console.log('Using element[0] successfully');
             }
 
             if (domElement && domElement.nodeType === Node.ELEMENT_NODE) {
-                console.log('[StudioEditor] Successfully converted jQuery to DOM element:', domElement);
                 return domElement;
             }
         }
 
         // If it's a string selector, try to find the element
         if (typeof element === 'string') {
-            console.log('[StudioEditor] Element is a string selector, finding element:', element);
             const foundElement = document.querySelector(element);
             if (foundElement) {
                 return foundElement;
@@ -94,7 +83,6 @@ export class StudioEditor extends EventEmitter {
         }
 
         // Last resort: throw an error with helpful information
-        console.error('[StudioEditor] Could not convert element to DOM element:', element);
         throw new Error('StudioEditor requires a valid DOM element or jQuery object');
     }
 
@@ -111,18 +99,14 @@ export class StudioEditor extends EventEmitter {
     }
 
     init() {
-        console.log('[StudioEditor] Initializing PDF XBlock Studio Editor');
-
         try {
             // Ensure we have a proper DOM element first
             const element = this._ensureElement();
-            console.log('[StudioEditor] Got DOM element for initialization');
 
             // Find form and elements
             this.form = element.querySelector('#pdf-form');
             if (!this.form) {
-                console.error('[StudioEditor] Form not found');
-                console.error('[StudioEditor] Available form elements:',
+                console.warn('PDF form not found. Available forms:',
                     Array.from(element.querySelectorAll('form')).map(f => f.id || f.className));
                 return;
             }
@@ -139,9 +123,8 @@ export class StudioEditor extends EventEmitter {
             // Set up form submission
             this._setupFormHandlers();
 
-            console.log('[StudioEditor] Studio Editor initialized successfully');
         } catch (error) {
-            console.error('[StudioEditor] Error during initialization:', error);
+            console.error('Error initializing StudioEditor:', error);
             throw error;
         }
     }
@@ -165,13 +148,6 @@ export class StudioEditor extends EventEmitter {
             const fileInfoText = fileInfo ? fileInfo.textContent.trim() : '';
             const hasExistingFileInfo = fileInfoText && !fileInfoText.includes('No file chosen') && !fileInfoText.includes('placeholder');
 
-            console.log('[StudioEditor] Detecting existing data...');
-            console.log('[StudioEditor] Existing PDF URL:', existingUrl);
-            console.log('[StudioEditor] Existing file name:', existingFileName);
-            console.log('[StudioEditor] Existing asset key:', existingAssetKey);
-            console.log('[StudioEditor] File info text:', fileInfoText);
-            console.log('[StudioEditor] Has existing file info:', hasExistingFileInfo);
-
             // Priority order (matching Python get_pdf_url method):
             // 1. Asset key (contentstore files)
             // 2. File path (Django storage files)
@@ -179,7 +155,6 @@ export class StudioEditor extends EventEmitter {
 
             if (existingAssetKey) {
                 // We have a contentstore asset
-                console.log('[StudioEditor] Found existing contentstore asset, switching to upload tab');
                 this.currentTab = 'upload';
                 this.switchTab('upload');
 
@@ -189,7 +164,6 @@ export class StudioEditor extends EventEmitter {
 
             } else if (existingFileName || hasExistingFileInfo) {
                 // We have an uploaded file (Django storage or data URL)
-                console.log('[StudioEditor] Found existing uploaded file, switching to upload tab');
                 this.currentTab = 'upload';
                 this.switchTab('upload');
 
@@ -208,18 +182,16 @@ export class StudioEditor extends EventEmitter {
 
             } else if (existingUrl) {
                 // We have an external URL (not a data URL)
-                console.log('[StudioEditor] Found existing PDF URL, switching to URL tab');
                 this.currentTab = 'url';
                 this.switchTab('url');
 
             } else {
                 // No existing data, default to upload tab
-                console.log('[StudioEditor] No existing PDF data, defaulting to upload tab');
                 this.currentTab = 'upload';
                 this.switchTab('upload');
             }
         } catch (error) {
-            console.error('[StudioEditor] Error detecting existing data:', error);
+            console.error('Error detecting existing data:', error);
             // Default to upload tab on error
             this.currentTab = 'upload';
             this.switchTab('upload');
@@ -239,13 +211,11 @@ export class StudioEditor extends EventEmitter {
                 });
             });
         } catch (error) {
-            console.error('[StudioEditor] Error setting up tab switching:', error);
+            console.error('Error setting up tab switching:', error);
         }
     }
 
     switchTab(tabName) {
-        console.log(`[StudioEditor] Switching to tab: ${tabName}`);
-
         try {
             const element = this._ensureElement();
 
@@ -272,15 +242,13 @@ export class StudioEditor extends EventEmitter {
                     urlTab.style.display = 'block';
                 }
             } else {
-                console.warn('[StudioEditor] Tab content elements not found');
-                console.warn('[StudioEditor] uploadTab:', uploadTab);
-                console.warn('[StudioEditor] urlTab:', urlTab);
+                console.warn('Tab content elements not found');
             }
 
             this.currentTab = tabName;
             this.emit('tabChanged', { tab: tabName });
         } catch (error) {
-            console.error('[StudioEditor] Error switching tabs:', error);
+            console.error('Error switching tabs:', error);
         }
     }
 
@@ -292,10 +260,7 @@ export class StudioEditor extends EventEmitter {
             const dropZone = element.querySelector('#drop-zone');
 
             if (!fileInput || !uploadTrigger || !dropZone) {
-                console.warn('[StudioEditor] Upload elements not found');
-                console.warn('[StudioEditor] fileInput:', fileInput);
-                console.warn('[StudioEditor] uploadTrigger:', uploadTrigger);
-                console.warn('[StudioEditor] dropZone:', dropZone);
+                console.warn('File upload elements not found');
                 return;
             }
 
@@ -321,7 +286,7 @@ export class StudioEditor extends EventEmitter {
                 });
             });
         } catch (error) {
-            console.error('[StudioEditor] Error setting up file upload:', error);
+            console.error('Error setting up file upload:', error);
         }
     }
 
@@ -338,36 +303,31 @@ export class StudioEditor extends EventEmitter {
 
     handleDragOver(event) {
         event.preventDefault();
-        const element = this._ensureElement();
-        const dropZone = element.querySelector('#drop-zone');
-        dropZone.classList.add('drag-over');
+        event.dataTransfer.dropEffect = 'copy';
+        event.currentTarget.classList.add('drag-over');
     }
 
     handleDragLeave(event) {
         event.preventDefault();
-        const element = this._ensureElement();
-        const dropZone = element.querySelector('#drop-zone');
-        dropZone.classList.remove('drag-over');
+        event.currentTarget.classList.remove('drag-over');
     }
 
     handleDrop(event) {
         event.preventDefault();
-        const element = this._ensureElement();
-        const dropZone = element.querySelector('#drop-zone');
-        dropZone.classList.remove('drag-over');
+        event.currentTarget.classList.remove('drag-over');
 
         const files = event.dataTransfer.files;
         if (files.length > 0) {
-            // Reset to file selection state first (in case we're changing an uploaded file)
+            // Reset to file selection state first
             this.resetToFileSelectionState();
 
-            // Process the new file
+            // Process the first file
             this.processFile(files[0]);
         }
     }
 
     processFile(file) {
-        console.log('[StudioEditor] Processing file:', {
+        console.log('Processing file:', {
             name: file.name,
             size: file.size,
             type: file.type
@@ -388,7 +348,6 @@ export class StudioEditor extends EventEmitter {
 
         // Store the file for form submission
         this.uploadedFile = file;
-        console.log('[StudioEditor] File stored for upload');
 
         // Update UI to show file info
         this.updateFileInfo(file);
@@ -398,20 +357,16 @@ export class StudioEditor extends EventEmitter {
     }
 
     updateFileInfo(file) {
-        console.log('[StudioEditor] updateFileInfo - Processing file:', file.name);
-
         try {
             // Use the centralized _ensureElement() method instead of manual conversion
             const element = this._ensureElement();
-            console.log('[StudioEditor] updateFileInfo - Got DOM element successfully');
 
             // **CRITICAL FIX**: Update the hidden field with the new file name
             const hiddenFileNameField = element.querySelector('#pdf-file-name');
             if (hiddenFileNameField) {
                 hiddenFileNameField.value = file.name;
-                console.log('[StudioEditor] updateFileInfo - Updated hidden field with file name:', file.name);
             } else {
-                console.warn('[StudioEditor] updateFileInfo - Hidden pdf-file-name field not found');
+                console.warn('Hidden file name field not found');
             }
 
             const fileInfo = element.querySelector('#file-info');
@@ -422,15 +377,12 @@ export class StudioEditor extends EventEmitter {
                     <span class="filesize">(${sizeInMB} MB)</span>
                     <span class="file-status pending">Ready to upload</span>
                 `;
-                console.log('[StudioEditor] updateFileInfo - File info updated successfully');
             } else {
-                console.warn('[StudioEditor] updateFileInfo - #file-info element not found');
-                console.warn('[StudioEditor] updateFileInfo - Available elements in container:',
+                console.warn('File info element not found. Available elements:',
                     Array.from(element.querySelectorAll('[id]')).map(el => el.id));
             }
         } catch (error) {
-            console.error('[StudioEditor] updateFileInfo - Error updating file info:', error);
-            console.error('[StudioEditor] updateFileInfo - Element details:', {
+            console.error('Error updating file info:', error, {
                 elementType: typeof this.element,
                 hasQuerySelector: typeof this.element.querySelector,
                 isJQuery: !!this.element.jquery,
@@ -446,10 +398,6 @@ export class StudioEditor extends EventEmitter {
      * @param {string} storagePath - The path/URL where the file is stored
      */
     showUploadedFileState(fileName, storageMethod = 'unknown', storagePath = null) {
-        console.log('[StudioEditor] showUploadedFileState - Showing uploaded file state for:', fileName);
-        console.log('[StudioEditor] showUploadedFileState - Storage method:', storageMethod);
-        console.log('[StudioEditor] showUploadedFileState - Storage path:', storagePath);
-
         try {
             const element = this._ensureElement();
             const fileInfo = element.querySelector('#file-info');
@@ -469,7 +417,6 @@ export class StudioEditor extends EventEmitter {
                         previewUrl = storagePath || '';
                         storageDisplay = 'Open edX Course Assets';
                         canPreview = !!previewUrl;
-                        console.log('[StudioEditor] showUploadedFileState - Using contentstore asset URL:', previewUrl);
                         break;
 
                     case 'django_file_storage':
@@ -477,7 +424,6 @@ export class StudioEditor extends EventEmitter {
                         previewUrl = this.runtime.handlerUrl(this.element, 'serve_pdf_file');
                         storageDisplay = 'Django File Storage';
                         canPreview = true;
-                        console.log('[StudioEditor] showUploadedFileState - Using Django storage handler URL:', previewUrl);
                         break;
 
                     case 'data_url_fallback':
@@ -485,7 +431,6 @@ export class StudioEditor extends EventEmitter {
                         previewUrl = '#';
                         storageDisplay = 'Embedded Data URL';
                         canPreview = false; // Data URLs are too large for new tab preview
-                        console.log('[StudioEditor] showUploadedFileState - Using data URL storage (preview disabled)');
                         break;
 
                     case 'server_stored':
@@ -493,7 +438,6 @@ export class StudioEditor extends EventEmitter {
                         previewUrl = this.runtime.handlerUrl(this.element, 'serve_pdf_file');
                         storageDisplay = 'Server Storage';
                         canPreview = true;
-                        console.log('[StudioEditor] showUploadedFileState - Using server storage handler URL:', previewUrl);
                         break;
 
                     default:
@@ -501,7 +445,6 @@ export class StudioEditor extends EventEmitter {
                         previewUrl = this.runtime.handlerUrl(this.element, 'serve_pdf_file');
                         storageDisplay = 'Unknown Storage';
                         canPreview = true;
-                        console.log('[StudioEditor] showUploadedFileState - Using fallback handler URL:', previewUrl);
                         break;
                 }
 
@@ -541,9 +484,6 @@ export class StudioEditor extends EventEmitter {
                         </div>
                     </div>
                 `;
-                console.log('[StudioEditor] showUploadedFileState - File info updated to uploaded state');
-                console.log('[StudioEditor] showUploadedFileState - Can preview:', canPreview);
-                console.log('[StudioEditor] showUploadedFileState - Preview URL:', previewUrl);
             }
 
             // Update the uploaded-file-info element with detailed information
@@ -573,26 +513,21 @@ export class StudioEditor extends EventEmitter {
                 }
 
                 uploadedFileInfo.innerHTML = uploadedFileContent;
-                console.log('[StudioEditor] showUploadedFileState - Updated uploaded-file-info element');
             }
 
             // Update upload trigger button
             if (uploadTrigger) {
                 uploadTrigger.innerHTML = '<i class="fas fa-exchange-alt"></i> Change PDF File';
                 uploadTrigger.classList.add('change-file');
-                console.log('[StudioEditor] showUploadedFileState - Upload trigger updated to change mode');
             }
 
             // Update drop zone styling
             if (dropZone) {
                 dropZone.classList.add('file-uploaded');
-                console.log('[StudioEditor] showUploadedFileState - Drop zone marked as uploaded');
             }
 
-            console.log('[StudioEditor] showUploadedFileState - UI state updated successfully');
-
         } catch (error) {
-            console.error('[StudioEditor] showUploadedFileState - Error updating uploaded state:', error);
+            console.error('Error showing uploaded file state:', error);
         }
     }
 
@@ -600,8 +535,6 @@ export class StudioEditor extends EventEmitter {
      * Reset to file selection state (when changing files)
      */
     resetToFileSelectionState() {
-        console.log('[StudioEditor] resetToFileSelectionState - Resetting to file selection state');
-
         try {
             const element = this._ensureElement();
             const fileInfo = element.querySelector('#file-info');
@@ -633,79 +566,71 @@ export class StudioEditor extends EventEmitter {
             // Clear uploaded file
             this.uploadedFile = null;
 
-            console.log('[StudioEditor] resetToFileSelectionState - Reset completed');
-
         } catch (error) {
-            console.error('[StudioEditor] resetToFileSelectionState - Error resetting state:', error);
+            console.error('Error resetting to file selection state:', error);
         }
     }
 
     _setupFormHandlers() {
-        const element = this._ensureElement();
-        const submitButton = element.querySelector('#pdf-submit-options');
-        const cancelButton = element.querySelector('.cancel-button');
+        try {
+            const element = this._ensureElement();
 
-        if (submitButton) {
-            submitButton.addEventListener('click', this.handleFormSubmit);
+            // Form submission
+            if (this.form) {
+                this.form.addEventListener('submit', this.handleFormSubmit);
+            }
+
+            // Cancel button
+            const cancelButton = element.querySelector('.cancel-button');
+            if (cancelButton) {
+                cancelButton.addEventListener('click', this.handleCancel);
+            }
+
+        } catch (error) {
+            console.error('Error setting up form handlers:', error);
         }
-
-        if (cancelButton) {
-            cancelButton.addEventListener('click', this.handleCancel);
-        }
-
-        // Form submission
-        this.form.addEventListener('submit', this.handleFormSubmit);
     }
 
     async handleFormSubmit(event) {
         event.preventDefault();
-        console.log('[StudioEditor] Form submission started');
 
         try {
             this.setLoadingState(true);
 
-            // Collect form data first
+            // Collect form data
             const formData = this.collectFormData();
-            console.log('[StudioEditor] Collected form data:', formData);
 
             // Validate form data
             const validation = this.validateFormData(formData);
             if (!validation.isValid) {
-                console.error('[StudioEditor] Form validation failed:', validation.errors);
-                this.showError(`Validation failed: ${validation.errors.join(', ')}`);
+                this.showError(validation.errors.join(', '));
                 return;
             }
 
-            // Create FormData for file upload
+            // Create FormData for submission (handles both regular data and file uploads)
             const submitData = new FormData();
 
-            // Add all form fields
-            submitData.append('display_name', formData.display_name);
-            submitData.append('pdf_file_name', formData.pdf_file_name);
-            submitData.append('allow_download', formData.allow_download);
-            submitData.append('allow_annotation', formData.allow_annotation);
-
-            // Add URL if provided (URL tab)
-            if (formData.pdf_url) {
-                submitData.append('pdf_url', formData.pdf_url);
-            }
+            // Add regular form fields
+            Object.keys(formData).forEach(key => {
+                if (formData[key] !== null && formData[key] !== undefined) {
+                    submitData.append(key, formData[key]);
+                }
+            });
 
             // **CRITICAL: Add file if uploaded (File tab)**
             const fileInput = this.container.querySelector('#pdf-file');
             if (fileInput && fileInput.files && fileInput.files.length > 0) {
                 const file = fileInput.files[0];
-                console.log('[StudioEditor] Adding file to FormData:', {
+                console.log('Adding file from input:', {
                     name: file.name,
                     size: file.size,
                     type: file.type
                 });
                 submitData.append('pdf_file', file);
             } else {
-                console.log('[StudioEditor] No file found in file input');
-
                 // Check if we have stored file data from drag & drop
                 if (this.uploadedFile) {
-                    console.log('[StudioEditor] Adding stored file to FormData:', {
+                    console.log('Adding uploaded file:', {
                         name: this.uploadedFile.name,
                         size: this.uploadedFile.size,
                         type: this.uploadedFile.type
@@ -715,24 +640,22 @@ export class StudioEditor extends EventEmitter {
             }
 
             // Log FormData contents for debugging
-            console.log('[StudioEditor] FormData contents:');
             for (let [key, value] of submitData.entries()) {
                 if (value instanceof File) {
-                    console.log(`  ${key}: [File] name="${value.name}", size=${value.size}, type="${value.type}"`);
+                    console.log(`FormData[${key}]: File(${value.name}, ${value.size} bytes)`);
                 } else {
-                    console.log(`  ${key}: ${value}`);
+                    console.log(`FormData[${key}]: ${value}`);
                 }
             }
 
             // Submit the data
             const result = await this.submitData(submitData);
-            console.log('[StudioEditor] Submit result:', result);
 
             if (result.result === 'success') {
                 this.showSuccess('Settings saved successfully!');
 
                 if (result.file_uploaded) {
-                    console.log('[StudioEditor] File upload successful:', {
+                    console.log('File uploaded successfully:', {
                         fileName: result.file_name,
                         storageMethod: result.storage_method,
                         storagePath: result.storage_path
@@ -751,12 +674,11 @@ export class StudioEditor extends EventEmitter {
                     this.closeEditor();
                 }, 1500);
             } else {
-                console.error('[StudioEditor] Submit failed:', result.message);
                 this.showError(result.message || 'Failed to save settings');
             }
 
         } catch (error) {
-            console.error('[StudioEditor] Form submission error:', error);
+            console.error('Form submission error:', error);
             this.showError(`Error: ${error.message}`);
         } finally {
             this.setLoadingState(false);
@@ -781,7 +703,6 @@ export class StudioEditor extends EventEmitter {
         // Provide default display name if empty
         if (!data.display_name) {
             data.display_name = 'PDF Viewer';
-            console.log('[StudioEditor] Using default display name: PDF Viewer');
         }
 
         // Handle PDF source based on current tab
@@ -791,7 +712,7 @@ export class StudioEditor extends EventEmitter {
             data.pdf_url = ''; // Clear URL when using file upload
         }
 
-        console.log('[StudioEditor] Collected form data:', {
+        console.log('Collected form data:', {
             display_name: data.display_name,
             pdf_file_name: data.pdf_file_name,
             allow_download: data.allow_download,
@@ -809,7 +730,6 @@ export class StudioEditor extends EventEmitter {
         const errors = [];
 
         // Display name is now automatically set to default if empty, so no need to validate
-        console.log('[StudioEditor] Validating form data:', data);
 
         // Check if we have either a URL or a file
         const hasUrl = data.pdf_url && data.pdf_url.trim().length > 0;
@@ -829,7 +749,7 @@ export class StudioEditor extends EventEmitter {
                        (existingAssetKey.length > 0) ||
                        (existingFilePath.length > 0);
 
-        console.log('[StudioEditor] File validation details:', {
+        console.log('File validation check:', {
             hasUploadedFile: !!this.uploadedFile,
             hasFileInput: !!(this.container.querySelector('#pdf-file')?.files?.length),
             hasPdfFileName: !!(data.pdf_file_name && data.pdf_file_name.trim().length > 0),
@@ -850,17 +770,15 @@ export class StudioEditor extends EventEmitter {
                 // Allow data URLs for base64 encoded files
                 if (data.pdf_url.startsWith('data:application/pdf')) {
                     // Valid data URL
-                    console.log('[StudioEditor] Valid data URL detected');
                 } else {
                     new URL(data.pdf_url);
-                    console.log('[StudioEditor] Valid external URL detected');
                 }
             } catch (e) {
                 errors.push('PDF URL is not a valid URL');
             }
         }
 
-        console.log('[StudioEditor] Validation result:', {
+        console.log('Validation result:', {
             hasUrl,
             hasFile,
             errors,
@@ -875,11 +793,8 @@ export class StudioEditor extends EventEmitter {
 
     async submitData(data) {
         try {
-            console.log('[StudioEditor] Submitting data to backend...');
-
             // Get CSRF token
             const csrfToken = this.getCSRFToken();
-            console.log('[StudioEditor] CSRF token found:', !!csrfToken);
 
             // Prepare fetch options
             const fetchOptions = {
@@ -892,7 +807,6 @@ export class StudioEditor extends EventEmitter {
                 // For FormData (file uploads), don't set Content-Type header
                 // Let the browser set it with boundary
                 fetchOptions.body = data;
-                console.log('[StudioEditor] Using FormData for file upload');
 
                 // Add CSRF token to FormData
                 if (csrfToken) {
@@ -902,7 +816,6 @@ export class StudioEditor extends EventEmitter {
                 // For regular JSON data
                 fetchOptions.headers['Content-Type'] = 'application/json';
                 fetchOptions.body = JSON.stringify(data);
-                console.log('[StudioEditor] Using JSON data');
 
                 // Add CSRF token to headers
                 if (csrfToken) {
@@ -910,7 +823,7 @@ export class StudioEditor extends EventEmitter {
                 }
             }
 
-            console.log('[StudioEditor] Fetch options:', {
+            console.log('Submitting data:', {
                 method: fetchOptions.method,
                 headers: fetchOptions.headers,
                 bodyType: data instanceof FormData ? 'FormData' : 'JSON'
@@ -919,22 +832,19 @@ export class StudioEditor extends EventEmitter {
             // Make the request
             const response = await fetch(this.runtime.handlerUrl(this.element, 'studio_submit'), fetchOptions);
 
-            console.log('[StudioEditor] Response status:', response.status);
-            console.log('[StudioEditor] Response headers:', Object.fromEntries(response.headers.entries()));
-
             if (!response.ok) {
                 const errorText = await response.text();
-                console.error('[StudioEditor] HTTP error response:', errorText);
+                console.error('HTTP Error:', response.status, response.statusText, errorText);
                 throw new Error(`HTTP ${response.status}: ${response.statusText}`);
             }
 
             const result = await response.json();
-            console.log('[StudioEditor] Parsed response:', result);
+            console.log('Submit result:', result);
 
             return result;
 
         } catch (error) {
-            console.error('[StudioEditor] Submit error:', error);
+            console.error('Submit error:', error);
             throw error;
         }
     }
@@ -964,13 +874,11 @@ export class StudioEditor extends EventEmitter {
 
     handleCancel(event) {
         event.preventDefault();
-        console.log('[StudioEditor] Cancel clicked');
         this.closeEditor();
     }
 
     closeEditor() {
         // Notify the Studio runtime that the user wants to cancel
-        console.log('[StudioEditor] Notifying runtime of cancel event');
         this.runtime.notify('cancel');
 
         // Emit local event for any listeners
@@ -993,12 +901,10 @@ export class StudioEditor extends EventEmitter {
     }
 
     showError(message) {
-        console.error('[StudioEditor] Error:', message);
         this.showMessage(message, 'error');
     }
 
     showSuccess(message) {
-        console.log('[StudioEditor] Success:', message);
         this.showMessage(message, 'success');
     }
 
@@ -1033,61 +939,42 @@ export class StudioEditor extends EventEmitter {
      * @returns {Element} Native DOM element
      */
     _ensureElement() {
-        console.log('[StudioEditor] _ensureElement - Starting element conversion');
-        console.log('[StudioEditor] _ensureElement - Element type:', typeof this.element);
-        console.log('[StudioEditor] _ensureElement - Element constructor:', this.element?.constructor?.name);
-        console.log('[StudioEditor] _ensureElement - Has querySelector:', typeof this.element?.querySelector);
-        console.log('[StudioEditor] _ensureElement - Is jQuery:', !!this.element?.jquery);
-
         let element = this.element;
 
         // If this.element is still a jQuery object, convert it
         if (!element.querySelector && element.jquery) {
-            console.log('[StudioEditor] _ensureElement - Converting jQuery object to DOM element');
-            console.log('[StudioEditor] _ensureElement - jQuery object length:', element.length);
-            console.log('[StudioEditor] _ensureElement - jQuery object has get method:', typeof element.get === 'function');
+            console.log('Converting jQuery element to DOM element');
 
             // Try element[0] first (most common way)
             let domElement = element[0];
-            console.log('[StudioEditor] _ensureElement - Trying element[0]:', domElement);
 
             // If that doesn't work, try element.get(0)
             if (!domElement || domElement.nodeType !== Node.ELEMENT_NODE) {
                 domElement = element.get(0);
-                console.log('[StudioEditor] _ensureElement - Trying element.get(0):', domElement);
             }
 
             if (domElement && domElement.nodeType === Node.ELEMENT_NODE) {
                 element = domElement;
-                console.log('[StudioEditor] _ensureElement - Successfully converted jQuery to DOM element');
             } else {
-                console.error('[StudioEditor] _ensureElement - Failed to convert jQuery object to DOM element');
-                console.error('[StudioEditor] _ensureElement - domElement:', domElement);
-                console.error('[StudioEditor] _ensureElement - domElement nodeType:', domElement?.nodeType);
+                console.error('Failed to convert jQuery element to DOM element');
             }
         }
 
         // If we still don't have querySelector, try the _ensureDOMElement method again
         if (!element.querySelector) {
-            console.log('[StudioEditor] _ensureElement - Element still lacks querySelector, trying _ensureDOMElement');
             try {
                 element = this._ensureDOMElement(this.element);
-                console.log('[StudioEditor] _ensureElement - _ensureDOMElement successful');
             } catch (error) {
-                console.error('[StudioEditor] _ensureElement - _ensureDOMElement failed:', error);
+                console.error('Failed to ensure DOM element:', error);
                 throw error;
             }
         }
 
         // Final validation
         if (!element || typeof element.querySelector !== 'function') {
-            console.error('[StudioEditor] _ensureElement - Final element is invalid');
-            console.error('[StudioEditor] _ensureElement - Final element:', element);
-            console.error('[StudioEditor] _ensureElement - Final element type:', typeof element);
             throw new Error('Could not convert element to a valid DOM element with querySelector method');
         }
 
-        console.log('[StudioEditor] _ensureElement - Successfully got DOM element');
         return element;
     }
 }

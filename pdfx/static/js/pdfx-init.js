@@ -6,8 +6,6 @@
 (function() {
     'use strict';
 
-    console.log('[PdfxInit] 🚀 PDF XBlock initialization script loaded');
-
     /**
      * Wait for all required dependencies to be available
      */
@@ -19,17 +17,15 @@
             function checkDependencies() {
                 checkCount++;
 
-                if (typeof window.pdfjsLib !== 'undefined' && typeof window.fabric !== 'undefined') {
-                    console.log('[PdfxInit] ✅ All dependencies ready');
+                if (typeof window.pdfjsLib !== 'undefined' && typeof window.fabric !== 'undefined' && typeof window.PdfxXBlock === 'function') {
+
                     resolve();
                 } else if (checkCount >= maxChecks) {
                     console.error('[PdfxInit] ❌ Timeout waiting for dependencies');
-                    console.log('pdfjsLib:', typeof window.pdfjsLib);
-                    console.log('fabric:', typeof window.fabric);
+
                     resolve(); // Continue anyway
                 } else {
-                    console.log(`[PdfxInit] ⏳ Waiting for dependencies... (${checkCount}/${maxChecks})`);
-                    setTimeout(checkDependencies, 100);
+                   setTimeout(checkDependencies, 100);
                 }
             }
 
@@ -39,7 +35,6 @@
             // Also listen for the PDF.js ready event
             document.addEventListener('pdfjsReady', function() {
                 if (typeof window.fabric !== 'undefined') {
-                    console.log('[PdfxInit] ✅ Dependencies ready via event');
                     resolve();
                 }
             }, { once: true });
@@ -52,7 +47,9 @@
     function initializePdfxXBlock(blockElement) {
         try {
             const blockId = blockElement.dataset.blockId;
-            console.log(`[PdfxInit] 🔧 Starting PdfxXBlock initialization for block ${blockId}...`);
+
+            // Debug: Log the element being processed
+            console.log('[PdfxInit] Processing block:', blockId, blockElement.className);
 
             // Check dependencies one more time
             if (typeof window.pdfjsLib === 'undefined') {
@@ -69,43 +66,65 @@
             const config = {
                 blockId: blockElement.dataset.blockId || '',
                 pdfUrl: blockElement.dataset.pdfUrl || '',
-                allowDownload: blockElement.dataset.allowDownload === 'true',
-                allowAnnotation: blockElement.dataset.allowAnnotation === 'true',
+                allowDownload: blockElement.dataset.allowDownload === 'true' || blockElement.dataset.allowDownload === 'True',
+                allowAnnotation: blockElement.dataset.allowAnnotation === 'true' || blockElement.dataset.allowAnnotation === 'True',
                 currentPage: parseInt(blockElement.dataset.currentPage) || 1,
                 userId: blockElement.dataset.userId || 'anonymous',
                 courseId: blockElement.dataset.courseId || '',
                 handlerUrl: blockElement.dataset.handlerUrl || ''
             };
 
-            // Parse JSON data attributes
+            // Parse JSON data attributes for all annotation types
+            // HTML unescape function for handling escaped data attributes
+            function htmlUnescape(str) {
+                const textarea = document.createElement('textarea');
+                textarea.innerHTML = str;
+                return textarea.value;
+            }
+
             try {
-                config.savedAnnotations = JSON.parse(blockElement.dataset.savedAnnotations || '{}');
-                config.drawingStrokes = JSON.parse(blockElement.dataset.drawingStrokes || '{}');
-                config.highlights = JSON.parse(blockElement.dataset.highlights || '{}');
+                // Debug: Check if we have annotation data
+                console.log('[PdfxInit] Drawing strokes data length:', blockElement.dataset.drawingStrokes ? blockElement.dataset.drawingStrokes.length : 0);
+
+                config.savedAnnotations = JSON.parse(htmlUnescape(blockElement.dataset.savedAnnotations || '{}'));
+                config.drawingStrokes = JSON.parse(htmlUnescape(blockElement.dataset.drawingStrokes || '{}'));
+                config.highlights = JSON.parse(htmlUnescape(blockElement.dataset.highlights || '{}'));
+                config.markerStrokes = JSON.parse(htmlUnescape(blockElement.dataset.markerStrokes || '{}'));
+                config.textAnnotations = JSON.parse(htmlUnescape(blockElement.dataset.textAnnotations || '{}'));
+                config.shapeAnnotations = JSON.parse(htmlUnescape(blockElement.dataset.shapeAnnotations || '{}'));
+                config.noteAnnotations = JSON.parse(htmlUnescape(blockElement.dataset.noteAnnotations || '{}'));
+
+                // Debug: Log if we have annotation data
+                const hasDrawingStrokes = Object.keys(config.drawingStrokes).length > 0;
+                if (hasDrawingStrokes) {
+                    console.log('[PdfxInit] ✅ Found drawing strokes for', Object.keys(config.drawingStrokes).length, 'pages');
+                } else {
+                    console.log('[PdfxInit] ⚠️ No drawing strokes found');
+                }
+
             } catch (e) {
                 console.warn('[PdfxInit] Error parsing JSON data attributes:', e);
                 config.savedAnnotations = {};
                 config.drawingStrokes = {};
                 config.highlights = {};
+                config.markerStrokes = {};
+                config.textAnnotations = {};
+                config.shapeAnnotations = {};
+                config.noteAnnotations = {};
             }
 
-            console.log('[PdfxInit] 📋 Initialization arguments:', config);
-            console.log('[PdfxInit] 🔍 PDF URL being passed:', config.pdfUrl);
 
             // Check if PDF URL is valid
             if (!config.pdfUrl || config.pdfUrl === 'undefined' || config.pdfUrl.trim() === '') {
-                console.log('[PdfxInit] ℹ️ No PDF URL configured - this is expected when no PDF has been uploaded');
-                console.debug('[PdfxInit] 🔍 PDF URL value:', config.pdfUrl);
-                console.debug('[PdfxInit] 🔍 Block element dataset:', blockElement.dataset);
+
 
                 // Use demo PDF for testing when no URL is configured
                 const demoUrl = 'https://mozilla.github.io/pdf.js/web/compressed.tracemonkey-pldi-09.pdf';
-                console.log('[PdfxInit] 🔧 Using demo PDF for testing:', demoUrl);
+
                 config.pdfUrl = demoUrl;
             }
 
-            console.log('[PdfxInit] 🔍 PDF URL length:', config.pdfUrl.length);
-            console.log('[PdfxInit] 🔍 PDF URL starts with:', config.pdfUrl.substring(0, 50));
+
 
             // CRITICAL FIX: Prevent direct navigation to PDF URL
             if (window.location.href.includes('asset-v1') && window.location.href.includes('.pdf')) {
@@ -115,10 +134,10 @@
 
                 // Try to go back to the course page
                 if (window.history.length > 1) {
-                    console.log('[PdfxInit] 🔄 Attempting to go back to course page...');
+
                     window.history.back();
                 } else {
-                    console.log('[PdfxInit] 🔄 Redirecting to course home...');
+
                     // Extract course ID from the asset URL if possible
                     const courseMatch = window.location.href.match(/asset-v1:([^+]+\+[^+]+\+[^+]+)/);
                     if (courseMatch) {
@@ -134,7 +153,7 @@
             // Create runtime object
             const runtime = {
                 handlerUrl: function(element, handler) {
-                    console.log('[PdfxInit] 🔗 Handler URL requested:', handler);
+
                     return config.handlerUrl;
                 }
             };
@@ -144,17 +163,64 @@
 
             // Initialize using the global PdfxXBlock function
             if (typeof window.PdfxXBlock === 'function') {
-                console.log('[PdfxInit] 🎯 Calling PdfxXBlock constructor...');
+                console.log('[PdfxInit] Creating PdfxXBlock with config:', {
+                    allowAnnotation: config.allowAnnotation,
+                    drawingStrokesKeys: Object.keys(config.drawingStrokes),
+                    blockId: config.blockId
+                });
+
                 const instance = window.PdfxXBlock(runtime, containerElement, config);
-                console.log('[PdfxInit] ✅ Initialized successfully with ES6 modules');
+
+                // Initialize the instance
+                console.log('[PdfxInit] Calling init() on PdfxXBlock instance...');
+                instance.init().then(() => {
+                    console.log('[PdfxInit] PdfxXBlock initialization completed for block:', blockId);
+                }).catch(error => {
+                    console.error('[PdfxInit] PdfxXBlock initialization failed for block:', blockId, error);
+                });
 
                 // Store instance globally for debugging
                 window.PdfxInstances = window.PdfxInstances || {};
                 window.PdfxInstances[blockId] = instance;
-                console.log(`[PdfxInit] 💾 Instance stored globally as PdfxInstances["${blockId}"]`);
+
+                // Add global debug function
+                window.debugScribbleAnnotations = function(blockIdToDebug) {
+                    const targetBlockId = blockIdToDebug || blockId;
+                    const targetInstance = window.PdfxInstances[targetBlockId];
+                    if (targetInstance && targetInstance.toolManager) {
+                        const scribbleTool = targetInstance.toolManager.getTool('scribble');
+                        if (scribbleTool && typeof scribbleTool.debugAnnotationState === 'function') {
+                            return scribbleTool.debugAnnotationState();
+                        } else {
+                            return null;
+                        }
+                    } else {
+                        return null;
+                    }
+                };
+
+                // Add global function to check annotation data
+                window.checkAnnotationData = function(blockIdToDebug) {
+                    const targetBlockId = blockIdToDebug || blockId;
+                    const blockElement = document.querySelector(`[data-block-id="${targetBlockId}"]`);
+                    if (blockElement) {
+                        try {
+                            const drawingStrokes = JSON.parse(blockElement.dataset.drawingStrokes || '{}');
+                            return {
+                                blockId: targetBlockId,
+                                drawingStrokes: drawingStrokes,
+                                hasData: Object.keys(drawingStrokes).length > 0
+                            };
+                        } catch (e) {
+                            return { error: 'Failed to parse annotation data', blockId: targetBlockId };
+                        }
+                    } else {
+                        return { error: 'Block element not found', blockId: targetBlockId };
+                    }
+                };
+
             } else {
                 console.error('[PdfxInit] ❌ PdfxXBlock constructor not available');
-                console.log('[PdfxInit] 🔍 Available functions:', Object.keys(window).filter(k => k.includes('Pdf')));
             }
         } catch (error) {
             console.error('[PdfxInit] ❌ Initialization error:', error);
@@ -166,22 +232,28 @@
      * Initialize all PdfxXBlock instances on the page
      */
     function initializeAllBlocks() {
-        console.log('[PdfxInit] 🔍 Looking for PdfxXBlock instances...');
-
-        // Find all block containers
-        const blockElements = document.querySelectorAll('[data-block-type="pdfx"]');
+        // Find all block containers - look for the actual .pdfx-block elements, not just data-block-type
+        const blockElements = document.querySelectorAll('.pdfx-block[data-block-type="pdfx"]');
 
         if (blockElements.length === 0) {
             console.warn('[PdfxInit] ⚠️ No PdfxXBlock instances found on page');
+            // Fallback: try the old selector
+            const fallbackElements = document.querySelectorAll('[data-block-type="pdfx"]');
+            console.log('[PdfxInit] Found fallback elements:', fallbackElements.length);
+            fallbackElements.forEach((element, index) => {
+                console.log(`[PdfxInit] Fallback element ${index}:`, element.className, element.id);
+            });
             return;
         }
 
-        console.log(`[PdfxInit] 📦 Found ${blockElements.length} PdfxXBlock instance(s)`);
+        console.log('[PdfxInit] Found', blockElements.length, 'PdfxXBlock instances');
 
-        // Initialize each block
+        // Initialize each block with a small delay to prevent race conditions
         blockElements.forEach((blockElement, index) => {
-            console.log(`[PdfxInit] 🎯 Initializing block ${index + 1}/${blockElements.length}`);
-            initializePdfxXBlock(blockElement);
+            console.log(`[PdfxInit] Initializing block ${index + 1}/${blockElements.length}`);
+            setTimeout(() => {
+                initializePdfxXBlock(blockElement);
+            }, index * 100); // 100ms delay between each block
         });
     }
 
@@ -189,16 +261,16 @@
      * Start the initialization process
      */
     function startInitialization() {
-        console.log('[PdfxInit] 📄 Document ready state:', document.readyState);
+
 
         if (document.readyState === 'loading') {
-            console.log('[PdfxInit] ⏳ Waiting for DOMContentLoaded...');
+
             document.addEventListener('DOMContentLoaded', function() {
-                console.log('[PdfxInit] ✅ DOMContentLoaded fired');
+
                 waitForDependencies().then(initializeAllBlocks);
             });
         } else {
-            console.log('[PdfxInit] ✅ DOM already ready, proceeding...');
+
             waitForDependencies().then(initializeAllBlocks);
         }
     }
@@ -208,7 +280,6 @@
      */
     function ensureContainerVisibility() {
         setTimeout(function() {
-            console.debug('[PdfxInit] 👀 Ensuring PDF containers are visible...');
 
             // Find all possible PDF containers
             const containers = document.querySelectorAll('[id*="pdf-main-"]');
@@ -217,14 +288,12 @@
             containers.forEach(function(container) {
                 if (container && container.style.display === 'none') {
                     container.style.display = 'block';
-                    console.debug('[PdfxInit] ✅ Showed container:', container.id);
                 }
             });
 
             loadingIndicators.forEach(function(loading) {
                 if (loading && loading.style.display !== 'none') {
                     loading.style.display = 'none';
-                    console.debug('[PdfxInit] ✅ Hidden loading:', loading.id);
                 }
             });
 
@@ -234,10 +303,8 @@
                 overlay.style.display = 'none';
                 overlay.style.visibility = 'hidden';
                 overlay.style.opacity = '0';
-                console.debug('[PdfxInit] ✅ Hidden loading element:', overlay.className || overlay.id);
             });
 
-            console.log('[PdfxInit] 🎉 Container visibility check completed');
         }, 1000); // Wait 1 second for everything to load
     }
 

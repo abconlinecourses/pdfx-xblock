@@ -19,8 +19,8 @@ export class HighlightTool extends BaseTool {
 
         // Configuration
         this.config = {
-            color: '#FFFF0080', // Yellow with transparency
-            opacity: 0.5,
+            color: '#FFFF00', // Yellow color
+            opacity: 0.3,
             borderRadius: '2px',
             ...this.config
         };
@@ -35,17 +35,14 @@ export class HighlightTool extends BaseTool {
      */
     async init() {
         try {
-            console.debug('[HighlightTool] Initializing highlight tool');
 
             // Set up highlight container
             await this._setupHighlightContainer();
 
             this.isEnabled = true;
 
-            console.debug('[HighlightTool] Highlight tool initialized successfully');
 
         } catch (error) {
-            console.error('[HighlightTool] Initialization error:', error);
             throw error;
         }
     }
@@ -66,28 +63,25 @@ export class HighlightTool extends BaseTool {
             highlightContainer.style.pointerEvents = 'none';
             highlightContainer.style.zIndex = '5';
 
-            // BULLETPROOF FIX: Hide highlight container by default to prevent yellow overlay
-            highlightContainer.style.display = 'none';
-            highlightContainer.style.visibility = 'hidden';
-            highlightContainer.style.opacity = '0';
+            // Show highlight container for actual highlight rendering
+            highlightContainer.style.display = 'block';
+            highlightContainer.style.visibility = 'visible';
+            highlightContainer.style.opacity = '1';
             highlightContainer.style.backgroundColor = 'transparent';
             highlightContainer.style.background = 'none';
 
-            console.debug('[HighlightTool] ✅ BULLETPROOF FIX: Highlight container hidden by default');
 
             const pdfContainer = this.container.querySelector(`#pdf-container-${this.blockId}`);
             if (pdfContainer) {
                 pdfContainer.appendChild(highlightContainer);
             }
         } else {
-            // BULLETPROOF FIX: Ensure existing highlight container is also hidden
-            highlightContainer.style.display = 'none';
-            highlightContainer.style.visibility = 'hidden';
-            highlightContainer.style.opacity = '0';
+            // Ensure existing highlight container is properly visible
+            highlightContainer.style.display = 'block';
+            highlightContainer.style.visibility = 'visible';
+            highlightContainer.style.opacity = '1';
             highlightContainer.style.backgroundColor = 'transparent';
             highlightContainer.style.background = 'none';
-
-            console.debug('[HighlightTool] ✅ BULLETPROOF FIX: Existing highlight container hidden');
         }
 
         this.highlightContainer = highlightContainer;
@@ -98,7 +92,6 @@ export class HighlightTool extends BaseTool {
      */
     enable() {
         this.isEnabled = true;
-        console.debug('[HighlightTool] Highlight tool enabled');
     }
 
     /**
@@ -109,7 +102,6 @@ export class HighlightTool extends BaseTool {
             this.deactivate();
         }
         this.isEnabled = false;
-        console.debug('[HighlightTool] Highlight tool disabled');
     }
 
     /**
@@ -117,22 +109,30 @@ export class HighlightTool extends BaseTool {
      */
     activate() {
         if (!this.isEnabled) {
-            console.warn('[HighlightTool] Cannot activate disabled tool');
+            console.warn('[HighlightTool] Tool not enabled, cannot activate');
             return false;
         }
 
         try {
+            console.log('[HighlightTool] Activating highlight tool for block:', this.blockId);
+
+            // Set the tool attribute on draw container for CSS targeting
+            const drawContainer = this.container.querySelector(`#draw-container-${this.blockId}`);
+            if (drawContainer) {
+                drawContainer.setAttribute('data-current-tool', 'highlight');
+                console.log('[HighlightTool] Set data-current-tool="highlight" on draw container');
+            }
+
             // Enable text highlighting
             this._enableTextHighlighting();
 
             this.isActive = true;
 
-            console.debug('[HighlightTool] Highlight tool activated');
-
+            console.log('[HighlightTool] Highlight tool activated successfully');
             return true;
 
         } catch (error) {
-            console.error('[HighlightTool] Error activating tool:', error);
+            console.error('[HighlightTool] Error activating highlight tool:', error);
             return false;
         }
     }
@@ -142,6 +142,15 @@ export class HighlightTool extends BaseTool {
      */
     deactivate() {
         try {
+            console.log('[HighlightTool] Deactivating highlight tool for block:', this.blockId);
+
+            // Remove the tool attribute from draw container
+            const drawContainer = this.container.querySelector(`#draw-container-${this.blockId}`);
+            if (drawContainer) {
+                drawContainer.removeAttribute('data-current-tool');
+                console.log('[HighlightTool] Removed data-current-tool attribute from draw container');
+            }
+
             // Disable text highlighting
             this._disableTextHighlighting();
 
@@ -150,10 +159,10 @@ export class HighlightTool extends BaseTool {
 
             this.isActive = false;
 
-            console.debug('[HighlightTool] Highlight tool deactivated');
+            console.log('[HighlightTool] Highlight tool deactivated successfully');
 
         } catch (error) {
-            console.error('[HighlightTool] Error deactivating tool:', error);
+            console.error('[HighlightTool] Error deactivating highlight tool:', error);
         }
     }
 
@@ -163,9 +172,12 @@ export class HighlightTool extends BaseTool {
     _enableTextHighlighting() {
         const textLayer = this.container.querySelector(`#text-layer-${this.blockId}`);
         if (!textLayer) {
-            console.warn('[HighlightTool] Text layer not found');
+            console.warn('[HighlightTool] Text layer not found for block:', this.blockId);
             return;
         }
+
+        console.log('[HighlightTool] Enabling text highlighting on text layer:', textLayer.id);
+        console.log('[HighlightTool] Text layer content:', textLayer.innerHTML.substring(0, 200) + '...');
 
         // Make text layer interactive
         textLayer.style.pointerEvents = 'auto';
@@ -181,8 +193,23 @@ export class HighlightTool extends BaseTool {
         this.addEventHandler(textLayer, 'mouseup', this._handleTextSelection.bind(this));
         this.addEventHandler(textLayer, 'mousedown', this._handleMouseDown.bind(this));
 
+        // Check for text spans
+        const spans = textLayer.querySelectorAll('span');
+        console.log('[HighlightTool] Found spans:', spans.length);
+
+        if (spans.length === 0) {
+            console.log('[HighlightTool] No spans found, checking for other text elements...');
+            const allChildren = textLayer.children;
+            console.log('[HighlightTool] Text layer children:', allChildren.length);
+            for (let i = 0; i < Math.min(5, allChildren.length); i++) {
+                console.log('[HighlightTool] Child', i, ':', allChildren[i].tagName, allChildren[i].className);
+            }
+        }
+
         // Style text spans
         this._styleTextSpans(textLayer);
+
+        console.log('[HighlightTool] Text highlighting enabled, spans found:', spans.length);
     }
 
     /**
@@ -208,51 +235,96 @@ export class HighlightTool extends BaseTool {
         this._removeTextSpanStyles(textLayer);
     }
 
-    /**
+        /**
      * Style text spans for highlighting
      */
     _styleTextSpans(textLayer) {
-        const spans = textLayer.querySelectorAll('span');
+        // Look for all text elements: spans, divs, and text-items
+        let textElements = textLayer.querySelectorAll('span, div, .text-item');
 
-        // Use efficient styling for large documents
-        if (spans.length > 2000) {
-            // Add CSS rule for hover effect
-            const styleId = `highlight-hover-${this.blockId}`;
-            let style = document.getElementById(styleId);
+        // Filter to only elements with actual text content
+        textElements = Array.from(textElements).filter(element =>
+            element.textContent && element.textContent.trim().length > 0
+        );
 
-            if (!style) {
-                style = document.createElement('style');
-                style.id = styleId;
-                style.textContent = `
-                    #text-layer-${this.blockId}.highlight-tool-active span:hover {
-                        background-color: rgba(255, 255, 0, 0.2) !important;
-                        border-radius: 2px;
-                        transition: background-color 0.2s ease;
-                    }
-                `;
-                document.head.appendChild(style);
-            }
-        } else {
-            // Style individual spans for smaller documents
-            spans.forEach(span => {
-                span.style.cursor = 'text';
-                span.style.transition = 'background-color 0.2s ease';
-                span.style.borderRadius = '2px';
-                span.classList.add('highlight-selectable');
-            });
+        console.log(`[HighlightTool-${this.blockId}] Found ${textElements.length} text elements for styling`);
+
+        if (textElements.length === 0) {
+            console.warn(`[HighlightTool-${this.blockId}] No text elements found in text layer`);
+            return;
         }
+
+        // Always use CSS-based styling for better performance and isolation
+        const styleId = `highlight-hover-${this.blockId}`;
+        let style = document.getElementById(styleId);
+
+        if (!style) {
+            style = document.createElement('style');
+            style.id = styleId;
+            style.textContent = `
+                /* Highlight tool specific styles for block ${this.blockId} */
+                #text-layer-${this.blockId}.highlight-tool-active span,
+                #text-layer-${this.blockId}.highlight-tool-active div,
+                #text-layer-${this.blockId}.highlight-tool-active .text-item {
+                    cursor: text !important;
+                    pointer-events: auto !important;
+                    user-select: text !important;
+                    -webkit-user-select: text !important;
+                    -moz-user-select: text !important;
+                    -ms-user-select: text !important;
+                    transition: background-color 0.2s ease !important;
+                }
+
+                #text-layer-${this.blockId}.highlight-tool-active span:hover,
+                #text-layer-${this.blockId}.highlight-tool-active div:hover,
+                #text-layer-${this.blockId}.highlight-tool-active .text-item:hover {
+                    background-color: rgba(255, 255, 0, 0.2) !important;
+                    border-radius: 2px !important;
+                }
+
+                /* Ensure text layer is above drawing layer when highlight tool is active */
+                #text-layer-${this.blockId}.highlight-tool-active {
+                    z-index: 100 !important;
+                    pointer-events: auto !important;
+                }
+            `;
+            document.head.appendChild(style);
+            console.log(`[HighlightTool-${this.blockId}] Added CSS-based text styling`);
+        }
+
+        // Add highlight-selectable class for identification
+        textElements.forEach((element, index) => {
+            element.classList.add('highlight-selectable');
+
+            // Add debugging info for first few elements
+            if (index < 3) {
+                console.log(`[HighlightTool-${this.blockId}] Text element ${index}:`, {
+                    tagName: element.tagName,
+                    className: element.className,
+                    text: element.textContent.substring(0, 50),
+                    position: {
+                        left: element.style.left,
+                        top: element.style.top
+                    }
+                });
+            }
+        });
     }
 
     /**
      * Remove text span styles
      */
     _removeTextSpanStyles(textLayer) {
-        const spans = textLayer.querySelectorAll('span.highlight-selectable');
-        spans.forEach(span => {
-            span.classList.remove('highlight-selectable');
-            span.style.cursor = '';
-            span.style.transition = '';
-            span.style.borderRadius = '';
+        const selectableElements = textLayer.querySelectorAll('.highlight-selectable');
+        selectableElements.forEach(element => {
+            element.classList.remove('highlight-selectable');
+            element.style.cursor = '';
+            element.style.transition = '';
+            element.style.borderRadius = '';
+            element.style.userSelect = '';
+            element.style.webkitUserSelect = '';
+            element.style.MozUserSelect = '';
+            element.style.msUserSelect = '';
         });
 
         // Remove CSS rule
@@ -267,6 +339,8 @@ export class HighlightTool extends BaseTool {
      * Handle mouse down event
      */
     _handleMouseDown(event) {
+        console.log('[HighlightTool] Mouse down on text layer');
+
         // Clear any existing timeout
         if (this.selectionTimeout) {
             clearTimeout(this.selectionTimeout);
@@ -280,6 +354,8 @@ export class HighlightTool extends BaseTool {
      * Handle text selection
      */
     _handleTextSelection(event) {
+        console.log('[HighlightTool] Mouse up on text layer, isSelecting:', this.isSelecting);
+
         if (!this.isSelecting) {
             return;
         }
@@ -299,30 +375,57 @@ export class HighlightTool extends BaseTool {
      * Process the current text selection
      */
     _processTextSelection() {
+        console.log('[HighlightTool] Processing text selection...');
+
         const selection = window.getSelection();
 
         if (!selection || selection.rangeCount === 0) {
+            console.log('[HighlightTool] No selection found');
             return;
         }
 
         const range = selection.getRangeAt(0);
+        const selectedText = range.toString().trim();
 
-        if (range.collapsed || !range.toString().trim()) {
+        console.log('[HighlightTool] Selected text:', selectedText);
+
+        if (range.collapsed || !selectedText) {
+            console.log('[HighlightTool] Selection is collapsed or empty');
             return;
         }
+
+        // Validate that selection is within text layer
+        const textLayer = this.container.querySelector(`#text-layer-${this.blockId}`);
+        if (!textLayer) {
+            console.warn('[HighlightTool] Text layer not found during selection processing');
+            return;
+        }
+
+        // Check if selection is within text layer
+        if (!this._isSelectionInTextLayer(range, textLayer)) {
+            console.log('[HighlightTool] Selection is not within text layer');
+            this._clearSelection();
+            return;
+        }
+
+        console.log('[HighlightTool] Selection is valid, creating highlight...');
 
         try {
             // Get selection bounds
             const selectionData = this._getSelectionData(range);
 
             if (selectionData) {
+                console.log('[HighlightTool] Selection data:', selectionData);
+
                 // Create highlight annotation
                 const annotation = this.createAnnotation(selectionData);
 
                 // Render the highlight
                 this._renderHighlight(annotation);
 
-                console.debug('[HighlightTool] Created highlight:', annotation.id);
+                console.log('[HighlightTool] Highlight created successfully:', annotation);
+            } else {
+                console.warn('[HighlightTool] Failed to get selection data');
             }
 
         } catch (error) {
@@ -331,6 +434,24 @@ export class HighlightTool extends BaseTool {
             // Clear the selection
             this._clearSelection();
         }
+    }
+
+    /**
+     * Check if selection is within text layer
+     */
+    _isSelectionInTextLayer(range, textLayer) {
+        const commonAncestor = range.commonAncestorContainer;
+
+        // Check if the common ancestor is the text layer or its child
+        if (textLayer.contains(commonAncestor)) {
+            return true;
+        }
+
+        // Check if both start and end containers are within text layer
+        const startContainer = range.startContainer;
+        const endContainer = range.endContainer;
+
+        return textLayer.contains(startContainer) && textLayer.contains(endContainer);
     }
 
     /**
@@ -392,11 +513,21 @@ export class HighlightTool extends BaseTool {
      * Render highlight from annotation
      */
     _renderHighlight(annotation) {
+        console.log('[HighlightTool] Rendering highlight:', annotation);
+
         const data = annotation.data;
 
         if (!data.highlights || data.highlights.length === 0) {
+            console.warn('[HighlightTool] No highlight data to render');
             return;
         }
+
+        if (!this.highlightContainer) {
+            console.error('[HighlightTool] Highlight container not found');
+            return;
+        }
+
+        console.log('[HighlightTool] Creating', data.highlights.length, 'highlight elements');
 
         const highlightElements = [];
 
@@ -413,8 +544,18 @@ export class HighlightTool extends BaseTool {
             element.style.opacity = this.config.opacity;
             element.style.borderRadius = this.config.borderRadius;
             element.style.pointerEvents = 'none';
+            element.style.zIndex = '5';
             element.dataset.annotationId = annotation.id;
             element.dataset.highlightIndex = index;
+
+            console.log('[HighlightTool] Created highlight element:', {
+                left: highlight.left,
+                top: highlight.top,
+                width: highlight.width,
+                height: highlight.height,
+                color: this.config.color,
+                opacity: this.config.opacity
+            });
 
             this.highlightContainer.appendChild(element);
             highlightElements.push(element);
@@ -422,6 +563,8 @@ export class HighlightTool extends BaseTool {
 
         // Store elements for later removal
         this.highlightElements.set(annotation.id, highlightElements);
+
+        console.log('[HighlightTool] Highlight rendered successfully, total elements in container:', this.highlightContainer.children.length);
     }
 
     /**
@@ -466,7 +609,6 @@ export class HighlightTool extends BaseTool {
             this._renderHighlight(annotation);
         }
 
-        console.debug(`[HighlightTool] Rendered ${annotations.length} highlights for page ${pageNum}`);
     }
 
     /**
@@ -526,7 +668,6 @@ export class HighlightTool extends BaseTool {
      * Clean up tool resources
      */
     async cleanup() {
-        console.debug('[HighlightTool] Cleaning up highlight tool');
 
         // Clear timeout
         if (this.selectionTimeout) {

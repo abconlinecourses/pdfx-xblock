@@ -44,17 +44,14 @@ export class ToolManager extends EventEmitter {
      */
     async init() {
         if (this.isInitialized) {
-            console.warn('[ToolManager] Already initialized');
             return;
         }
 
         if (!this.allowAnnotation) {
-            console.debug('[ToolManager] Annotations disabled, skipping tool initialization');
             return;
         }
 
         try {
-            console.debug('[ToolManager] Initializing tools...');
 
             // Register all available tools
             await this._registerTools();
@@ -64,7 +61,6 @@ export class ToolManager extends EventEmitter {
 
             this.isInitialized = true;
 
-            console.debug(`[ToolManager] Initialized with ${this.tools.size} tools`);
 
             this.emit('initialized', {
                 tools: Array.from(this.tools.keys()),
@@ -72,7 +68,6 @@ export class ToolManager extends EventEmitter {
             });
 
         } catch (error) {
-            console.error('[ToolManager] Initialization error:', error);
             throw error;
         }
     }
@@ -121,7 +116,6 @@ export class ToolManager extends EventEmitter {
      */
     async _registerTool(name, ToolClass) {
         try {
-            console.debug(`[ToolManager] Registering ${name} tool`);
 
             const tool = new ToolClass({
                 name: name,
@@ -140,10 +134,8 @@ export class ToolManager extends EventEmitter {
             // Store the tool
             this.tools.set(name, tool);
 
-            console.debug(`[ToolManager] Registered ${name} tool successfully`);
 
         } catch (error) {
-            console.error(`[ToolManager] Error registering ${name} tool:`, error);
         }
     }
 
@@ -230,7 +222,6 @@ export class ToolManager extends EventEmitter {
     activateTool(toolName) {
         const tool = this.tools.get(toolName);
         if (!tool) {
-            console.warn(`[ToolManager] Tool '${toolName}' not found`);
             return false;
         }
 
@@ -244,7 +235,6 @@ export class ToolManager extends EventEmitter {
             tool.activate();
             this.activeTool = tool;
 
-            console.debug(`[ToolManager] Activated ${toolName} tool`);
 
             this.emit('toolActivated', {
                 toolName: toolName,
@@ -254,7 +244,6 @@ export class ToolManager extends EventEmitter {
             return true;
 
         } catch (error) {
-            console.error(`[ToolManager] Error activating ${toolName} tool:`, error);
             return false;
         }
     }
@@ -272,7 +261,6 @@ export class ToolManager extends EventEmitter {
 
             this.activeTool.deactivate();
 
-            console.debug(`[ToolManager] Deactivated ${toolName} tool`);
 
             this.emit('toolDeactivated', {
                 toolName: toolName,
@@ -284,7 +272,6 @@ export class ToolManager extends EventEmitter {
             return true;
 
         } catch (error) {
-            console.error('[ToolManager] Error deactivating current tool:', error);
             return false;
         }
     }
@@ -333,7 +320,6 @@ export class ToolManager extends EventEmitter {
             try {
                 tool.handlePageChange(pageNum);
             } catch (error) {
-                console.error(`[ToolManager] Error handling page change for ${tool.name}:`, error);
             }
         }
 
@@ -422,9 +408,7 @@ export class ToolManager extends EventEmitter {
 
         try {
             await Promise.all(promises);
-            console.debug('[ToolManager] Loaded annotations for all tools');
         } catch (error) {
-            console.error('[ToolManager] Error loading annotations:', error);
         }
     }
 
@@ -438,6 +422,34 @@ export class ToolManager extends EventEmitter {
         }
 
         this.emit('allAnnotationsCleared');
+    }
+
+    /**
+     * Clear annotations for current page only
+     */
+    clearCurrentPageAnnotations() {
+        if (!this.pdfManager) {
+            return;
+        }
+
+        const currentPage = this.pdfManager.getCurrentPage();
+
+        for (const tool of this.tools.values()) {
+            // Get annotations for current page
+            const pageAnnotations = tool.getAnnotationsForPage(currentPage);
+
+            // Delete each annotation on current page
+            for (const annotation of pageAnnotations) {
+                tool.deleteAnnotation(annotation.id);
+            }
+
+            // Special handling for scribble tool to clear canvas
+            if (tool.name === 'scribble' && typeof tool.clearCurrentPage === 'function') {
+                tool.clearCurrentPage();
+            }
+        }
+
+        this.emit('currentPageCleared', { pageNum: currentPage });
     }
 
     /**
@@ -471,7 +483,6 @@ export class ToolManager extends EventEmitter {
      * Destroy the tool manager
      */
     async destroy() {
-        console.debug('[ToolManager] Destroying tool manager');
 
         // Deactivate current tool
         this.deactivateCurrentTool();
@@ -485,7 +496,6 @@ export class ToolManager extends EventEmitter {
         try {
             await Promise.all(destroyPromises);
         } catch (error) {
-            console.error('[ToolManager] Error destroying tools:', error);
         }
 
         // Clear tools

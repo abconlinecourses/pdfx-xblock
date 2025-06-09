@@ -87,7 +87,6 @@ export class EventEmitter {
             try {
                 listenerData.listener.apply(this, args);
             } catch (error) {
-                console.error(`Error in event listener for '${event}':`, error);
             }
 
             // Remove one-time listeners

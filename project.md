@@ -1,7 +1,7 @@
 PDFX-xBlock: Open edX PDF reader with annotation tools (highlight, draw, scribble).
 PDFX-xBlock: is developing in open edx docker containers.
 Use MCP for browser verification. Auto-reload enabled in Docker - no restarts needed. SO DO NOT restart "tutor_dev-lms-1" and tutor_dev-cms-1
-
+DO NOT add unnecessary console.log,  console.warn, console.debug, add only when its nessary. When you debug you MUST remove old unnessary "console.log" lines.
 * **File Storage:** Use Open edX contentstore
   ```python
   from xmodule.contentstore.django import contentstore
@@ -23,4 +23,7 @@ Use MCP for browser verification. Auto-reload enabled in Docker - no restarts ne
 * **CSS:** `pdf.css` (LMS), `pdf_edit.css` (Studio)
 
 **Note:** Write robust code, avoid quick fixes.
+
+
+DO NOT write extensive explanations.
 
