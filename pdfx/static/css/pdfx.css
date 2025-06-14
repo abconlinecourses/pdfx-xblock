@@ -380,14 +380,14 @@ input[type="range"] {
     right: 0;
     bottom: 0;
     overflow: hidden;
-    opacity: 0.2;
     line-height: 1.0;
-    user-select: text;
-    -webkit-user-select: text;
-    -moz-user-select: text;
-    -ms-user-select: text;
+    /* ENABLE text selection by default */
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
     --scale-factor: 1;
-    pointer-events: none;
+    pointer-events: auto !important; /* CRITICAL: Allow interaction */
     z-index: 3; /* Text layer on top for selection */
 }
 
@@ -404,7 +404,12 @@ input[type="range"] {
     cursor: text;
     transform-origin: 0% 0%;
     background: none;
-    pointer-events: all;
+    /* CRITICAL: Enable text selection on spans */
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
 }
 
 .text-layer.active > span, #text-layer.active > span, [id^="text-layer-"].active > span {
@@ -414,7 +419,8 @@ input[type="range"] {
 
 .text-layer.active > span::selection, #text-layer.active > span::selection, [id^="text-layer-"].active > span::selection,
 .textLayer ::selection {
-    background: rgba(255, 255, 0, 0.3);
+    background:rgba(0 0 255 / 0.25);
+    color: transparent !important;
 }
 
 /* PDF.js 3.x specific highlight classes */
@@ -493,7 +499,12 @@ input[type="range"] {
     cursor: default;
     display: block !important; /* Show by default */
     visibility: visible !important;
-    opacity: 1 !important;
+    /* Remove opacity: 1 !important to allow inline styles to work */
+}
+
+/* Ensure highlight elements created by JavaScript have proper opacity */
+.highlight-container .highlight-element {
+    opacity: 0.3; /* Default opacity, can be overridden by inline styles */
 }
 
 /* Ensure highlights are always visible when created */
@@ -514,7 +525,6 @@ input[type="range"] {
 [id^="highlight-container-"] .highlight-element {
     display: block !important;
     visibility: visible !important;
-    opacity: 1 !important;
     pointer-events: none !important;
     z-index: 5 !important;
 }
@@ -1276,10 +1286,10 @@ html body .canvas-container .upper-canvas {
     cursor: crosshair !important;
 }
 
-/* Make sure the text layer doesn't interfere with scribble drawing */
-.draw-mode ~ .text-layer,
-.draw-mode ~ #text-layer,
-.draw-mode ~ [id^="text-layer-"] {
+/* Only disable text layer when actively drawing with scribble tool */
+.draw-container.draw-mode[data-current-tool="marker"] ~ .text-layer,
+.draw-container.draw-mode[data-current-tool="marker"] ~ #text-layer,
+.draw-container.draw-mode[data-current-tool="marker"] ~ [id^="text-layer-"] {
     pointer-events: none !important;
 }
 
@@ -1313,10 +1323,14 @@ body .pdfx_block [id^="draw-container-"].draw-mode {
     z-index: 50 !important; /* Highest priority */
 }
 
-/* Prevent text layer from capturing events when in drawing mode */
+/* Allow text layer to capture events for normal text selection */
 body .pdfx_block [id^="text-layer-"] {
-    pointer-events: none !important;
+    pointer-events: auto !important;
     z-index: 5 !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
 }
 
 /* Canvas styles with high specificity */
@@ -1359,7 +1373,7 @@ html body [id^="marker-tool-"].active {
 .textLayer, .text-layer, #text-layer, [id^="text-layer-"], [class*="textLayer"], .pdf-text-layer {
     background-color: transparent !important;
     background: none !important;
-    opacity: 0 !important; /* Make text layer completely invisible to remove yellow tint */
+    /* Remove opacity: 0 to allow normal text selection */
 }
 
 .textLayer span,
@@ -1471,6 +1485,260 @@ html body [id^="marker-tool-"].active {
 .text-layer.highlight-tool-active span,
 .text-layer.highlight-tool-active * {
     cursor: text !important;
+}
+
+/* Basic text layer styling from PDF.js - ENABLE NORMAL TEXT SELECTION */
+.textLayer {
+    position: absolute;
+    left: 0;
+    top: 0;
+    right: 0;
+    bottom: 0;
+    overflow: hidden;
+    line-height: 1.0;
+    text-align: initial;
+    /* CRITICAL: Allow text selection by default */
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+    z-index: 100 !important; /* Higher z-index to ensure it's on top */
+}
+
+/* FORCE text selection on PDF.js viewer text layers */
+.pdfx-block.pdfjs-viewer .textLayer,
+.pdfx-block.pdfjs-viewer [class*="textLayer"],
+.pdfx-block .textLayer,
+.pdfx-block [class*="textLayer"] {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+    z-index: 100 !important;
+}
+
+.textLayer :is(span,br) {
+    color: transparent;
+    position: absolute;
+    white-space: pre;
+    cursor: text;
+    transform-origin: 0% 0%;
+    /* CRITICAL: Allow text selection on spans */
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+}
+
+/* FORCE text selection on all text layer spans */
+.pdfx-block.pdfjs-viewer .textLayer span,
+.pdfx-block.pdfjs-viewer [class*="textLayer"] span,
+.pdfx-block .textLayer span,
+.pdfx-block [class*="textLayer"] span {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+    cursor: text !important;
+}
+
+.textLayer > :not(.markedContent),
+.textLayer .markedContent span:not(.markedContent) {
+    z-index: 1;
+}
+
+.textLayer span.markedContent {
+    top: 0;
+    height: 0;
+}
+
+.textLayer span[role="img"] {
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    user-select: none;
+    cursor: default;
+}
+
+/* Basic text selection styling - MAKE SELECTION VISIBLE */
+.textLayer ::-moz-selection {
+    background: rgba(0, 100, 255, 0.3) !important;
+}
+
+.textLayer ::selection {
+    background: rgba(0, 100, 255, 0.3) !important;
+}
+
+.textLayer br::-moz-selection {
+    background: transparent;
+}
+
+.textLayer br::selection {
+    background: transparent;
+}
+
+/* PDF.js highlighting class - enable text selection when highlighting */
+.textLayer.highlighting,
+.text-layer.highlighting,
+[id^="textLayer-"].highlighting {
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    z-index: 100 !important;
+}
+
+/* Override cursor when parameter toolbar is active */
+.textLayer.highlighting.toolbar-active,
+.text-layer.highlighting.toolbar-active,
+[id^="textLayer-"].highlighting.toolbar-active {
+    cursor: default !important; /* Change to default cursor when toolbar is open */
+}
+
+/* Scribble/Drawing tool cursor and area styles */
+.pdfx-block.pdfjs-viewer .drawing-mode {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="%23333"/></svg>') 2 22, crosshair !important;
+}
+
+/* Drawing overlay canvas */
+.drawing-overlay {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 25 !important;
+    pointer-events: none !important;
+    background: transparent !important;
+}
+
+/* Active drawing overlay */
+.drawing-overlay.active {
+    pointer-events: auto !important;
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="%23333"/></svg>') 2 22, crosshair !important;
+}
+
+/* Drawing canvas styling */
+.drawing-canvas {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    z-index: 25 !important;
+    pointer-events: none !important;
+    background: transparent !important;
+}
+
+.drawing-canvas.active {
+    pointer-events: auto !important;
+}
+
+/* Drawing mode for PDF pages */
+.pdfx-block.pdfjs-viewer .pdfViewer .page.drawing-mode {
+    cursor: url('data:image/svg+xml;utf8,<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M3 17.25V21h3.75L17.81 9.94l-3.75-3.75L3 17.25zM20.71 7.04c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.39-.39-1.02-.39-1.41 0l-1.83 1.83 3.75 3.75 1.83-1.83z" fill="%23333"/></svg>') 2 22, crosshair !important;
+}
+
+/* Override text layer cursor when scribble tool is active and toolbar is open */
+.textLayer.scribbling.toolbar-active,
+.text-layer.scribbling.toolbar-active,
+[id^="textLayer-"].scribbling.toolbar-active {
+    cursor: default !important;
+}
+
+.textLayer.highlighting span,
+.text-layer.highlighting span,
+[id^="textLayer-"].highlighting span {
+    pointer-events: auto !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    /* Keep text transparent normally, but visible when selected */
+}
+
+.textLayer.highlighting span:hover,
+.text-layer.highlighting span:hover,
+[id^="textLayer-"].highlighting span:hover {
+    background-color: rgba(255, 255, 0, 0.2) !important;
+    border-radius: 2px;
+    /* Text remains transparent on hover, visible only when selected */
+}
+
+/* Selection styling for highlighting mode */
+.textLayer.highlighting span::selection,
+.text-layer.highlighting span::selection,
+[id^="textLayer-"].highlighting span::selection {
+    background: rgba(255, 255, 0, 0.3) !important;
+}
+
+.textLayer.highlighting span::-moz-selection,
+.text-layer.highlighting span::-moz-selection,
+[id^="textLayer-"].highlighting span::-moz-selection {
+    background: rgba(255, 255, 0, 0.3) !important;
+}
+
+/* Selecting class - when user is actively selecting text */
+.textLayer.selecting,
+.text-layer.selecting,
+[id^="textLayer-"].selecting {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+}
+
+.textLayer.selecting span,
+.text-layer.selecting span,
+[id^="textLayer-"].selecting span {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+}
+
+/* Visual feedback during selection */
+.textLayer.selecting span::selection,
+.text-layer.selecting span::selection,
+[id^="textLayer-"].selecting span::selection {
+    background: rgba(255, 255, 0, 0.4) !important;
+}
+
+.textLayer.selecting span::-moz-selection,
+.text-layer.selecting span::-moz-selection,
+[id^="textLayer-"].selecting span::-moz-selection {
+    background: rgba(255, 255, 0, 0.4) !important;
+}
+
+/* Highlight elements created by our tool */
+.highlight-container {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    pointer-events: none !important;
+    z-index: 1 !important;
+}
+
+.highlight-group {
+    position: relative;
+}
+
+.highlight-element {
+    position: absolute !important;
+    pointer-events: none !important;
+    border-radius: 2px;
+    opacity: 0.4;
+    transition: opacity 0.2s ease;
+}
+
+.highlight-element:hover {
+    opacity: 0.6;
 }
 
 /* Override any draw-mode styles when highlight tool is active */
@@ -1718,9 +1986,7 @@ html body [id^="marker-tool-"].active {
     }
 }
 
-/* BULLETPROOF FIX FOR YELLOW OVERLAY AND LOADING ISSUES */
-
-/* Ensure all PDF.js text layers are transparent */
+/* FIXED: Enable text layers for selection while keeping them transparent */
 .textLayer,
 .text-layer,
 [class*="textLayer"],
@@ -1729,7 +1995,13 @@ html body [id^="marker-tool-"].active {
 [id*="text-layer"] {
     background-color: transparent !important;
     background: none !important;
-    opacity: 0 !important; /* Make text layer completely invisible to remove yellow tint */
+    /* CRITICAL: Must have opacity > 0 for text selection to work */
+    opacity: 1 !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
 }
 
 /* Hide all text spans that might cause yellow overlay */
@@ -1768,11 +2040,15 @@ html body [id^="marker-tool-"].active {
     opacity: 1 !important;
 }
 
-/* Additional fix for PDF.js 5.x text layer rendering */
+/* FIXED: Enable text layer for selection */
 .page .textLayer {
-    opacity: 0 !important;
-    pointer-events: none !important;
+    opacity: 1 !important;
+    pointer-events: auto !important;
     background: transparent !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
 }
 
 /* Remove any yellow/highlighter background from PDF rendering */
@@ -2673,37 +2949,17 @@ canvas[data-main-rotation] {
     max-width: 400px;
     z-index: 10000 !important; /* Very high z-index to appear above everything */
     display: none;
+    pointer-events: auto !important; /* Ensure toolbar is always clickable */
     /* Remove transform - we'll handle positioning in JS */
     position: relative; /* For auto-hide indicator positioning */
+    cursor: auto !important;
 }
 
-/* Auto-hide timer indicator */
-.pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"]::before {
-    content: '';
-    position: absolute;
-    top: 0;
-    left: 0;
-    height: 3px;
-    background: linear-gradient(90deg, #007bff 0%, #0056b3 100%);
-    border-radius: 8px 8px 0 0;
-    width: 0%;
-    transition: width 5s linear;
-    z-index: 1;
-}
 
-/* Show the progress indicator when toolbar is visible */
-.pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"]:not(.hidden)::before {
-    width: 100%;
-}
-
-/* Hide progress indicator when toolbar is hidden */
-.pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"].hidden::before {
-    width: 0%;
-    transition: none;
-}
 
 .pdfx-block.pdfjs-viewer .editorParamsToolbar:not(.hidden) {
     display: block;
+    pointer-events: auto !important; /* Ensure visible toolbar is always clickable */
 }
 
 .pdfx-block.pdfjs-viewer .editorParamsToolbarContainer {
@@ -2718,6 +2974,48 @@ canvas[data-main-rotation] {
     color: #333;
     margin-bottom: 8px;
     display: block;
+}
+
+/* Ensure parameter toolbar contents are always clickable */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar * {
+    pointer-events: auto !important;
+    user-select: none !important; /* Prevent text selection in toolbar */
+    -webkit-user-select: none !important;
+    -moz-user-select: none !important;
+    -ms-user-select: none !important;
+    cursor: auto !important;
+}
+
+/* Override text cursor specifically for buttons and interactive elements */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar button,
+.pdfx-block.pdfjs-viewer .editorParamsToolbar input,
+.pdfx-block.pdfjs-viewer .editorParamsToolbar select {
+    cursor: pointer !important;
+}
+
+/* Override text cursor for the entire parameter toolbar */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar,
+.pdfx-block.pdfjs-viewer .editorParamsToolbar:hover {
+    cursor: auto !important;
+}
+
+/* Super specific override to defeat text layer cursor styles */
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"],
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"] *,
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"]:hover,
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"] *:hover {
+    cursor: auto !important;
+    pointer-events: auto !important;
+}
+
+/* Specific overrides for interactive elements in parameter toolbar */
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar button,
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar input[type="color"],
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar input[type="range"],
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar .colorPickerButton,
+html body .pdfx-block.pdfjs-viewer .editorParamsToolbar .toggle-button {
+    cursor: pointer !important;
+    pointer-events: auto !important;
 }
 
 /* Modern Color Picker Styles */
@@ -3162,4 +3460,79 @@ canvas[data-main-rotation] {
         overflow: visible !important;
         height: auto !important;
     }
+}
+
+/* FINAL SOLUTION: Enable text selection with proper visibility */
+html body .pdfx-block.pdfjs-viewer .textLayer,
+html body .pdfx-block.pdfjs-viewer [class*="textLayer"],
+html body .pdfx-block .textLayer,
+html body .pdfx-block [class*="textLayer"],
+html body div[class*="textLayer"],
+html body div.textLayer {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+    z-index: 10 !important;
+    /* CRITICAL: Must have opacity > 0 for text selection to work */
+/* opacity: 1 !important; */
+}
+
+/* FINAL SOLUTION: Text spans with proper selection */
+html body div.pdfx-block.pdfjs-viewer div.textLayer span[role="presentation"],
+html body div.pdfx-block.pdfjs-viewer div[class*="textLayer"] span[role="presentation"],
+html body div.pdfx-block div.textLayer span[role="presentation"],
+html body div.pdfx-block div[class*="textLayer"] span[role="presentation"],
+html body .pdfx-block.pdfjs-viewer .textLayer span,
+html body .pdfx-block.pdfjs-viewer [class*="textLayer"] span,
+html body .pdfx-block .textLayer span,
+html body .pdfx-block [class*="textLayer"] span,
+html body div[class*="textLayer"] span,
+html body div.textLayer span {
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+    cursor: text !important;
+    /* Keep text transparent but selectable */
+    color: transparent !important;
+    /* CRITICAL: Must have opacity > 0 for text selection to work */
+    /* opacity: 1 !important; */
+    visibility: visible !important;
+}
+
+/* Ensure text selection is visible */
+.pdfx-block .textLayer span::selection,
+.pdfx-block [class*="textLayer"] span::selection,
+.pdfx-block.pdfjs-viewer .textLayer span::selection,
+.pdfx-block.pdfjs-viewer [class*="textLayer"] span::selection,
+div[class*="textLayer"] span::selection,
+div.textLayer span::selection {
+    background: rgba(0, 100, 255, 0.3) !important;
+}
+
+.pdfx-block .textLayer span::-moz-selection,
+.pdfx-block [class*="textLayer"] span::-moz-selection,
+.pdfx-block.pdfjs-viewer .textLayer span::-moz-selection,
+.pdfx-block.pdfjs-viewer [class*="textLayer"] span::-moz-selection,
+div[class*="textLayer"] span::-moz-selection,
+div.textLayer span::-moz-selection {
+    background: rgba(0, 100, 255, 0.3) !important;
+}
+
+/* FINAL SOLUTION: Ensure text selection works on all text layers */
+div[id^="viewer-"] div.textLayer span[role="presentation"],
+.pdfViewer .textLayer span {
+    color: transparent !important;
+    user-select: text !important;
+    -webkit-user-select: text !important;
+    -moz-user-select: text !important;
+    -ms-user-select: text !important;
+    pointer-events: auto !important;
+    cursor: text !important;
+    /* CRITICAL: Must have opacity > 0 for text selection to work */
+    /* opacity: 1 !important; */
+    visibility: visible !important;
 }

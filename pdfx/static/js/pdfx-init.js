@@ -592,11 +592,529 @@ class PdfxViewer {
     }
 
     setActiveTool(toolName) {
+        // Deactivate previous tool first
+        this.deactivateCurrentTool();
+
         this.currentTool = toolName;
         console.log(`[PdfxViewer] Active tool: ${toolName}`);
 
         // Update UI to show active tool
         this.updateActiveToolUI(toolName);
+
+        // Activate the specific tool functionality
+        this.activateToolFunctionality(toolName);
+    }
+
+    deactivateCurrentTool() {
+        if (!this.currentTool) return;
+
+        console.log(`[PdfxViewer] Deactivating current tool: ${this.currentTool}`);
+
+        // Remove highlighting class from text layer if it was the highlight tool
+        if (this.currentTool === 'highlight') {
+            this.disableTextHighlighting();
+        } else if (this.currentTool === 'scribble') {
+            this.disableDrawingMode();
+        }
+
+        // Clear any tool-specific states
+        const textLayers = document.querySelectorAll(`#viewerContainer-${this.blockId} .textLayer`);
+        textLayers.forEach(textLayer => {
+            textLayer.classList.remove('highlighting', 'scribbling');
+            textLayer.style.pointerEvents = 'none';
+            textLayer.style.userSelect = 'none';
+        });
+    }
+
+    activateToolFunctionality(toolName) {
+        console.log(`[PdfxViewer] Activating functionality for tool: ${toolName}`);
+
+        switch(toolName) {
+            case 'highlight':
+                this.enableTextHighlighting();
+                break;
+            case 'scribble':
+                // Enable drawing mode
+                this.enableDrawingMode();
+                break;
+            case 'text':
+                // Enable text annotation mode
+                this.enableTextAnnotationMode();
+                break;
+            case 'shape':
+                // Enable shape drawing mode
+                this.enableShapeMode();
+                break;
+            case 'note':
+                // Enable note creation mode
+                this.enableNoteMode();
+                break;
+            default:
+                console.log(`[PdfxViewer] No specific functionality for tool: ${toolName}`);
+        }
+    }
+
+    enableTextHighlighting() {
+        console.log(`[PdfxViewer] Enabling text highlighting for block: ${this.blockId}`);
+
+        // Find all text layers for this block (PDF.js creates .textLayer elements)
+        const textLayers = document.querySelectorAll(`#viewerContainer-${this.blockId} .textLayer`);
+
+        if (textLayers.length === 0) {
+            console.warn(`[PdfxViewer] No text layers found for block: ${this.blockId}`);
+            // Fallback: look for alternative selectors
+            const fallbackLayers = document.querySelectorAll(`[id^="textLayer-${this.blockId}"], [class*="textLayer"], [class*="text-layer"]`);
+            console.log(`[PdfxViewer] Found ${fallbackLayers.length} fallback text layers`);
+            if (fallbackLayers.length === 0) {
+                return;
+            }
+            // Convert NodeList to Array and use it
+            const textLayersArray = Array.from(fallbackLayers);
+            textLayersArray.forEach(layer => {
+                console.log(`[PdfxViewer] Adding fallback text layer: ${layer.className}`);
+                this.enableTextLayerHighlighting(layer);
+            });
+            return;
+        }
+
+                textLayers.forEach(textLayer => {
+            this.enableTextLayerHighlighting(textLayer);
+        });
+
+        console.log(`[PdfxViewer] Text highlighting enabled on ${textLayers.length} text layers`);
+    }
+
+    enableTextLayerHighlighting(textLayer) {
+        console.log(`[PdfxViewer] Adding highlighting class to: ${textLayer.id || textLayer.className}`);
+
+        // Add the highlighting class as per PDF.js example
+        textLayer.classList.add('highlighting');
+
+        // Enable text selection
+        textLayer.style.pointerEvents = 'auto';
+        textLayer.style.userSelect = 'text';
+        textLayer.style.webkitUserSelect = 'text';
+        textLayer.style.MozUserSelect = 'text';
+        textLayer.style.msUserSelect = 'text';
+
+        // Add event listeners for text selection
+        this.addTextSelectionListeners(textLayer);
+    }
+
+    disableTextHighlighting() {
+        console.log(`[PdfxViewer] Disabling text highlighting for block: ${this.blockId}`);
+
+        // Find all text layers for this block (PDF.js creates .textLayer elements)
+        const textLayers = document.querySelectorAll(`#viewerContainer-${this.blockId} .textLayer`);
+
+        textLayers.forEach(textLayer => {
+            // Remove the highlighting class
+            textLayer.classList.remove('highlighting');
+
+            // Disable text selection
+            textLayer.style.pointerEvents = 'none';
+            textLayer.style.userSelect = 'none';
+            textLayer.style.webkitUserSelect = 'none';
+            textLayer.style.MozUserSelect = 'none';
+            textLayer.style.msUserSelect = 'none';
+
+            // Remove event listeners
+            this.removeTextSelectionListeners(textLayer);
+        });
+    }
+
+        addTextSelectionListeners(textLayer) {
+        // Remove existing listeners first
+        this.removeTextSelectionListeners(textLayer);
+
+        const onMouseDown = (e) => this.handleMouseDown(e, textLayer);
+        const onMouseUp = (e) => this.handleTextSelection(e, textLayer);
+        const onSelectionChange = () => this.handleSelectionChange(textLayer);
+
+        textLayer.addEventListener('mousedown', onMouseDown);
+        textLayer.addEventListener('mouseup', onMouseUp);
+        document.addEventListener('selectionchange', onSelectionChange);
+
+        // Store listeners for cleanup
+        textLayer._pdfxListeners = {
+            mousedown: onMouseDown,
+            mouseup: onMouseUp,
+            selectionchange: onSelectionChange
+        };
+    }
+
+    removeTextSelectionListeners(textLayer) {
+        if (textLayer._pdfxListeners) {
+            textLayer.removeEventListener('mousedown', textLayer._pdfxListeners.mousedown);
+            textLayer.removeEventListener('mouseup', textLayer._pdfxListeners.mouseup);
+            document.removeEventListener('selectionchange', textLayer._pdfxListeners.selectionchange);
+            delete textLayer._pdfxListeners;
+        }
+    }
+
+        handleSelectionChange(textLayer) {
+        const selection = window.getSelection();
+
+        if (selection.rangeCount === 0) {
+            // No selection, remove selecting class
+            textLayer.classList.remove('selecting');
+            return;
+        }
+
+        // Check if selection intersects with this text layer
+        let hasSelection = false;
+        for (let i = 0; i < selection.rangeCount; i++) {
+            const range = selection.getRangeAt(i);
+            if (this.rangeIntersectsTextLayer(range, textLayer)) {
+                hasSelection = true;
+                break;
+            }
+        }
+
+        if (hasSelection) {
+            textLayer.classList.add('selecting');
+        } else {
+            textLayer.classList.remove('selecting');
+        }
+    }
+
+    rangeIntersectsTextLayer(range, textLayer) {
+        try {
+            // Check if range intersects with text layer
+            return textLayer.contains(range.commonAncestorContainer) ||
+                   textLayer.contains(range.startContainer) ||
+                   textLayer.contains(range.endContainer) ||
+                   range.intersectsNode(textLayer);
+        } catch (e) {
+            return false;
+        }
+    }
+
+    handleTextSelection(event, textLayer) {
+        const selection = window.getSelection();
+        if (selection.rangeCount > 0 && !selection.isCollapsed) {
+            const range = selection.getRangeAt(0);
+
+            // Check if selection is within the text layer
+            if (this.rangeIntersectsTextLayer(range, textLayer)) {
+                console.log(`[PdfxViewer] Text selected in text layer: ${textLayer.className}`);
+                this.createHighlight(range, textLayer);
+
+                // Remove selecting class after highlight is created
+                setTimeout(() => {
+                    textLayer.classList.remove('selecting');
+                }, 100);
+            }
+        }
+    }
+
+    handleMouseDown(event, textLayer) {
+        console.log(`[PdfxViewer] Mouse down on text layer: ${textLayer.className}`);
+
+        // Add selecting class as per PDF.js example
+        textLayer.classList.add('selecting');
+
+        // Clear any existing selection when starting new selection
+        window.getSelection().removeAllRanges();
+    }
+
+        createHighlight(range, textLayer) {
+        // Get the selected text
+        const selectedText = range.toString().trim();
+        if (!selectedText) return;
+
+        console.log(`[PdfxViewer] Creating highlight for text: "${selectedText}"`);
+
+        // Get or create highlight container for this text layer
+        let highlightContainer = textLayer.querySelector('.highlight-container');
+        if (!highlightContainer) {
+            highlightContainer = document.createElement('div');
+            highlightContainer.className = 'highlight-container';
+            highlightContainer.style.position = 'absolute';
+            highlightContainer.style.top = '0';
+            highlightContainer.style.left = '0';
+            highlightContainer.style.width = '100%';
+            highlightContainer.style.height = '100%';
+            highlightContainer.style.pointerEvents = 'none';
+            highlightContainer.style.zIndex = '1';
+            textLayer.appendChild(highlightContainer);
+        }
+
+        // Calculate position from range
+        const rects = range.getClientRects();
+        if (rects.length > 0) {
+            const textLayerRect = textLayer.getBoundingClientRect();
+
+            // Create a highlight group for this selection
+            const highlightGroup = document.createElement('div');
+            highlightGroup.className = 'highlight-group';
+            highlightGroup.setAttribute('data-text', selectedText);
+
+            for (let i = 0; i < rects.length; i++) {
+                const rect = rects[i];
+                const highlightRect = document.createElement('div');
+                highlightRect.className = 'highlight-element';
+                highlightRect.style.position = 'absolute';
+                highlightRect.style.left = `${rect.left - textLayerRect.left}px`;
+                highlightRect.style.top = `${rect.top - textLayerRect.top}px`;
+                highlightRect.style.width = `${rect.width}px`;
+                highlightRect.style.height = `${rect.height}px`;
+                // Debug: Log the color being used
+                const finalColor = this.highlightColor || '#FFFF00';
+                console.log(`[PdfxViewer] Creating highlight with color: ${finalColor}, opacity: 0.4`);
+
+                highlightRect.style.backgroundColor = finalColor;
+                highlightRect.style.opacity = '0.4';
+                highlightRect.style.pointerEvents = 'none';
+                highlightRect.style.borderRadius = '2px';
+
+                // Debug: Log the final computed styles
+                console.log(`[PdfxViewer] Highlight element styles:`, {
+                    backgroundColor: highlightRect.style.backgroundColor,
+                    opacity: highlightRect.style.opacity,
+                    position: highlightRect.style.position,
+                    left: highlightRect.style.left,
+                    top: highlightRect.style.top,
+                    width: highlightRect.style.width,
+                    height: highlightRect.style.height
+                });
+
+                highlightGroup.appendChild(highlightRect);
+            }
+
+            highlightContainer.appendChild(highlightGroup);
+            console.log(`[PdfxViewer] Created highlight with ${rects.length} rectangles`);
+        }
+
+        // Clear selection after highlight is created
+        window.getSelection().removeAllRanges();
+    }
+
+    enableDrawingMode() {
+        console.log(`[PdfxViewer] Enabling drawing mode for block: ${this.blockId}`);
+
+        // Set scribbling flag for text layers (similar to highlighting)
+        this.setTextLayerScribbleMode(true);
+
+        // Add drawing mode class to viewer
+        const viewer = document.getElementById(`viewer-${this.blockId}`);
+        if (viewer) {
+            viewer.classList.add('drawing-mode');
+        }
+
+        // Setup drawing canvas overlays for each page
+        this.setupDrawingCanvases();
+
+        // Get current ink settings
+        this.updateInkSettings();
+    }
+
+    setTextLayerScribbleMode(isActive) {
+        // Find all text layers within this PDF block and set scribbling mode
+        const container = document.getElementById(`pdfx-block-${this.blockId}`);
+        if (!container) return;
+
+        const textLayers = container.querySelectorAll('.textLayer, .text-layer, [id^="textLayer-"]');
+        textLayers.forEach(layer => {
+            if (isActive) {
+                layer.classList.add('scribbling');
+            } else {
+                layer.classList.remove('scribbling');
+            }
+        });
+    }
+
+        setupDrawingCanvases() {
+        const viewer = document.getElementById(`viewer-${this.blockId}`);
+        if (!viewer) return;
+
+        // Find all PDF pages
+        const pages = viewer.querySelectorAll('.page');
+
+        pages.forEach((page, index) => {
+            let canvas = page.querySelector('.drawing-canvas');
+
+            if (canvas) {
+                // Canvas already exists, just activate it
+                canvas.classList.add('active');
+                canvas.style.pointerEvents = 'auto';
+                console.log(`[PdfxViewer] Reactivated existing drawing canvas: ${canvas.id}`);
+            } else {
+                // Create new drawing canvas
+                canvas = document.createElement('canvas');
+                canvas.className = 'drawing-canvas active';
+                canvas.id = `drawing-canvas-${this.blockId}-${index}`;
+
+                // Set canvas size to match page
+                const pageRect = page.getBoundingClientRect();
+                canvas.width = pageRect.width;
+                canvas.height = pageRect.height;
+
+                // Position canvas over page
+                canvas.style.position = 'absolute';
+                canvas.style.top = '0';
+                canvas.style.left = '0';
+                canvas.style.zIndex = '25';
+                canvas.style.pointerEvents = 'auto';
+
+                // Add drawing event listeners
+                this.addDrawingListeners(canvas);
+
+                // Append to page
+                page.style.position = 'relative';
+                page.appendChild(canvas);
+
+                console.log(`[PdfxViewer] Created new drawing canvas: ${canvas.id}`);
+            }
+        });
+    }
+
+        addDrawingListeners(canvas) {
+        let isDrawing = false;
+        let lastX = 0;
+        let lastY = 0;
+
+        const ctx = canvas.getContext('2d');
+
+        // Set up drawing context
+        const updateDrawingContext = () => {
+            ctx.lineCap = 'round';
+            ctx.lineJoin = 'round';
+            ctx.strokeStyle = this.inkColor || '#FF0000';
+            ctx.lineWidth = this.inkThickness || 2;
+            ctx.globalAlpha = this.inkOpacity || 1;
+        };
+
+        updateDrawingContext();
+
+        // Store reference to this canvas for updates
+        canvas._updateContext = updateDrawingContext;
+
+        const startDrawing = (e) => {
+            isDrawing = true;
+            updateDrawingContext(); // Update context at start of each stroke
+
+            const rect = canvas.getBoundingClientRect();
+            lastX = e.clientX - rect.left;
+            lastY = e.clientY - rect.top;
+
+            ctx.beginPath();
+            ctx.moveTo(lastX, lastY);
+        };
+
+        const draw = (e) => {
+            if (!isDrawing) return;
+
+            const rect = canvas.getBoundingClientRect();
+            const currentX = e.clientX - rect.left;
+            const currentY = e.clientY - rect.top;
+
+            ctx.lineTo(currentX, currentY);
+            ctx.stroke();
+
+            lastX = currentX;
+            lastY = currentY;
+        };
+
+        const stopDrawing = () => {
+            if (!isDrawing) return;
+            isDrawing = false;
+            ctx.beginPath();
+        };
+
+        // Mouse events
+        canvas.addEventListener('mousedown', startDrawing);
+        canvas.addEventListener('mousemove', draw);
+        canvas.addEventListener('mouseup', stopDrawing);
+        canvas.addEventListener('mouseout', stopDrawing);
+
+        // Touch events for mobile
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const mouseEvent = new MouseEvent('mouseup', {});
+            canvas.dispatchEvent(mouseEvent);
+        });
+    }
+
+        updateInkSettings() {
+        // Get current ink settings from the parameter toolbar
+        const colorInput = document.getElementById(`editorInkColor-${this.blockId}`);
+        const thicknessInput = document.getElementById(`editorInkThickness-${this.blockId}`);
+        const opacityInput = document.getElementById(`editorInkOpacity-${this.blockId}`);
+
+        this.inkColor = colorInput ? colorInput.value : '#FF0000';
+        this.inkThickness = thicknessInput ? parseInt(thicknessInput.value) : 2;
+        this.inkOpacity = opacityInput ? parseFloat(opacityInput.value) : 1;
+
+        // Update all active drawing canvases with new settings
+        this.updateAllCanvasContexts();
+    }
+
+    updateAllCanvasContexts() {
+        // Update all active drawing canvases with current ink settings
+        const canvases = document.querySelectorAll(`#pdfx-block-${this.blockId} .drawing-canvas.active`);
+        canvases.forEach(canvas => {
+            if (canvas._updateContext) {
+                // Use the stored update function for this canvas
+                canvas._updateContext();
+            }
+        });
+        console.log(`[PdfxViewer] Updated ${canvases.length} canvas contexts with new ink settings`);
+    }
+
+    disableDrawingMode() {
+        console.log(`[PdfxViewer] Disabling drawing mode for block: ${this.blockId}`);
+
+        // Remove scribbling flag from text layers
+        this.setTextLayerScribbleMode(false);
+
+        // Remove drawing mode class from viewer
+        const viewer = document.getElementById(`viewer-${this.blockId}`);
+        if (viewer) {
+            viewer.classList.remove('drawing-mode');
+        }
+
+        // Remove drawing canvases
+        const canvases = document.querySelectorAll(`#pdfx-block-${this.blockId} .drawing-canvas`);
+        canvases.forEach(canvas => {
+            canvas.classList.remove('active');
+            canvas.style.pointerEvents = 'none';
+        });
+    }
+
+    enableTextAnnotationMode() {
+        console.log(`[PdfxViewer] Enabling text annotation mode for block: ${this.blockId}`);
+        // TODO: Implement text annotation functionality
+    }
+
+    enableShapeMode() {
+        console.log(`[PdfxViewer] Enabling shape mode for block: ${this.blockId}`);
+        // TODO: Implement shape functionality
+    }
+
+    enableNoteMode() {
+        console.log(`[PdfxViewer] Enabling note mode for block: ${this.blockId}`);
+        // TODO: Implement note functionality
     }
 
     updateActiveToolUI(toolName) {
@@ -656,73 +1174,176 @@ class PdfxViewer {
         toolbar.classList.remove('hidden');
         button.setAttribute('aria-expanded', 'true');
 
-        // Set up auto-hide timer and interaction listeners
-        this.setupAutoHideTimer(toolbar, button);
-        this.setupToolbarInteractionListeners(toolbar, button);
+        // Change text layer cursor to default when toolbar is active
+        this.setTextLayerCursorForToolbar(true);
 
-        console.log(`[PdfxViewer-${this.blockId}] Showed toolbar ${toolbar.id} with auto-hide timer`);
+        // Set up mouse leave behavior instead of auto-hide timer
+        this.setupToolbarMouseLeave(toolbar, button);
+
+        console.log(`[PdfxViewer-${this.blockId}] Showed toolbar ${toolbar.id} with mouse leave behavior`);
     }
 
-    setupAutoHideTimer(toolbar, button) {
-        // Set up auto-hide timer (5 seconds)
-        if (!this.parameterToolbarTimers) {
-            this.parameterToolbarTimers = {};
-        }
+            setupToolbarMouseLeave(toolbar, button) {
+        // Set up mouse leave behavior that works reliably with child elements
+        let isInteracting = false; // Flag to prevent hiding during interactions
 
-        // Reset the progress indicator animation
-        toolbar.style.setProperty('--progress-animation', 'none');
-        toolbar.offsetHeight; // Force reflow
-        toolbar.style.setProperty('--progress-animation', 'width 5s linear');
+                const checkMousePosition = (event) => {
+            // Don't check position if user is actively interacting
+            if (isInteracting) return;
 
-        this.parameterToolbarTimers[toolbar.id] = setTimeout(() => {
-            console.log(`[PdfxViewer-${this.blockId}] Auto-hiding toolbar ${toolbar.id} after 5 seconds`);
-            this.hideParameterToolbar(toolbar, button);
-            delete this.parameterToolbarTimers[toolbar.id];
-        }, 5000); // 5 seconds
+            // Get toolbar bounds
+            const rect = toolbar.getBoundingClientRect();
+            const mouseX = event.clientX;
+            const mouseY = event.clientY;
 
-        console.log(`[PdfxViewer-${this.blockId}] Set auto-hide timer for toolbar ${toolbar.id}`);
-    }
+            // Check if mouse is outside toolbar bounds
+            let isOutside = (
+                mouseX < rect.left ||
+                mouseX > rect.right ||
+                mouseY < rect.top ||
+                mouseY > rect.bottom
+            );
 
-    setupToolbarInteractionListeners(toolbar, button) {
-        // Reset timer on mouse enter (hover)
-        const onMouseEnter = () => {
-            console.log(`[PdfxViewer-${this.blockId}] Mouse entered toolbar ${toolbar.id}, resetting timer`);
-            this.resetAutoHideTimer(toolbar, button);
+            // If highlight or scribble tool is active, also check if mouse is over text layer area
+            if (isOutside && (this.currentTool === 'highlight' || this.currentTool === 'scribble')) {
+                const viewerContainer = document.getElementById(`viewerContainer-${this.blockId}`);
+                if (viewerContainer) {
+                    const viewerRect = viewerContainer.getBoundingClientRect();
+                    const isOverTextArea = (
+                        mouseX >= viewerRect.left &&
+                        mouseX <= viewerRect.right &&
+                        mouseY >= viewerRect.top &&
+                        mouseY <= viewerRect.bottom
+                    );
+
+                    // If mouse is over text area, don't consider it "outside"
+                    if (isOverTextArea) {
+                        isOutside = false;
+                    }
+                }
+            }
+
+            if (isOutside) {
+                // Mouse is outside toolbar and text area, start hide timer
+                if (!this.parameterToolbarTimers) {
+                    this.parameterToolbarTimers = {};
+                }
+
+                // Clear existing timer first
+                if (this.parameterToolbarTimers[toolbar.id]) {
+                    clearTimeout(this.parameterToolbarTimers[toolbar.id]);
+                }
+
+                this.parameterToolbarTimers[toolbar.id] = setTimeout(() => {
+                    console.log(`[PdfxViewer-${this.blockId}] Mouse left toolbar ${toolbar.id}, hiding`);
+                    this.hideParameterToolbar(toolbar, button);
+                    delete this.parameterToolbarTimers[toolbar.id];
+                }, 300); // Increased delay to 300ms for better UX
+            } else {
+                // Mouse is inside valid area, cancel hide timer
+                if (this.parameterToolbarTimers && this.parameterToolbarTimers[toolbar.id]) {
+                    clearTimeout(this.parameterToolbarTimers[toolbar.id]);
+                    delete this.parameterToolbarTimers[toolbar.id];
+                }
+            }
         };
 
-        // Reset timer on any interaction inside the toolbar
-        const onInteraction = () => {
-            console.log(`[PdfxViewer-${this.blockId}] Interaction in toolbar ${toolbar.id}, resetting timer`);
-            this.resetAutoHideTimer(toolbar, button);
+        const onMouseMove = (event) => {
+            checkMousePosition(event);
+        };
+
+        const onMouseLeave = (event) => {
+            // Double-check on mouseleave as well
+            checkMousePosition(event);
+        };
+
+        // Prevent hiding during active interactions
+        const onMouseDown = (event) => {
+            isInteracting = true;
+            // Clear any pending hide timer
+            if (this.parameterToolbarTimers && this.parameterToolbarTimers[toolbar.id]) {
+                clearTimeout(this.parameterToolbarTimers[toolbar.id]);
+                delete this.parameterToolbarTimers[toolbar.id];
+            }
+        };
+
+        const onMouseUp = (event) => {
+            // Extended delay before re-enabling position checking for complex interactions
+            setTimeout(() => {
+                isInteracting = false;
+            }, 200);
+        };
+
+        const onClick = (event) => {
+            // Prevent hiding on click
+            event.stopPropagation();
+            // Clear any pending hide timer
+            if (this.parameterToolbarTimers && this.parameterToolbarTimers[toolbar.id]) {
+                clearTimeout(this.parameterToolbarTimers[toolbar.id]);
+                delete this.parameterToolbarTimers[toolbar.id];
+            }
+        };
+
+        const onMouseEnter = (event) => {
+            // Always clear hide timer when mouse enters toolbar
+            if (this.parameterToolbarTimers && this.parameterToolbarTimers[toolbar.id]) {
+                clearTimeout(this.parameterToolbarTimers[toolbar.id]);
+                delete this.parameterToolbarTimers[toolbar.id];
+            }
+        };
+
+        const onInput = (event) => {
+            // Prevent hiding during input interactions (sliders, etc.)
+            isInteracting = true;
+            if (this.parameterToolbarTimers && this.parameterToolbarTimers[toolbar.id]) {
+                clearTimeout(this.parameterToolbarTimers[toolbar.id]);
+                delete this.parameterToolbarTimers[toolbar.id];
+            }
+            // Reset after longer delay for input elements
+            setTimeout(() => {
+                isInteracting = false;
+            }, 300);
+        };
+
+        const onChange = (event) => {
+            // Prevent hiding during change events (select, etc.)
+            isInteracting = true;
+            if (this.parameterToolbarTimers && this.parameterToolbarTimers[toolbar.id]) {
+                clearTimeout(this.parameterToolbarTimers[toolbar.id]);
+                delete this.parameterToolbarTimers[toolbar.id];
+            }
+            // Reset after delay
+            setTimeout(() => {
+                isInteracting = false;
+            }, 200);
         };
 
         // Add event listeners
+        document.addEventListener('mousemove', onMouseMove);
+        toolbar.addEventListener('mouseleave', onMouseLeave);
         toolbar.addEventListener('mouseenter', onMouseEnter);
-        toolbar.addEventListener('click', onInteraction);
-        toolbar.addEventListener('input', onInteraction);
-        toolbar.addEventListener('change', onInteraction);
+        toolbar.addEventListener('mousedown', onMouseDown);
+        toolbar.addEventListener('mouseup', onMouseUp);
+        toolbar.addEventListener('click', onClick);
+        toolbar.addEventListener('input', onInput);
+        toolbar.addEventListener('change', onChange);
 
         // Store listeners for cleanup
         if (!this.toolbarListeners) {
             this.toolbarListeners = {};
         }
         this.toolbarListeners[toolbar.id] = {
+            mousemove: onMouseMove,
+            mouseleave: onMouseLeave,
             mouseenter: onMouseEnter,
-            click: onInteraction,
-            input: onInteraction,
-            change: onInteraction
+            mousedown: onMouseDown,
+            mouseup: onMouseUp,
+            click: onClick,
+            input: onInput,
+            change: onChange
         };
-    }
 
-    resetAutoHideTimer(toolbar, button) {
-        // Clear existing timer
-        if (this.parameterToolbarTimers && this.parameterToolbarTimers[toolbar.id]) {
-            clearTimeout(this.parameterToolbarTimers[toolbar.id]);
-            delete this.parameterToolbarTimers[toolbar.id];
-        }
-
-        // Set new timer
-        this.setupAutoHideTimer(toolbar, button);
+        console.log(`[PdfxViewer-${this.blockId}] Set mouse leave behavior for toolbar ${toolbar.id}`);
     }
 
     hideParameterToolbar(toolbar, button) {
@@ -735,7 +1356,11 @@ class PdfxViewer {
         // Clean up event listeners
         if (this.toolbarListeners && this.toolbarListeners[toolbar.id]) {
             const listeners = this.toolbarListeners[toolbar.id];
+            document.removeEventListener('mousemove', listeners.mousemove);
+            toolbar.removeEventListener('mouseleave', listeners.mouseleave);
             toolbar.removeEventListener('mouseenter', listeners.mouseenter);
+            toolbar.removeEventListener('mousedown', listeners.mousedown);
+            toolbar.removeEventListener('mouseup', listeners.mouseup);
             toolbar.removeEventListener('click', listeners.click);
             toolbar.removeEventListener('input', listeners.input);
             toolbar.removeEventListener('change', listeners.change);
@@ -744,6 +1369,10 @@ class PdfxViewer {
 
         toolbar.classList.add('hidden');
         button.setAttribute('aria-expanded', 'false');
+
+        // Restore text layer cursor to text when toolbar is hidden
+        this.setTextLayerCursorForToolbar(false);
+
         console.log(`[PdfxViewer-${this.blockId}] Hidden toolbar ${toolbar.id}`);
     }
 
@@ -754,7 +1383,7 @@ class PdfxViewer {
         const buttonRect = button.getBoundingClientRect();
 
         // Position toolbar to the right of the secondary toolbar with some offset
-        const leftPosition = buttonRect.right + 20; // 20px gap from secondary toolbar
+        const leftPosition = buttonRect.right; // 20px gap from secondary toolbar
         const topPosition = buttonRect.top + (buttonRect.height / 2); // Center vertically with button
 
         console.log(`[PdfxViewer] Positioning toolbar at: left=${leftPosition}px, top=${topPosition}px`);
@@ -799,6 +1428,9 @@ class PdfxViewer {
 
         toolbars.forEach(toolbar => toolbar.classList.add('hidden'));
         buttons.forEach(button => button.setAttribute('aria-expanded', 'false'));
+
+        // Restore text layer cursor when all toolbars are closed
+        this.setTextLayerCursorForToolbar(false);
     }
 
     initHighlightColorPicker() {
@@ -822,10 +1454,15 @@ class PdfxViewer {
         const defaultSelected = document.querySelector(`#highlightColorPickerButtons-${this.blockId} .colorPickerButton[aria-selected="true"]`);
         if (defaultSelected) {
             this.highlightColor = defaultSelected.dataset.color;
+            console.log(`[PdfxViewer-${this.blockId}] Default highlight color set from selected button: ${this.highlightColor}`);
         } else if (colorButtons.length > 0) {
             // Fallback to first button if none selected
             colorButtons[0].setAttribute('aria-selected', 'true');
             this.highlightColor = colorButtons[0].dataset.color;
+            console.log(`[PdfxViewer-${this.blockId}] Default highlight color set from first button: ${this.highlightColor}`);
+        } else {
+            console.warn(`[PdfxViewer-${this.blockId}] No color buttons found, using fallback color`);
+            this.highlightColor = '#FFFF00';
         }
     }
 
@@ -858,26 +1495,29 @@ class PdfxViewer {
 
         if (colorPicker) {
             colorPicker.addEventListener('input', (e) => {
-                this.scribbleColor = e.target.value;
-                console.log(`[PdfxViewer] Scribble color: ${this.scribbleColor}`);
+                this.inkColor = e.target.value;
+                this.updateInkSettings();
+                console.log(`[PdfxViewer] Ink color updated: ${this.inkColor}`);
             });
-            this.scribbleColor = colorPicker.value;
+            this.inkColor = colorPicker.value;
         }
 
         if (thicknessSlider) {
             thicknessSlider.addEventListener('input', (e) => {
-                this.scribbleThickness = e.target.value;
-                console.log(`[PdfxViewer] Scribble thickness: ${this.scribbleThickness}`);
+                this.inkThickness = parseInt(e.target.value);
+                this.updateInkSettings();
+                console.log(`[PdfxViewer] Ink thickness updated: ${this.inkThickness}`);
             });
-            this.scribbleThickness = thicknessSlider.value;
+            this.inkThickness = parseInt(thicknessSlider.value);
         }
 
         if (opacitySlider) {
             opacitySlider.addEventListener('input', (e) => {
-                this.scribbleOpacity = e.target.value;
-                console.log(`[PdfxViewer] Scribble opacity: ${this.scribbleOpacity}`);
+                this.inkOpacity = parseFloat(e.target.value);
+                this.updateInkSettings();
+                console.log(`[PdfxViewer] Ink opacity updated: ${this.inkOpacity}`);
             });
-            this.scribbleOpacity = opacitySlider.value;
+            this.inkOpacity = parseFloat(opacitySlider.value);
         }
     }
 
@@ -900,6 +1540,27 @@ class PdfxViewer {
             });
             this.textFontSize = fontSizeSlider.value;
         }
+    }
+
+    setTextLayerCursorForToolbar(isToolbarActive) {
+        // Find all text layers with highlighting or scribbling class
+        const highlightingLayers = document.querySelectorAll(`#viewerContainer-${this.blockId} .textLayer.highlighting`);
+        const scribblingLayers = document.querySelectorAll(`#viewerContainer-${this.blockId} .textLayer.scribbling`);
+
+        // Combine both sets
+        const allLayers = [...highlightingLayers, ...scribblingLayers];
+
+        allLayers.forEach(textLayer => {
+            if (isToolbarActive) {
+                // Add toolbar-active class to change cursor to default
+                textLayer.classList.add('toolbar-active');
+            } else {
+                // Remove toolbar-active class to restore text cursor
+                textLayer.classList.remove('toolbar-active');
+            }
+        });
+
+        console.log(`[PdfxViewer-${this.blockId}] Set text layer cursor - toolbar active: ${isToolbarActive}, highlighting layers: ${highlightingLayers.length}, scribbling layers: ${scribblingLayers.length}, total: ${allLayers.length}`);
     }
 
     initGlobalClickHandler() {

@@ -20,7 +20,7 @@ export class HighlightTool extends BaseTool {
         // Configuration
         this.config = {
             color: '#FFFF00', // Yellow color
-            opacity: 0.3,
+            opacity: 0.25,
             borderRadius: '2px',
             ...this.config
         };
