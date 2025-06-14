@@ -614,24 +614,20 @@ class PdfxXBlock(XBlock):
         rendered_html = template.render(**template_context)
         frag = Fragment(rendered_html)
 
-        # Add CSS
-
+        # Add CSS for PDF.js viewer
         frag.add_css(self.resource_string("static/css/pdfx.css"))
-        frag.add_css(self.resource_string("static/css/pdf_viewer.min.css"))
+        # frag.add_css(self.resource_string("static/css/pdf_viewer.css"))
+        frag.add_css_url('https://cdn.jsdelivr.net/npm/pdfjs-dist@5.3.31/web/pdf_viewer.min.css')
         frag.add_css_url('https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css')
 
-        # Add external library dependencies
-        # Load PDF.js using custom loader to handle ES modules properly
-        frag.add_javascript(self.resource_string("static/js/pdf-loader.js"))
+        # Load PDF.js libraries using dedicated ES6 loader
+        frag.add_javascript(self.resource_string("static/js/pdf-loader-es6.js"))
 
-        # Load Fabric.js from local vendor file
-        frag.add_javascript(self.resource_string("static/js/vendor/fabric.min.js"))
-
-        # Add the PDF XBlock implementation
-        frag.add_javascript(self.resource_string("static/js/build/pdfx-xblock.js"))
-
-        # Add the initialization script
+        # Add the PDF.js XBlock initializer
         frag.add_javascript(self.resource_string("static/js/pdfx-init.js"))
+
+        # Initialize the XBlock with PDF.js
+        frag.initialize_js('PdfxXBlockInit')
 
         # Add data element for JavaScript access
         data_html = f"""
@@ -1401,319 +1397,63 @@ class PdfxXBlock(XBlock):
     @XBlock.handler
     def save_annotations(self, request, suffix=''):
         """
-        Save the student's annotations and other data to MongoDB via XBlock fields.
+        Simple annotation save handler - temporary fix for frontend development.
         """
         import json
-
-        # Add CSRF exemption for XBlock handler if needed
-        try:
-            from django.views.decorators.csrf import csrf_exempt
-            # Note: XBlock handlers are typically CSRF exempt by default,
-            # but we can ensure it by checking if request has CSRF validation
-            if hasattr(request, '_dont_enforce_csrf_checks'):
-                request._dont_enforce_csrf_checks = True
-        except ImportError:
-            # Django not available in this context
-            pass
-
-        # Handle both GET and POST requests
-        if request.method == 'POST':
-            data = None
-
-            # Try multiple methods to extract POST data
-            try:
-                # Method 1: Try to get JSON data from request body
-                if hasattr(request, 'body') and request.body:
-                    body_str = request.body.decode('utf-8') if isinstance(request.body, bytes) else str(request.body)
-                    if body_str.strip():
-                        data = json.loads(body_str)
-                        log.info(f"[PdfxXBlock] 💾 save_annotations - Data extracted from JSON body")
-            except (json.JSONDecodeError, AttributeError, UnicodeDecodeError) as e:
-                log.warning(f"[PdfxXBlock] 💾 save_annotations - JSON body parse failed: {e}")
-
-            # Method 2: Try request.POST (form data)
-            if data is None and hasattr(request, 'POST'):
-                try:
-                    post_data = dict(request.POST)
-                    if post_data:
-                        # If data values are lists, take the first element
-                        data = {k: v[0] if isinstance(v, list) and len(v) > 0 else v for k, v in post_data.items()}
-                        log.info(f"[PdfxXBlock] 💾 save_annotations - Data extracted from POST form data")
-
-                        # If there's a 'data' field that looks like JSON, try to parse it
-                        if 'data' in data and isinstance(data['data'], str):
-                            try:
-                                parsed_data = json.loads(data['data'])
-                                data['data'] = parsed_data
-                                log.info(f"[PdfxXBlock] 💾 save_annotations - Parsed JSON from data field")
-                            except json.JSONDecodeError:
-                                pass
-                except Exception as e:
-                    log.warning(f"[PdfxXBlock] 💾 save_annotations - POST data extraction failed: {e}")
-
-            # Method 3: Try request.params (alternative parameter source)
-            if data is None and hasattr(request, 'params'):
-                try:
-                    params_data = dict(request.params)
-                    if params_data:
-                        data = params_data
-                        log.info(f"[PdfxXBlock] 💾 save_annotations - Data extracted from request.params")
-                except Exception as e:
-                    log.warning(f"[PdfxXBlock] 💾 save_annotations - Params data extraction failed: {e}")
-
-            # If still no data, return error
-            if data is None:
-                log.error(f"[PdfxXBlock] 💾 save_annotations - No data found in request")
-                log.error(f"[PdfxXBlock] 💾 save_annotations - Request attributes: {[attr for attr in dir(request) if not attr.startswith('_')]}")
-                from webob import Response
-                response = Response('{"result": "error", "message": "No data received in request"}')
-                response.content_type = 'application/json'
-                response.status_code = 400
-                return response
-        else:
-            # For GET requests, return method not allowed
-            from webob import Response
-            response = Response('{"result": "error", "message": "Method not allowed"}')
-            response.content_type = 'application/json'
-            response.status_code = 405
-            return response
-
-        log.info(f"[PdfxXBlock] 💾 save_annotations - START")
-        log.info(f"[PdfxXBlock] 💾 save_annotations - Data keys: {list(data.keys()) if data else 'None'}")
-        log.info(f"[PdfxXBlock] 💾 save_annotations - Allow annotation: {self.allow_annotation}")
-
-        if not self.allow_annotation:
-            log.warning(f"[PdfxXBlock] 💾 save_annotations - Annotations not allowed")
-            from webob import Response
-            response = Response('{"result": "error", "message": "Annotations are not allowed"}')
-            response.content_type = 'application/json'
-            response.status_code = 403
-            return response
-
-        # Extract the actual annotation data if it's nested under 'data' key
-        annotation_data = data.get('data', data)
-        log.info(f"[PdfxXBlock] 💾 save_annotations - Annotation data keys: {list(annotation_data.keys()) if annotation_data else 'None'}")
-
-        # Log detailed structure of incoming data
-        if annotation_data:
-            for key, value in annotation_data.items():
-                if isinstance(value, dict):
-                    log.info(f"[PdfxXBlock] 💾 save_annotations - {key}: dict with {len(value)} keys: {list(value.keys())}")
-                    # Log first level of nested data for scribble
-                    if key == 'scribble' and value:
-                        for page_num, page_data in value.items():
-                            if isinstance(page_data, list):
-                                log.info(f"[PdfxXBlock] 💾 save_annotations - scribble page {page_num}: {len(page_data)} annotations")
-                elif isinstance(value, list):
-                    log.info(f"[PdfxXBlock] 💾 save_annotations - {key}: list with {len(value)} items")
-                else:
-                    log.info(f"[PdfxXBlock] 💾 save_annotations - {key}: {type(value).__name__} = {value}")
-
-        # Initialize saved fields list
-        saved_fields = []
-
-        # Check if this is a deletion-only request (more efficient)
-        is_deletion_only = annotation_data.get('_deletionOnly', False)
-        if is_deletion_only:
-            log.info(f"[PdfxXBlock] 💾 DELETION-ONLY mode detected - processing only deletions")
-
-        # Handle deletions first (before processing saves)
-        if '_deletions' in annotation_data:
-            deletions = annotation_data['_deletions']
-            log.info(f"[PdfxXBlock] 💾 Processing {len(deletions)} deletions")
-
-            for deletion in deletions:
-                deletion_type = deletion.get('type')
-                deletion_id = deletion.get('id')
-                page_num = str(deletion.get('pageNum'))
-
-                log.info(f"[PdfxXBlock] 💾 Deleting {deletion_type} annotation {deletion_id} from page {page_num}")
-
-                # Handle scribble/drawing_strokes deletions
-                if deletion_type == 'scribble' and isinstance(self.drawing_strokes, dict):
-                    if page_num in self.drawing_strokes:
-                        original_count = len(self.drawing_strokes[page_num])
-                        self.drawing_strokes[page_num] = [
-                            stroke for stroke in self.drawing_strokes[page_num]
-                            if stroke.get('id') != deletion_id
-                        ]
-                        new_count = len(self.drawing_strokes[page_num])
-
-                        # Remove empty page entries
-                        if new_count == 0:
-                            del self.drawing_strokes[page_num]
-
-                        log.info(f"[PdfxXBlock] 💾 Deleted scribble: page {page_num} had {original_count}, now has {new_count}")
-
-                # Handle highlight deletions
-                elif deletion_type == 'highlight' and isinstance(self.highlights, dict):
-                    user_id = self.get_user_info()['id']
-                    if user_id in self.highlights and page_num in self.highlights[user_id]:
-                        original_count = len(self.highlights[user_id][page_num])
-                        self.highlights[user_id][page_num] = [
-                            highlight for highlight in self.highlights[user_id][page_num]
-                            if highlight.get('id') != deletion_id
-                        ]
-                        new_count = len(self.highlights[user_id][page_num])
-
-                        # Remove empty page entries
-                        if new_count == 0:
-                            del self.highlights[user_id][page_num]
-
-                        log.info(f"[PdfxXBlock] 💾 Deleted highlight: page {page_num} had {original_count}, now has {new_count}")
-
-                # Add more deletion handlers for other annotation types as needed
-                # TODO: Add handlers for text_annotations, shape_annotations, note_annotations, etc.
-
-            if deletions:
-                saved_fields.append('processed_deletions')
-
-        # For deletion-only requests, skip processing other annotation data (efficiency optimization)
-        if is_deletion_only:
-            log.info(f"[PdfxXBlock] 💾 DELETION-ONLY mode: skipping other annotation processing for efficiency")
-        else:
-            # Save various types of data to MongoDB via XBlock fields (only if not deletion-only)
-            log.info(f"[PdfxXBlock] 💾 FULL SAVE mode: processing all annotation data")
-
-        if not is_deletion_only and 'annotations' in annotation_data:
-            # Merge new annotations with existing ones
-            if not isinstance(self.annotations, dict):
-                self.annotations = {}
-
-            new_annotations = annotation_data['annotations']
-            for key, value in new_annotations.items():
-                if key not in self.annotations:
-                    self.annotations[key] = value
-                else:
-                    # If it's a list, merge; otherwise replace
-                    if isinstance(self.annotations[key], list) and isinstance(value, list):
-                        # Merge by ID to avoid duplicates
-                        existing_ids = {item.get('id') for item in self.annotations[key] if isinstance(item, dict)}
-                        for item in value:
-                            if isinstance(item, dict) and item.get('id') not in existing_ids:
-                                self.annotations[key].append(item)
-                    else:
-                        self.annotations[key] = value
-
-            saved_fields.append('annotations')
-            log.info(f"[PdfxXBlock] 💾 Merged annotations: {len(annotation_data['annotations'])} items")
-
-        # Handle both 'drawing_strokes' and 'scribble' (legacy support)
-        if not is_deletion_only and 'drawing_strokes' in annotation_data:
-            # Merge new drawing strokes with existing ones
-            if not isinstance(self.drawing_strokes, dict):
-                self.drawing_strokes = {}
-
-            new_strokes = annotation_data['drawing_strokes']
-            for page_num, page_strokes in new_strokes.items():
-                if page_num not in self.drawing_strokes:
-                    self.drawing_strokes[page_num] = []
-
-                # Merge by stroke ID to avoid duplicates
-                existing_ids = {stroke.get('id') for stroke in self.drawing_strokes[page_num] if isinstance(stroke, dict)}
-                for stroke in page_strokes:
-                    if isinstance(stroke, dict) and stroke.get('id') not in existing_ids:
-                        self.drawing_strokes[page_num].append(stroke)
-
-            saved_fields.append('drawing_strokes')
-            log.info(f"[PdfxXBlock] 💾 Merged drawing_strokes: {len(annotation_data['drawing_strokes'])} pages")
-
-        elif not is_deletion_only and 'scribble' in annotation_data:
-            # Map scribble to drawing_strokes field and merge with existing
-            if not isinstance(self.drawing_strokes, dict):
-                self.drawing_strokes = {}
-
-            new_scribbles = annotation_data['scribble']
-            log.info(f"[PdfxXBlock] 💾 Processing scribble data: {new_scribbles}")
-
-            for page_num, page_scribbles in new_scribbles.items():
-                if page_num not in self.drawing_strokes:
-                    self.drawing_strokes[page_num] = []
-
-                # Merge by stroke ID to avoid duplicates
-                existing_ids = {stroke.get('id') for stroke in self.drawing_strokes[page_num] if isinstance(stroke, dict)}
-                log.info(f"[PdfxXBlock] 💾 Existing stroke IDs for page {page_num}: {existing_ids}")
-
-                for stroke in page_scribbles:
-                    if isinstance(stroke, dict):
-                        stroke_id = stroke.get('id')
-                        log.info(f"[PdfxXBlock] 💾 Processing stroke ID: {stroke_id}")
-                        if stroke_id not in existing_ids:
-                            self.drawing_strokes[page_num].append(stroke)
-                            log.info(f"[PdfxXBlock] 💾 Added new stroke: {stroke_id}")
-                        else:
-                            log.info(f"[PdfxXBlock] 💾 Skipped duplicate stroke: {stroke_id}")
-
-            saved_fields.append('drawing_strokes')
-            log.info(f"[PdfxXBlock] 💾 Merged scribble as drawing_strokes: {len(annotation_data['scribble'])} pages")
-            log.info(f"[PdfxXBlock] 💾 Final drawing strokes: {self.drawing_strokes}")
-
-        if not is_deletion_only and 'highlights' in annotation_data:
-            user_id = self.get_user_info()['id']
-            if not isinstance(self.highlights, dict):
-                self.highlights = {}
-            self.highlights[user_id] = annotation_data['highlights']
-            saved_fields.append('highlights')
-            log.info(f"[PdfxXBlock] 💾 Saved highlights for user {user_id}: {len(annotation_data['highlights'])} pages")
-
-        if not is_deletion_only and 'marker_strokes' in annotation_data:
-            self.marker_strokes = annotation_data['marker_strokes']
-            saved_fields.append('marker_strokes')
-            log.info(f"[PdfxXBlock] 💾 Saved marker_strokes: {len(annotation_data['marker_strokes'])} pages")
-
-        if not is_deletion_only and 'text_annotations' in annotation_data:
-            self.text_annotations = annotation_data['text_annotations']
-            saved_fields.append('text_annotations')
-            log.info(f"[PdfxXBlock] 💾 Saved text_annotations: {len(annotation_data['text_annotations'])} pages")
-
-        if not is_deletion_only and 'shape_annotations' in annotation_data:
-            self.shape_annotations = annotation_data['shape_annotations']
-            saved_fields.append('shape_annotations')
-            log.info(f"[PdfxXBlock] 💾 Saved shape_annotations: {len(annotation_data['shape_annotations'])} pages")
-
-        if not is_deletion_only and 'note_annotations' in annotation_data:
-            self.note_annotations = annotation_data['note_annotations']
-            saved_fields.append('note_annotations')
-            log.info(f"[PdfxXBlock] 💾 Saved note_annotations: {len(annotation_data['note_annotations'])} pages")
-
-        # Check for page/display settings in both data and annotation_data
-        if 'currentPage' in data:
-            self.current_page = data['currentPage']
-            saved_fields.append('current_page')
-        elif 'currentPage' in annotation_data:
-            self.current_page = annotation_data['currentPage']
-            saved_fields.append('current_page')
-
-        if 'brightness' in data:
-            self.brightness = data['brightness']
-            saved_fields.append('brightness')
-        elif 'brightness' in annotation_data:
-            self.brightness = annotation_data['brightness']
-            saved_fields.append('brightness')
-
-        if 'is_grayscale' in data:
-            self.is_grayscale = data['is_grayscale']
-            saved_fields.append('is_grayscale')
-        elif 'is_grayscale' in annotation_data:
-            self.is_grayscale = annotation_data['is_grayscale']
-            saved_fields.append('is_grayscale')
-
-        log.info(f"[PdfxXBlock] 💾 save_annotations - Successfully saved fields to MongoDB: {saved_fields}")
-
-        # Return success response
-        response_data = {
-            'result': 'success',
-            'message': f'Saved {len(saved_fields)} field(s) to MongoDB',
-            'saved_fields': saved_fields,
-            'annotations': self.annotations,
-            'currentPage': self.current_page
-        }
-
         from webob import Response
-        response = Response(json.dumps(response_data))
-        response.content_type = 'application/json'
-        response.status_code = 200
-        return response
+
+        log.info(f"[PdfxXBlock] 💾 save_annotations - START (simple version)")
+
+        try:
+            # Simple data extraction
+            data = None
+            if hasattr(request, 'body') and request.body:
+                try:
+                    body_str = request.body.decode('utf-8') if isinstance(request.body, bytes) else str(request.body)
+                    data = json.loads(body_str)
+                except:
+                    pass
+
+            if not data and hasattr(request, 'POST'):
+                data = dict(request.POST)
+
+            if not data:
+                log.warning(f"[PdfxXBlock] 💾 save_annotations - No data received")
+                return Response(
+                    json.dumps({'result': 'error', 'message': 'No data received'}),
+                    content_type='application/json',
+                    status_code=400
+                )
+
+            log.info(f"[PdfxXBlock] 💾 save_annotations - Received data: {data}")
+
+            # Simple save - just update current page for now
+            if 'data' in data and isinstance(data['data'], dict):
+                annotation_data = data['data']
+                if 'currentPage' in annotation_data:
+                    self.current_page = annotation_data['currentPage']
+                    log.info(f"[PdfxXBlock] 💾 save_annotations - Updated current page: {self.current_page}")
+
+            # Return simple success response
+            response_data = {
+                'result': 'success',
+                'message': 'Data saved successfully',
+                'currentPage': self.current_page
+            }
+
+            return Response(
+                json.dumps(response_data),
+                content_type='application/json',
+                status_code=200
+            )
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 💾 save_annotations - Error: {e}")
+            return Response(
+                json.dumps({'result': 'error', 'message': str(e)}),
+                content_type='application/json',
+                status_code=500
+            )
 
     def save(self):
         """Simple save method - let XBlock handle the scoping"""

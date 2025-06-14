@@ -25,8 +25,8 @@
     box-sizing: border-box;
     overflow: hidden;
     /* Responsive height based on viewport size */
-    height: min(70vh, 600px) !important; /* Use 70% of viewport height or max 600px */
-    min-height: 400px !important; /* Minimum height for usability */
+    height: min(70vh, 800px) !important; /* Use 70% of viewport height or max 600px */
+    min-height: 800px !important; /* Minimum height for usability */
     position: relative;
     display: flex;
     flex-direction: column;
@@ -2102,6 +2102,17 @@ canvas[data-main-rotation] {
         width: 100%;
         justify-content: center;
     }
+
+    /* Mobile responsive for PDF.js viewer */
+    .pdfx-block.pdfjs-viewer .secondaryToolbar {
+        width: 50px !important;
+    }
+
+    .pdfx-block.pdfjs-viewer .secondaryToolbarButton {
+        width: 36px !important;
+        height: 36px !important;
+        font-size: 16px;
+    }
 }
 
 @media (max-width: 480px) {
@@ -2169,5 +2180,986 @@ canvas[data-main-rotation] {
     .pdf-container {
         box-shadow: none;
         border: none;
+    }
+}
+
+/* PDF.js XBlock Integration Styles */
+.pdfx-block.pdfjs-viewer {
+    width: 100%;
+    /* height: min(70vh, 800px) !important;  */
+    min-height: 800px !important;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    overflow: hidden;
+    background: #f5f5f5;
+    display: flex;
+    flex-direction: column;
+}
+
+.pdfx-block.pdfjs-viewer #outerContainer {
+    width: 100%;
+    height: 100%;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+}
+
+/* Main Container with Flexbox Layout */
+.pdfx-block.pdfjs-viewer #mainContainer {
+    flex: 1;
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    overflow: hidden;
+}
+
+/* Content Area Container for Sidebar + Viewer */
+.pdfx-block.pdfjs-viewer .contentArea {
+    flex: 1;
+    display: flex;
+    position: relative;
+    overflow: hidden;
+}
+
+/* Enhanced Main Toolbar for PDF.js Viewer - Match Secondary Toolbar Style */
+.pdfx-block.pdfjs-viewer .toolbar {
+    background: #f5f5f5;
+    border-bottom: 1px solid #ddd;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
+    padding: 10px 16px;
+    min-height: 60px;
+    position: relative;
+    z-index: 200;
+    width: 100%;
+    flex-shrink: 0;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarContainer {
+    width: 100%;
+    height: 100%;
+    padding: 0;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarViewer {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 100%;
+    height: auto;
+    padding: 0;
+    gap: 40px;
+    position: relative;
+}
+
+/* Toolbar Sections */
+.pdfx-block.pdfjs-viewer .toolbarSection {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    height: 100%;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarLeft {
+    flex: 0 0 auto;
+    justify-content: center;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarCenter {
+    flex: 0 0 auto;
+    justify-content: center;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarRight {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    justify-content: flex-end;
+}
+
+/* Toolbar Groups - Remove background styling to match sidebar */
+.pdfx-block.pdfjs-viewer .toolbarGroup {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    border-radius: 0;
+    background: none;
+    border: none;
+    transition: none;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarGroup:hover {
+    background: none;
+    border: none;
+}
+
+/* Toolbar Buttons - Match Secondary Toolbar Style */
+.pdfx-block.pdfjs-viewer .toolbarButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px;
+    height: 42px;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: #555;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    position: relative;
+    outline: none;
+    margin: 0 2px;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton:hover {
+    background: #e0e0e0;
+    color: #333;
+    transform: none;
+    box-shadow: none;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton:active {
+    transform: none;
+    background: #d0d0d0;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton:focus-visible {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
+}
+
+/* Button Icons - Remove gradients and styling */
+.pdfx-block.pdfjs-viewer .buttonIcon {
+    font-size: 18px;
+    font-weight: normal;
+    min-width: 18px;
+    text-align: center;
+}
+
+/* Hide button labels to match sidebar icon-only design */
+.pdfx-block.pdfjs-viewer .buttonLabel {
+    display: none;
+}
+
+/* Remove navigation button specific styling */
+.pdfx-block.pdfjs-viewer .navButton {
+    background: none;
+    border: none;
+}
+
+.pdfx-block.pdfjs-viewer .navButton:hover {
+    background: #e0e0e0;
+    border: none;
+}
+
+/* Remove zoom button specific styling */
+.pdfx-block.pdfjs-viewer .zoomButton {
+    background: none;
+    border: none;
+}
+
+.pdfx-block.pdfjs-viewer .zoomButton:hover {
+    background: #e0e0e0;
+    border: none;
+}
+
+/* Remove action button specific styling */
+.pdfx-block.pdfjs-viewer .actionButton {
+    background: none;
+    border: none;
+}
+
+.pdfx-block.pdfjs-viewer .actionButton:hover {
+    background: #e0e0e0;
+    border: none;
+}
+
+/* Page Controls - Match Secondary Toolbar Style */
+.pdfx-block.pdfjs-viewer .pageControls {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    padding: 0;
+    background: none;
+    border-radius: 0;
+    border: none;
+}
+
+.pdfx-block.pdfjs-viewer .pageInput {
+    width: 60px;
+    padding: 8px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #555;
+    font-size: 14px;
+    text-align: center;
+    transition: all 0.2s ease;
+}
+
+.pdfx-block.pdfjs-viewer .pageInput:focus {
+    outline: none;
+    border-color: #3498db;
+    background: #ffffff;
+    color: #333;
+}
+
+.pdfx-block.pdfjs-viewer .pageSeparator {
+    color: #555;
+    font-weight: normal;
+    font-size: 14px;
+    margin: 0 4px;
+}
+
+.pdfx-block.pdfjs-viewer .totalPages {
+    color: #555;
+    font-size: 14px;
+    font-weight: normal;
+    min-width: 30px;
+}
+
+/* Zoom Select Container */
+.pdfx-block.pdfjs-viewer .zoomSelectContainer {
+    position: relative;
+}
+
+.pdfx-block.pdfjs-viewer .zoomSelect {
+    padding: 8px 12px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #ffffff;
+    color: #555;
+    font-size: 14px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    min-width: 120px;
+}
+
+.pdfx-block.pdfjs-viewer .zoomSelect:focus {
+    outline: none;
+    border-color: #3498db;
+    background: #ffffff;
+}
+
+.pdfx-block.pdfjs-viewer .zoomSelect option {
+    background: #ffffff;
+    color: #555;
+    padding: 4px 8px;
+}
+
+/* Responsive Design */
+@media (max-width: 768px) {
+    .pdfx-block.pdfjs-viewer .toolbarViewer {
+        padding: 0 8px;
+        gap: 8px;
+        height: 44px;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbar {
+        min-height: 44px;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbarGroup {
+        gap: 4px;
+        padding: 2px 4px;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbarButton {
+        padding: 4px 8px;
+        font-size: 12px;
+        min-height: 28px;
+    }
+
+    .pdfx-block.pdfjs-viewer .buttonLabel {
+        display: none;
+    }
+
+    .pdfx-block.pdfjs-viewer .buttonIcon {
+        font-size: 16px;
+    }
+
+    .pdfx-block.pdfjs-viewer .pageInput {
+        width: 50px;
+        font-size: 12px;
+    }
+
+    .pdfx-block.pdfjs-viewer .zoomSelect {
+        min-width: 80px;
+        font-size: 12px;
+    }
+}
+
+@media (max-width: 480px) {
+    .pdfx-block.pdfjs-viewer .toolbarViewer {
+        flex-wrap: wrap;
+        height: auto;
+        min-height: 44px;
+        padding: 4px;
+        gap: 4px;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbarSection {
+        gap: 4px;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbarCenter {
+        order: 3;
+        width: 100%;
+        max-width: none;
+        justify-content: center;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbarButton {
+        padding: 4px 6px;
+        min-height: 32px;
+    }
+
+    .pdfx-block.pdfjs-viewer .buttonIcon {
+        font-size: 14px;
+    }
+}
+
+/* Accessibility Enhancements */
+.pdfx-block.pdfjs-viewer .toolbarButton:focus-visible,
+.pdfx-block.pdfjs-viewer .pageInput:focus-visible,
+.pdfx-block.pdfjs-viewer .zoomSelect:focus-visible {
+    outline: 2px solid #3498db;
+    outline-offset: 2px;
+}
+
+/* High Contrast Mode */
+@media (prefers-contrast: high) {
+    .pdfx-block.pdfjs-viewer .toolbar {
+        background: #000000;
+        border-bottom-color: #ffffff;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbarButton {
+        background: #ffffff;
+        color: #000000;
+        border: 2px solid #000000;
+    }
+
+    .pdfx-block.pdfjs-viewer .toolbarGroup {
+        background: transparent;
+        border: 2px solid #ffffff;
+    }
+}
+
+/* Print Styles */
+@media print {
+    .pdfx-block.pdfjs-viewer .toolbar {
+        display: none !important;
+    }
+}
+
+/* Secondary Toolbar as Permanent Left Sidebar */
+.pdfx-block.pdfjs-viewer .secondaryToolbar {
+    position: relative !important;
+    width: 60px !important;
+    height: 100% !important;
+    background: #f5f5f5 !important;
+    border-right: 1px solid #ddd !important;
+    border-radius: 0 !important;
+    box-shadow: none !important;
+    padding: 10px 0 !important;
+    min-width: auto !important;
+    z-index: 100;
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 5px !important;
+    overflow-y: auto !important;
+    flex-shrink: 0 !important;
+}
+
+/* Always show secondary toolbar - override hidden class */
+.pdfx-block.pdfjs-viewer .secondaryToolbar.hidden {
+    display: flex !important;
+    visibility: visible !important;
+    opacity: 1 !important;
+}
+
+/* Override doorHangerRight positioning */
+.pdfx-block.pdfjs-viewer .secondaryToolbar.doorHangerRight {
+    left: 0 !important;
+    right: auto !important;
+}
+
+.pdfx-block.pdfjs-viewer .secondaryToolbarButton {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 42px !important;
+    height: 42px !important;
+    border: none;
+    border-radius: 4px;
+    background: none;
+    color: #555;
+    font-size: 18px;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    margin: 0 auto 5px auto;
+    position: relative;
+}
+
+.pdfx-block.pdfjs-viewer .secondaryToolbarButton:hover {
+    background: #e0e0e0;
+    color: #333;
+}
+
+.pdfx-block.pdfjs-viewer .secondaryToolbarButton.toggled,
+.pdfx-block.pdfjs-viewer .secondaryToolbarButton.active {
+    background: #3498db !important;
+    color: white !important;
+    box-shadow: 0 0 5px rgba(0, 0, 0, 0.3);
+}
+
+/* Hide text spans in buttons */
+.pdfx-block.pdfjs-viewer .secondaryToolbarButton span {
+    display: none;
+}
+
+/* Add FontAwesome icons using ::before pseudo-element */
+.pdfx-block.pdfjs-viewer .secondaryToolbarButton::before {
+    font-family: "Font Awesome 5 Free";
+    font-weight: 900;
+    font-size: 18px;
+}
+
+.pdfx-block.pdfjs-viewer [id^="highlightTool-"]::before {
+    content: "\f591"; /* fa-highlighter */
+}
+
+.pdfx-block.pdfjs-viewer [id^="scribbleTool-"]::before {
+    content: "\f303"; /* fa-pencil-alt */
+}
+
+.pdfx-block.pdfjs-viewer [id^="textTool-"]::before {
+    content: "\f031"; /* fa-font */
+}
+
+.pdfx-block.pdfjs-viewer [id^="shapeTool-"]::before {
+    content: "\f03e"; /* fa-image */
+}
+
+.pdfx-block.pdfjs-viewer [id^="noteTool-"]::before {
+    content: "\f249"; /* fa-sticky-note */
+}
+
+.pdfx-block.pdfjs-viewer [id^="clearAnnotations-"]::before {
+    content: "\f2ed"; /* fa-eraser */
+}
+
+/* Parameter Toolbars for Annotation Tools */
+.pdfx-block.pdfjs-viewer .toolbarButtonWithContainer {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    margin: 0 auto 5px auto;
+}
+
+/* Block-specific parameter toolbar styling to prevent interference between multiple PDF blocks */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"] {
+    position: fixed !important; /* Changed from absolute to fixed for better positioning */
+    background: #ffffff;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1); /* Enhanced shadow for floating effect */
+    padding: 20px;
+    min-width: 300px; /* Slightly wider for better usability */
+    max-width: 400px;
+    z-index: 10000 !important; /* Very high z-index to appear above everything */
+    display: none;
+    /* Remove transform - we'll handle positioning in JS */
+    position: relative; /* For auto-hide indicator positioning */
+}
+
+/* Auto-hide timer indicator */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"]::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    height: 3px;
+    background: linear-gradient(90deg, #007bff 0%, #0056b3 100%);
+    border-radius: 8px 8px 0 0;
+    width: 0%;
+    transition: width 5s linear;
+    z-index: 1;
+}
+
+/* Show the progress indicator when toolbar is visible */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"]:not(.hidden)::before {
+    width: 100%;
+}
+
+/* Hide progress indicator when toolbar is hidden */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"].hidden::before {
+    width: 0%;
+    transition: none;
+}
+
+.pdfx-block.pdfjs-viewer .editorParamsToolbar:not(.hidden) {
+    display: block;
+}
+
+.pdfx-block.pdfjs-viewer .editorParamsToolbarContainer {
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+}
+
+.pdfx-block.pdfjs-viewer .editorParamsLabel {
+    font-size: 12px;
+    font-weight: 500;
+    color: #333;
+    margin-bottom: 8px;
+    display: block;
+}
+
+/* Modern Color Picker Styles */
+.pdfx-block.pdfjs-viewer .colorPicker {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.pdfx-block.pdfjs-viewer .colorPickerDropdown {
+    display: flex;
+    gap: 6px;
+    padding: 6px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    border: 1px solid #e9ecef;
+    box-shadow: inset 0 1px 3px rgba(0, 0, 0, 0.05);
+}
+
+.pdfx-block.pdfjs-viewer .colorPickerButton {
+    position: relative;
+    width: 32px;
+    height: 32px;
+    border: none;
+    border-radius: 50%;
+    cursor: pointer;
+    background: transparent;
+    padding: 0;
+    transition: all 0.2s ease;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pdfx-block.pdfjs-viewer .colorPickerButton:hover {
+    transform: scale(1.1);
+}
+
+.pdfx-block.pdfjs-viewer .colorPickerButton:focus {
+    outline: none;
+}
+
+.pdfx-block.pdfjs-viewer .colorSwatch {
+    width: 24px;
+    height: 24px;
+    border-radius: 50%;
+    border: 2px solid #ffffff;
+    box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+    transition: all 0.2s ease;
+    display: block;
+}
+
+.pdfx-block.pdfjs-viewer .colorPickerButton:hover .colorSwatch {
+    box-shadow: 0 0 0 2px #007bff, 0 2px 8px rgba(0, 123, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.pdfx-block.pdfjs-viewer .colorPickerButton[aria-selected="true"] .colorSwatch {
+    box-shadow: 0 0 0 3px #007bff, 0 2px 12px rgba(0, 123, 255, 0.4);
+    transform: scale(1.1);
+    animation: colorSelected 0.3s ease-out;
+}
+
+@keyframes colorSelected {
+    0% {
+        transform: scale(1);
+        box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.1);
+    }
+    50% {
+        transform: scale(1.2);
+        box-shadow: 0 0 0 4px #007bff, 0 4px 16px rgba(0, 123, 255, 0.5);
+    }
+    100% {
+        transform: scale(1.1);
+        box-shadow: 0 0 0 3px #007bff, 0 2px 12px rgba(0, 123, 255, 0.4);
+    }
+}
+
+.pdfx-block.pdfjs-viewer .colorPickerButton[aria-selected="true"]::after {
+    content: '✓';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    color: #ffffff;
+    font-size: 14px;
+    font-weight: bold;
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.7), 0 0 1px rgba(0, 0, 0, 0.8);
+    z-index: 1;
+    line-height: 1;
+}
+
+/* Parameter Setters */
+.pdfx-block.pdfjs-viewer .editorParamsSetter {
+    display: flex;
+    flex-direction: column;
+}
+
+.pdfx-block.pdfjs-viewer .editorParamsColor {
+    width: 40px;
+    height: 32px;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    padding: 0;
+    background: transparent;
+}
+
+.pdfx-block.pdfjs-viewer .editorParamsSlider {
+    width: 100%;
+    height: 4px;
+    border-radius: 2px;
+    background: #ddd;
+    outline: none;
+    cursor: pointer;
+    margin-top: 8px;
+}
+
+.pdfx-block.pdfjs-viewer .thicknessPicker {
+    margin-top: 8px;
+}
+
+/* Toggle Button */
+.pdfx-block.pdfjs-viewer .toggler {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Modern Toggle Switch Button */
+.pdfx-block.pdfjs-viewer .toggle-button {
+    width: 40px;
+    height: 20px;
+    border-radius: 10px;
+    border: 1px solid #ccc;
+    background: #e9ecef;
+    position: relative;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    outline: none;
+    box-sizing: border-box;
+    display: inline-block;
+    padding: 0;
+}
+
+.pdfx-block.pdfjs-viewer .toggle-button:hover {
+    border-color: #999;
+    background: #dee2e6;
+}
+
+.pdfx-block.pdfjs-viewer .toggle-button:focus {
+    outline: 2px solid #007bff;
+    outline-offset: 2px;
+}
+
+.pdfx-block.pdfjs-viewer .toggle-button::before {
+    content: '';
+    top: 2px;
+    left: -5px;
+    width: 14px;
+    height: 14px;
+    background: #ffffff;
+    border-radius: 50%;
+    transition: all 0.2s ease;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.3);
+    border: 1px solid #aaa;
+}
+
+/* Active/Pressed State */
+.pdfx-block.pdfjs-viewer .toggle-button[aria-pressed="true"] {
+    background: #007bff;
+    border-color: #0056b3;
+}
+
+.pdfx-block.pdfjs-viewer .toggle-button[aria-pressed="true"]:hover {
+    background: #0056b3;
+    border-color: #004085;
+}
+
+.pdfx-block.pdfjs-viewer .toggle-button[aria-pressed="true"]::before {
+    transform: translateX(2px);
+    background: #ffffff;
+    border-color: #ffffff;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.4);
+}
+
+/* Disabled State */
+.pdfx-block.pdfjs-viewer .toggle-button:disabled {
+    opacity: 0.6;
+    cursor: not-allowed;
+    background: #f8f9fa;
+    border-color: #e9ecef;
+}
+
+.pdfx-block.pdfjs-viewer .toggle-button:disabled::before {
+    background: #dee2e6;
+    border-color: #ced4da;
+    box-shadow: none;
+}
+
+/* Accessibility - High Contrast Mode */
+@media (prefers-contrast: high) {
+    .pdfx-block.pdfjs-viewer .toggle-button {
+        border-width: 3px;
+        border-color: #000000;
+        background: #ffffff;
+    }
+
+    .pdfx-block.pdfjs-viewer .toggle-button[aria-pressed="true"] {
+        background: #000000;
+        border-color: #000000;
+    }
+
+    .pdfx-block.pdfjs-viewer .toggle-button::before {
+        border-color: #000000;
+        background: #ffffff;
+    }
+
+    .pdfx-block.pdfjs-viewer .toggle-button[aria-pressed="true"]::before {
+        background: #ffffff;
+        border-color: #ffffff;
+    }
+}
+
+/* Reduced Motion */
+@media (prefers-reduced-motion: reduce) {
+    .pdfx-block.pdfjs-viewer .toggle-button,
+    .pdfx-block.pdfjs-viewer .toggle-button::before {
+        transition: none;
+    }
+}
+
+.pdfx-block.pdfjs-viewer .divider {
+    height: 1px;
+    background: #eee;
+    margin: 8px 0;
+}
+
+/* Menu Container */
+.pdfx-block.pdfjs-viewer .menuContainer {
+    display: flex;
+    flex-direction: column;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled {
+    padding: 8px 12px;
+    background: #f8f9fa;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    cursor: pointer;
+    transition: background-color 0.2s ease;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled:hover {
+    background: #e9ecef;
+}
+
+.pdfx-block.pdfjs-viewer .horizontalToolbarSeparator {
+    height: 1px;
+    background: #ddd;
+    margin: 10px 8px;
+    width: calc(100% - 16px);
+}
+
+/* Enhanced Main Toolbar for PDF.js Viewer */
+.pdfx-block.pdfjs-viewer #viewerContainer {
+    overflow: auto;
+    width: 100%;
+    height: calc(100% - 48px); /* Account for toolbar */
+    background: #f5f5f5;
+}
+
+.pdfx-block.pdfjs-viewer .pdfViewer .page {
+    margin: 10px auto;
+    border: 1px solid #ccc;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    background: white;
+}
+
+.pdfx-block.pdfjs-viewer #loadingBar {
+    position: absolute;
+    height: 4px;
+    background-color: #333;
+    border-bottom: 1px solid #333;
+    top: 48px; /* Position under toolbar */
+    left: 0;
+    right: 0;
+    z-index: 1000;
+}
+
+.pdfx-block.pdfjs-viewer #loadingBar .progress {
+    position: absolute;
+    left: 0;
+    width: 0%;
+    height: 100%;
+    background-color: #0074cc;
+    overflow: hidden;
+    transition: width 200ms;
+}
+
+.pdfx-block.pdfjs-viewer #loadingBar .glimmer {
+    position: absolute;
+    right: 0;
+    top: 0;
+    left: 0;
+    height: 100%;
+    background: linear-gradient(45deg, transparent, rgba(255,255,255,0.5), transparent);
+    transform: translateX(-100%);
+    animation: loading 2s infinite;
+}
+
+@keyframes loading {
+    0% { transform: translateX(-100%); }
+    100% { transform: translateX(100%); }
+}
+
+.pdfx-block.pdfjs-viewer #errorWrapper {
+    background: #ff4444;
+    color: white;
+    padding: 10px;
+    text-align: center;
+}
+
+/* Hide elements when loading */
+.pdfx-block.pdfjs-viewer #outerContainer.loadingInProgress #viewerContainer {
+    opacity: 0.3;
+}
+
+/* PDF Viewer Container Scrolling Enhancement */
+.pdfx-block.pdfjs-viewer [id^="viewerContainer-"] {
+    overflow: auto !important;
+    background: #ffffff;
+    position: relative !important;
+    height: 100% !important;
+    flex: 1 !important;
+    /* Custom scrollbar styling */
+    scrollbar-width: thin;
+    scrollbar-color: #bbb #f5f5f5;
+}
+
+/* Custom Scrollbar Styling for Webkit Browsers (Chrome, Safari, Edge) */
+.pdfx-block.pdfjs-viewer [id^="viewerContainer-"]::-webkit-scrollbar {
+    width: 12px;
+    background-color: #f5f5f5;
+}
+
+.pdfx-block.pdfjs-viewer [id^="viewerContainer-"]::-webkit-scrollbar-track {
+    background: #f5f5f5;
+    border-radius: 6px;
+}
+
+.pdfx-block.pdfjs-viewer [id^="viewerContainer-"]::-webkit-scrollbar-thumb {
+    background-color: #bbb;
+    border-radius: 6px;
+    border: 2px solid #f5f5f5;
+    transition: background-color 0.2s ease;
+}
+
+.pdfx-block.pdfjs-viewer [id^="viewerContainer-"]::-webkit-scrollbar-thumb:hover {
+    background-color: #999;
+}
+
+.pdfx-block.pdfjs-viewer [id^="viewerContainer-"]::-webkit-scrollbar-thumb:active {
+    background-color: #777;
+}
+
+.pdfx-block.pdfjs-viewer [id^="viewerContainer-"]::-webkit-scrollbar-corner {
+    background: #f5f5f5;
+}
+
+/* PDF Viewer Content */
+.pdfx-block.pdfjs-viewer [id^="viewer-"] {
+    width: 100%;
+    height: min(70vh, 800px) !important;
+    min-height: 100%;
+    padding: 20px;
+    box-sizing: border-box;
+}
+
+/* Ensure PDF pages are properly contained and scrollable */
+.pdfx-block.pdfjs-viewer .pdfViewer {
+    padding: 20px 0;
+    text-align: center;
+    width: 100%;
+    min-height: 100%;
+    display: block;
+}
+
+.pdfx-block.pdfjs-viewer .pdfViewer .page {
+    margin: 10px auto 20px auto;
+    border: 1px solid #ccc;
+    box-shadow: 0 4px 8px rgba(0,0,0,0.1);
+    background: white;
+    display: block;
+    position: relative;
+    box-sizing: border-box;
+    /* Allow natural PDF sizing but with constraints */
+    max-width: none;
+    width: auto;
+    height: auto;
+}
+
+/* Allow PDF canvas to maintain aspect ratio while being scrollable */
+.pdfx-block.pdfjs-viewer .page canvas {
+    display: block;
+    margin: 0 auto;
+}
+
+/* Responsive scrolling adjustments */
+@media (max-width: 768px) {
+    .pdfx-block.pdfjs-viewer [id^="viewerContainer-"] {
+        height: calc(100% - 44px) !important; /* Account for smaller toolbar */
+    }
+
+    .pdfx-block.pdfjs-viewer [id^="viewer-"] {
+        padding: 10px;
+    }
+
+    .pdfx-block.pdfjs-viewer .pdfViewer {
+        padding: 10px 0;
+    }
+
+    .pdfx-block.pdfjs-viewer .pdfViewer .page {
+        margin: 5px auto 10px auto;
+    }
+}
+
+/* Ensure scrolling works in fullscreen mode */
+.pdfx-block.pdfjs-viewer.fullscreen [id^="viewerContainer-"] {
+    height: calc(100vh - 48px) !important;
+    overflow: auto !important;
+}
+
+/* Loading state scrolling */
+.pdfx-block.pdfjs-viewer #outerContainer.loadingInProgress [id^="viewerContainer-"] {
+    overflow: auto !important;
+}
+
+/* Print mode - disable scrolling */
+@media print {
+    .pdfx-block.pdfjs-viewer [id^="viewerContainer-"] {
+        overflow: visible !important;
+        height: auto !important;
     }
 }

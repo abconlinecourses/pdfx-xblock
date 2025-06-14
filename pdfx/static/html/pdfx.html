@@ -1,5 +1,5 @@
 <!DOCTYPE html>
-<div class="pdfx-block" id="pdfx-block-${block_id}"
+<div class="pdfx-block pdfjs-viewer" id="pdfx-block-${block_id}"
      data-block-type="pdfx"
      data-block-id="${block_id}"
      data-pdf-url="${pdf_url}"
@@ -16,144 +16,254 @@
      data-text-annotations="${text_annotations_json}"
      data-shape-annotations="${shape_annotations_json}"
      data-note-annotations="${note_annotations_json}">
-    <!-- PDF XBlock Container -->
-    <div class="pdf-container-wrapper">
-        <!-- Loading Indicator -->
-        <div class="loading-indicator" id="loading-${block_id}">
-            <div class="loading-spinner"></div>
-            <div class="loading-text">Loading PDF...</div>
+
+  <!-- PDF.js Viewer Container -->
+  <div id="outerContainer-${block_id}" class="loadingInProgress">
+
+    <!-- Main PDF.js Container -->
+    <div id="mainContainer-${block_id}">
+      <!-- Content Area: Sidebar + Viewer -->
+      <div id="contentArea-${block_id}" class="contentArea">
+        <!-- Secondary Toolbar for Annotations -->
+        <div id="secondaryToolbar-${block_id}" class="secondaryToolbar hidden doorHangerRight">
+          <div id="secondaryToolbarButtonContainer-${block_id}">
+            % if allow_annotation:
+            <!-- Highlight Tool with Parameters -->
+            <div id="editorHighlight-${block_id}" class="toolbarButtonWithContainer">
+              <button id="highlightTool-${block_id}" class="secondaryToolbarButton" type="button" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorHighlightParamsToolbar-${block_id}" title="Highlight">
+                <span>Highlight</span>
+              </button>
+              <div class="editorParamsToolbar editorParamsToolbar-${block_id} hidden doorHangerRight" id="editorHighlightParamsToolbar-${block_id}">
+                <div id="highlightParamsToolbarContainer-${block_id}" class="editorParamsToolbarContainer">
+                  <div id="editorHighlightColorPicker-${block_id}" class="colorPicker">
+                    <span class="editorParamsLabel">Highlight color</span>
+                    <div id="highlightColorPickerButtons-${block_id}" class="colorPickerDropdown" role="listbox" aria-multiselectable="false" aria-orientation="horizontal">
+                      <button id="highlightColorYellow-${block_id}" class="colorPickerButton" role="option" data-color="#FFFF98" title="Yellow" aria-selected="false" tabindex="0">
+                        <span class="colorSwatch" style="background-color: #FFFF98;"></span>
+                      </button>
+                      <button id="highlightColorGreen-${block_id}" class="colorPickerButton" role="option" data-color="#53FFBC" title="Green" aria-selected="true" tabindex="0">
+                        <span class="colorSwatch" style="background-color: #53FFBC;"></span>
+                      </button>
+                      <button id="highlightColorBlue-${block_id}" class="colorPickerButton" role="option" data-color="#80EBFF" title="Blue" aria-selected="false" tabindex="0">
+                        <span class="colorSwatch" style="background-color: #80EBFF;"></span>
+                      </button>
+                      <button id="highlightColorPink-${block_id}" class="colorPickerButton" role="option" data-color="#FFCBE6" title="Pink" aria-selected="false" tabindex="0">
+                        <span class="colorSwatch" style="background-color: #FFCBE6;"></span>
+                      </button>
+                      <button id="highlightColorRed-${block_id}" class="colorPickerButton" role="option" data-color="#FF4F5F" title="Red" aria-selected="false" tabindex="0">
+                        <span class="colorSwatch" style="background-color: #FF4F5F;"></span>
+                      </button>
+                    </div>
+                  </div>
+                  <div id="editorHighlightThickness-${block_id}">
+                    <label for="editorFreeHighlightThickness-${block_id}" class="editorParamsLabel">Thickness</label>
+                    <div id="highlightThicknessPicker-${block_id}" class="thicknessPicker">
+                      <input type="range" id="editorFreeHighlightThickness-${block_id}" class="editorParamsSlider" value="12" min="8" max="24" step="1" tabindex="0">
+                    </div>
+                  </div>
+                  <div id="editorHighlightVisibility-${block_id}">
+                    <div id="highlightDivider-${block_id}" class="divider"></div>
+                    <div id="highlightToggler-${block_id}" class="toggler">
+                      <label for="editorHighlightShowAll-${block_id}" class="editorParamsLabel">Show all</label>
+                      <button id="editorHighlightShowAll-${block_id}" class="toggle-button" type="button" aria-pressed="true" tabindex="0"></button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Draw/Ink Tool with Parameters -->
+            <div id="editorInk-${block_id}" class="toolbarButtonWithContainer">
+              <button id="scribbleTool-${block_id}" class="secondaryToolbarButton" type="button" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorInkParamsToolbar-${block_id}" title="Draw">
+                <span>Draw</span>
+              </button>
+              <div class="editorParamsToolbar editorParamsToolbar-${block_id} hidden doorHangerRight" id="editorInkParamsToolbar-${block_id}">
+                <div id="inkParamsToolbarContainer-${block_id}" class="editorParamsToolbarContainer">
+                  <div id="inkColorSetter-${block_id}" class="editorParamsSetter">
+                    <label for="editorInkColor-${block_id}" class="editorParamsLabel">Color</label>
+                    <input type="color" id="editorInkColor-${block_id}" class="editorParamsColor" value="#000000" tabindex="0">
+                  </div>
+                  <div id="inkThicknessSetter-${block_id}" class="editorParamsSetter">
+                    <label for="editorInkThickness-${block_id}" class="editorParamsLabel">Thickness</label>
+                    <input type="range" id="editorInkThickness-${block_id}" class="editorParamsSlider" value="1" min="1" max="20" step="1" tabindex="0">
+                  </div>
+                  <div id="inkOpacitySetter-${block_id}" class="editorParamsSetter">
+                    <label for="editorInkOpacity-${block_id}" class="editorParamsLabel">Opacity</label>
+                    <input type="range" id="editorInkOpacity-${block_id}" class="editorParamsSlider" value="1" min="0.05" max="1" step="0.05" tabindex="0">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Text Tool with Parameters -->
+            <div id="editorFreeText-${block_id}" class="toolbarButtonWithContainer">
+              <button id="textTool-${block_id}" class="secondaryToolbarButton" type="button" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorFreeTextParamsToolbar-${block_id}" title="Add Text">
+                <span>Text</span>
+              </button>
+              <div class="editorParamsToolbar editorParamsToolbar-${block_id} hidden doorHangerRight" id="editorFreeTextParamsToolbar-${block_id}">
+                <div id="textParamsToolbarContainer-${block_id}" class="editorParamsToolbarContainer">
+                  <div id="textColorSetter-${block_id}" class="editorParamsSetter">
+                    <label for="editorFreeTextColor-${block_id}" class="editorParamsLabel">Text color</label>
+                    <input type="color" id="editorFreeTextColor-${block_id}" class="editorParamsColor" value="#000000" tabindex="0">
+                  </div>
+                  <div id="textFontSizeSetter-${block_id}" class="editorParamsSetter">
+                    <label for="editorFreeTextFontSize-${block_id}" class="editorParamsLabel">Font size</label>
+                    <input type="range" id="editorFreeTextFontSize-${block_id}" class="editorParamsSlider" value="10" min="5" max="100" step="1" tabindex="0">
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- Stamp Tool with Parameters -->
+            <div id="editorStamp-${block_id}" class="toolbarButtonWithContainer">
+              <button id="shapeTool-${block_id}" class="secondaryToolbarButton" type="button" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorStampParamsToolbar-${block_id}" title="Shapes">
+                <span>Shapes</span>
+              </button>
+              <div class="editorParamsToolbar editorParamsToolbar-${block_id} hidden doorHangerRight menu" id="editorStampParamsToolbar-${block_id}">
+                <div id="stampMenuContainer-${block_id}" class="menuContainer">
+                  <button id="editorStampAddImage-${block_id}" class="toolbarButton labeled" type="button" tabindex="0">
+                    <span class="editorParamsLabel">Add shape</span>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- Notes Tool (Simple Button) -->
+            <button id="noteTool-${block_id}" class="secondaryToolbarButton" title="Notes">
+              <span>Notes</span>
+            </button>
+
+            <div id="toolbarSeparator-${block_id}" class="horizontalToolbarSeparator"></div>
+
+            <!-- Clear All Button -->
+            <button id="clearAnnotations-${block_id}" class="secondaryToolbarButton" title="Clear All Annotations">
+              <span>Clear All</span>
+            </button>
+            % endif
+          </div>
         </div>
 
-        <!-- Error Display -->
-        <div class="pdf-error" id="error-${block_id}" style="display: none;">
-            <div class="error-icon">⚠️</div>
-            <div class="error-message">An error occurred while loading the PDF</div>
-            <button class="error-retry">Retry</button>
+        <!-- Viewer Container -->
+        <div id="viewerContainer-${block_id}">
+          <div id="viewer-${block_id}" class="pdfViewer">
+            <!-- PDF Pages will be dynamically inserted here by PDF.js -->
+          </div>
         </div>
+      </div>
+      <!-- Main Toolbar -->
+      <div class="toolbar">
+        <div id="toolbarContainer-${block_id}" class="toolbarContainer">
+          <div id="toolbarViewer-${block_id}" class="toolbarViewer">
 
-        <!-- Main PDF Container -->
-        <div class="pdf-main-container" id="pdf-main-${block_id}" style="display: none;">
-            <!-- Toolbar with FontAwesome Icons (No Text Labels) -->
-            <div class="pdf-toolbar" id="toolbar-${block_id}">
-                <div class="toolbar-section tools-section">
-                    <div class="tool-buttons">
-                        <button class="tool-button" data-tool="highlight" title="Highlight Text">
-                            <i class="fas fa-highlighter"></i>
-                        </button>
-                        <button class="tool-button" data-tool="scribble" title="Draw/Scribble">
-                            <i class="fas fa-pen"></i>
-                        </button>
-                        <button class="tool-button" data-tool="text" title="Add Text">
-                            <i class="fas fa-font"></i>
-                        </button>
-                        <button class="tool-button" data-tool="shape" title="Draw Shape">
-                            <i class="fas fa-shapes"></i>
-                        </button>
-                        <button class="tool-button" data-tool="note" title="Add Note">
-                            <i class="fas fa-sticky-note"></i>
-                        </button>
-                    </div>
+            <!-- Left Section: Navigation Controls -->
+            <div id="toolbarViewerLeft-${block_id}" class="toolbarSection toolbarLeft">
+              <div class="toolbarGroup navigation-group">
+                <button id="previous-${block_id}" class="toolbarButton navButton" title="Previous Page" tabindex="0">
+                  <span class="buttonIcon">❮</span>
+                  <span class="buttonLabel">Previous</span>
+              </button>
+
+                <button id="next-${block_id}" class="toolbarButton navButton" title="Next Page" tabindex="0">
+                  <span class="buttonIcon">❯</span>
+                  <span class="buttonLabel">Next</span>
+                </button>
+              </div>
+
+              <div class="toolbarGroup page-group">
+                <div class="pageControls">
+                  <input type="number"
+                         id="pageNumber-${block_id}"
+                         class="toolbarField pageInput"
+                         title="Page Number"
+                         value="${current_page}"
+                         size="4"
+                         min="1"
+                         tabindex="0">
+                  <span class="pageSeparator">/</span>
+                  <span id="numPages-${block_id}" class="toolbarLabel totalPages">--</span>
                 </div>
-
-                <div class="toolbar-section settings-section">
-                    <div class="setting-controls">
-                        <label for="color-input-${block_id}">
-                            <i class="fas fa-palette"></i>
-                        </label>
-                        <input type="color" id="color-input-${block_id}" value="#FF0000" class="color-picker">
-
-                        <label for="size-input-${block_id}">
-                            <i class="fas fa-expand-arrows-alt"></i>
-                        </label>
-                        <input type="range" id="size-input-${block_id}" min="1" max="20" value="5" class="size-slider">
-                    </div>
-                </div>
-
-                <div class="toolbar-section actions-section">
-                    <div class="action-buttons">
-                        <button class="action-button" data-action="clear" title="Clear All">
-                            <i class="fas fa-trash"></i>
-                        </button>
-                        <button class="action-button" data-action="undo" title="Undo">
-                            <i class="fas fa-undo"></i>
-                        </button>
-                        % if allow_download:
-                        <button class="action-button" data-action="download" title="Download PDF">
-                            <i class="fas fa-download"></i>
-                        </button>
-                        % endif
-                    </div>
-                </div>
+              </div>
             </div>
 
-            <!-- PDF Viewer -->
-            <div class="pdf-viewer-area">
-                <div class="pdf-container" id="pdf-container-${block_id}">
-                    <!-- PDF Canvas -->
-                    <canvas id="pdf-canvas-${block_id}" class="pdf-canvas"></canvas>
+            <!-- Center Section: Zoom Controls -->
+            <div id="toolbarViewerMiddle-${block_id}" class="toolbarSection toolbarCenter">
+              <div class="toolbarGroup zoom-group">
+                <button id="zoomOut-${block_id}" class="toolbarButton zoomButton" title="Zoom Out" tabindex="0">
+                  <span class="buttonIcon">−</span>
+                  <span class="buttonLabel">Zoom Out</span>
+              </button>
 
-                    <!-- Text Layer -->
-                    <div id="text-layer-${block_id}" class="textLayer"></div>
-
-                    <!-- Drawing Container -->
-                    <div id="draw-container-${block_id}" class="draw-container"></div>
-
-                    <!-- Highlight Container -->
-                    <div id="highlight-container-${block_id}" class="highlight-container"></div>
+                <div class="zoomSelectContainer">
+                  <select id="scaleSelect-${block_id}" class="toolbarField zoomSelect" title="Zoom Level" tabindex="0">
+                    <option id="pageAutoOption-${block_id}" title="Automatic Zoom" value="auto">Auto</option>
+                    <option id="pageActualOption-${block_id}" title="Actual Size" value="page-actual">100%</option>
+                    <option id="pageFitOption-${block_id}" title="Fit Page" value="page-fit">Fit Page</option>
+                    <option id="pageWidthOption-${block_id}" title="Fit Width" value="page-width" selected="selected">Fit Width</option>
+                    <option id="customScaleOption-${block_id}" title="Custom Zoom" value="custom" disabled="disabled" hidden="true"></option>
+                    <option title="50%" value="0.5">50%</option>
+                    <option title="75%" value="0.75">75%</option>
+                    <option title="100%" value="1">100%</option>
+                    <option title="125%" value="1.25">125%</option>
+                    <option title="150%" value="1.5">150%</option>
+                    <option title="200%" value="2">200%</option>
+                    <option title="300%" value="3">300%</option>
+                    <option title="400%" value="4">400%</option>
+                  </select>
                 </div>
+
+                <button id="zoomIn-${block_id}" class="toolbarButton zoomButton" title="Zoom In" tabindex="0">
+                  <span class="buttonIcon">+</span>
+                  <span class="buttonLabel">Zoom In</span>
+                </button>
+              </div>
             </div>
 
-            <!-- Navigation with FontAwesome Icons (Moved to Bottom) -->
-            <div class="pdf-navigation" id="navigation-${block_id}">
-                <div class="nav-section">
-                    <button class="nav-button" data-nav="first" title="First Page">
-                        <i class="fas fa-step-backward"></i>
-                    </button>
-                    <button class="nav-button" data-nav="prev" title="Previous Page">
-                        <i class="fas fa-chevron-left"></i>
-                    </button>
-                    <span class="page-info">
-                        <input type="number" class="page-input" value="1" min="1">
-                        <span class="page-separator">of</span>
-                        <span class="total-pages">1</span>
-                    </span>
-                    <button class="nav-button" data-nav="next" title="Next Page">
-                        <i class="fas fa-chevron-right"></i>
-                    </button>
-                    <button class="nav-button" data-nav="last" title="Last Page">
-                        <i class="fas fa-step-forward"></i>
-                    </button>
-                </div>
+            <!-- Right Section: Action Controls -->
+            <div id="toolbarViewerRight-${block_id}" class="toolbarSection toolbarRight">
+              % if allow_annotation:
+              <div class="toolbarGroup annotation-group">
+                <button id="secondaryToolbarToggle-${block_id}" class="toolbarButton actionButton" title="Annotation Tools" tabindex="0">
+                  <span class="buttonIcon">🔧</span>
+                  <span class="buttonLabel">Tools</span>
+              </button>
+              </div>
+              % endif
 
-                <div class="zoom-section">
-                    <button class="zoom-button" data-zoom="out" title="Zoom Out">
-                        <i class="fas fa-search-minus"></i>
-                    </button>
-                    <span class="zoom-info">100%</span>
-                    <button class="zoom-button" data-zoom="in" title="Zoom In">
-                        <i class="fas fa-search-plus"></i>
-                    </button>
-                    <button class="zoom-button" data-zoom="fit" title="Fit to Page">
-                        <i class="fas fa-compress-alt"></i>
-                    </button>
-                    <button class="zoom-button" data-zoom="fit-width" title="Fit Width">
-                        <i class="fas fa-arrows-alt-h"></i>
-                    </button>
-                    <button class="zoom-button" data-action="fullscreen" title="Fullscreen">
-                        <i class="fas fa-expand"></i>
-                    </button>
-                </div>
+              % if allow_download:
+              <div class="toolbarGroup download-group">
+                <button id="download-${block_id}" class="toolbarButton actionButton" title="Download PDF" tabindex="0">
+                  <span class="buttonIcon">⬇</span>
+                  <span class="buttonLabel">Download</span>
+              </button>
+              </div>
+              % endif
             </div>
 
-            <!-- Status Bar -->
-            <div class="pdf-status-bar" id="status-bar-${block_id}">
-                <div class="status-section">
-                    <span class="status-text">Ready</span>
-                </div>
-                <div class="tool-status">
-                    <span class="active-tool-label">No tool active</span>
-                </div>
-            </div>
+          </div>
         </div>
+      </div>
+      <!-- Loading Bar -->
+      <div id="loadingBar-${block_id}">
+        <div class="progress"></div>
+        <div class="glimmer"></div>
+      </div>
     </div>
+  </div>
+
+  <!-- Error Wrapper -->
+  <div id="errorWrapper-${block_id}" hidden="true">
+    <div id="errorMessageLeft-${block_id}">
+      <span id="errorMessage-${block_id}"></span>
+      <button id="errorShowMore-${block_id}">More Information</button>
+      <button id="errorShowLess-${block_id}" hidden="true">Less Information</button>
+    </div>
+    <div id="errorMessageRight-${block_id}">
+      <button id="errorClose-${block_id}">Close</button>
+    </div>
+    <div class="clearBoth"></div>
+    <textarea id="errorMoreInfo-${block_id}" hidden="true" readonly="readonly"></textarea>
+  </div>
+
+  <!-- Print Container (for PDF.js printing) -->
+  <div id="printContainer-${block_id}"></div>
 </div>
