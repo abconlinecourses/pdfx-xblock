@@ -1780,6 +1780,10 @@ class PdfxXBlock(XBlock):
     def _save_annotation_type(self, annotation_type, data):
         """Save a specific type of annotation"""
         try:
+            # Handle clear actions first
+            if annotation_type == 'clear_action':
+                return self._handle_clear_action(data)
+
             # Map annotation types to XBlock fields for available tools: highlight, scribble, text, stamp
             field_mapping = {
                 'highlights': 'highlights',
@@ -1853,6 +1857,101 @@ class PdfxXBlock(XBlock):
         except Exception as e:
             log.error(f"[PdfxXBlock] 💾 _save_annotation_type - Error saving {annotation_type}: {e}")
             return False
+
+    def _handle_clear_action(self, data):
+        """Handle clear action requests (clear current page or clear all annotations)"""
+        try:
+            log.info(f"[PdfxXBlock] 🧹 _handle_clear_action - Processing clear action")
+
+            if not isinstance(data, dict):
+                log.warning(f"[PdfxXBlock] 🧹 _handle_clear_action - Invalid data format: {type(data)}")
+                return False
+
+            # Extract clear action data
+            for page_key, page_data in data.items():
+                if not isinstance(page_data, list):
+                    continue
+
+                for annotation in page_data:
+                    if not isinstance(annotation, dict) or annotation.get('type') != 'clear_action':
+                        continue
+
+                    clear_data = annotation.get('data', {})
+                    action = clear_data.get('action')
+
+                    if action == 'clear_page':
+                        page_num = clear_data.get('pageNum')
+                        if page_num:
+                            result = self._clear_page_annotations(page_num)
+                            log.info(f"[PdfxXBlock] 🧹 _handle_clear_action - Cleared page {page_num}: {result}")
+
+                    elif action == 'clear_all':
+                        result = self._clear_all_annotations()
+                        log.info(f"[PdfxXBlock] 🧹 _handle_clear_action - Cleared all annotations: {result}")
+
+                    else:
+                        log.warning(f"[PdfxXBlock] 🧹 _handle_clear_action - Unknown action: {action}")
+
+            return True
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 🧹 _handle_clear_action - Error: {e}")
+            import traceback
+            log.error(f"[PdfxXBlock] 🧹 _handle_clear_action - Traceback: {traceback.format_exc()}")
+            return False
+
+    def _clear_page_annotations(self, page_num):
+        """Clear all annotations from a specific page"""
+        try:
+            page_key = str(page_num)
+            cleared_count = 0
+
+            # Clear from all annotation fields
+            annotation_fields = ['highlights', 'drawing_strokes', 'marker_strokes', 'text_annotations', 'shape_annotations']
+
+            for field_name in annotation_fields:
+                if hasattr(self, field_name):
+                    current_data = dict(getattr(self, field_name))
+                    if page_key in current_data:
+                        if isinstance(current_data[page_key], list):
+                            cleared_count += len(current_data[page_key])
+                        del current_data[page_key]
+                        setattr(self, field_name, current_data)
+                        log.info(f"[PdfxXBlock] 🧹 _clear_page_annotations - Cleared {field_name} for page {page_num}")
+
+            log.info(f"[PdfxXBlock] 🧹 _clear_page_annotations - Cleared {cleared_count} annotations from page {page_num}")
+            return cleared_count
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 🧹 _clear_page_annotations - Error clearing page {page_num}: {e}")
+            return 0
+
+    def _clear_all_annotations(self):
+        """Clear all annotations from entire PDF"""
+        try:
+            cleared_count = 0
+
+            # Clear all annotation fields
+            annotation_fields = ['highlights', 'drawing_strokes', 'marker_strokes', 'text_annotations', 'shape_annotations']
+
+            for field_name in annotation_fields:
+                if hasattr(self, field_name):
+                    current_data = dict(getattr(self, field_name))
+                    # Count annotations before clearing
+                    for page_data in current_data.values():
+                        if isinstance(page_data, list):
+                            cleared_count += len(page_data)
+
+                    # Clear the field
+                    setattr(self, field_name, {})
+                    log.info(f"[PdfxXBlock] 🧹 _clear_all_annotations - Cleared all {field_name}")
+
+            log.info(f"[PdfxXBlock] 🧹 _clear_all_annotations - Cleared {cleared_count} total annotations from entire PDF")
+            return cleared_count
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 🧹 _clear_all_annotations - Error clearing all annotations: {e}")
+            return 0
 
     def _validate_annotation_data(self, data):
         """Validate and clean annotation data"""

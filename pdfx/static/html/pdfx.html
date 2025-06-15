@@ -136,10 +136,22 @@
 
             <div id="toolbarSeparator-${block_id}" class="horizontalToolbarSeparator"></div>
 
-            <!-- Clear All Button -->
-            <button id="clearAnnotations-${block_id}" class="secondaryToolbarButton" title="Clear All Annotations">
-              <span>Clear All</span>
-            </button>
+            <!-- Clear Tool with Parameters -->
+            <div id="editorClear-${block_id}" class="toolbarButtonWithContainer">
+              <button id="clearAnnotations-${block_id}" class="secondaryToolbarButton" type="button" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorClearParamsToolbar-${block_id}" title="Clear Annotations">
+                <span>Clear All</span>
+              </button>
+              <div class="editorParamsToolbar editorParamsToolbar-${block_id} hidden doorHangerRight menu" id="editorClearParamsToolbar-${block_id}">
+                <div id="clearMenuContainer-${block_id}" class="menuContainer">
+                  <button id="clearCurrentPage-${block_id}" class="toolbarButton labeled" type="button" tabindex="0">
+                    <span class="editorParamsLabel">Clear Current Page</span>
+                  </button>
+                  <button id="clearEntirePdf-${block_id}" class="toolbarButton labeled" type="button" tabindex="0">
+                    <span class="editorParamsLabel">Clear Entire PDF</span>
+                  </button>
+                </div>
+              </div>
+            </div>
             % endif
           </div>
         </div>

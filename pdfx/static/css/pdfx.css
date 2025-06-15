@@ -1664,7 +1664,7 @@ html body [id^="marker-tool-"].active {
 .textLayer.highlighting span:hover,
 .text-layer.highlighting span:hover,
 [id^="textLayer-"].highlighting span:hover {
-    background-color: rgba(255, 255, 0, 0.2) !important;
+    background-color: rgba(4, 21, 255, 0.1) !important;
     border-radius: 2px;
     /* Text remains transparent on hover, visible only when selected */
 }
@@ -2622,7 +2622,7 @@ canvas[data-main-rotation] {
 /* Remove navigation button specific styling */
 .pdfx-block.pdfjs-viewer .navButton {
     background: none;
-    border: none;
+    border: 1px solid #ddd;
 }
 
 .pdfx-block.pdfjs-viewer .navButton:hover {
@@ -2633,7 +2633,7 @@ canvas[data-main-rotation] {
 /* Remove zoom button specific styling */
 .pdfx-block.pdfjs-viewer .zoomButton {
     background: none;
-    border: none;
+    border: 1px solid #ddd;
 }
 
 .pdfx-block.pdfjs-viewer .zoomButton:hover {
@@ -2644,7 +2644,7 @@ canvas[data-main-rotation] {
 /* Remove action button specific styling */
 .pdfx-block.pdfjs-viewer .actionButton {
     background: none;
-    border: none;
+    border: 1px solid #ddd;
 }
 
 .pdfx-block.pdfjs-viewer .actionButton:hover {
@@ -2869,7 +2869,7 @@ canvas[data-main-rotation] {
     justify-content: center;
     width: 42px !important;
     height: 42px !important;
-    border: none;
+    border: 1px solid #ddd;
     border-radius: 4px;
     background: none;
     color: #555;
@@ -3677,5 +3677,349 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     to {
         transform: translateX(0);
         opacity: 1;
+    }
+}
+
+/* ===== CLEAR TOOL STYLES ===== */
+/* Compact Clear Toolbar Popup */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar[id*="ClearParamsToolbar"] {
+    min-width: 180px !important;
+    width: auto !important;
+    padding: 8px !important;
+    background: #ffffff !important;
+    border: 1px solid #d0d0d0 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+}
+
+.pdfx-block.pdfjs-viewer .menuContainer[id*="clearMenuContainer"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    padding: 0 !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clear"] {
+    width: 100% !important;
+    padding: 8px 12px !important;
+    margin: 0 !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 4px !important;
+    background: #f8f9fa !important;
+    color: #333 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clearCurrentPage"]:hover {
+    background: #007acc !important;
+    color: white !important;
+    border-color: #007acc !important;
+    transform: translateY(-1px) !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clearEntirePdf"]:hover {
+    background: #dc3545 !important;
+    color: white !important;
+    border-color: #dc3545 !important;
+    transform: translateY(-1px) !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clear"] .editorParamsLabel {
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+/* Add icons to clear buttons */
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clearCurrentPage"]::before {
+    content: "📄" !important;
+    font-size: 14px !important;
+    margin-right: 8px !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clearEntirePdf"]::before {
+    content: "📚" !important;
+    font-size: 14px !important;
+    margin-right: 8px !important;
+}
+
+/* ===== MODAL DIALOG STYLES ===== */
+.pdfx-clear-modal-overlay {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 10000 !important;
+    animation: fadeInModal 0.2s ease !important;
+}
+
+/* Ensure the contentArea can contain positioned modals */
+.pdfx-block.pdfjs-viewer .contentArea {
+    position: relative !important;
+}
+
+.pdfx-clear-modal {
+    background: white !important;
+    border-radius: 8px !important;
+    padding: 24px !important;
+    max-width: 400px !important;
+    width: 90% !important;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3) !important;
+    position: relative !important;
+    animation: slideInModal 0.3s ease !important;
+}
+
+.pdfx-clear-modal-header {
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 16px !important;
+}
+
+.pdfx-clear-modal-icon {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    background: #ff4757 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 16px !important;
+}
+
+.pdfx-clear-modal-icon::before {
+    content: "✕" !important;
+    color: white !important;
+    font-size: 24px !important;
+    font-weight: bold !important;
+}
+
+.pdfx-clear-modal-success-icon {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    background: #28a745 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 16px !important;
+}
+
+.pdfx-clear-modal-success-icon::before {
+    content: "✓" !important;
+    color: white !important;
+    font-size: 24px !important;
+    font-weight: bold !important;
+}
+
+.pdfx-clear-modal-error-icon {
+    width: 48px !important;
+    height: 48px !important;
+    border-radius: 50% !important;
+    background: #dc3545 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    margin-bottom: 16px !important;
+}
+
+.pdfx-clear-modal-error-icon::before {
+    content: "⚠" !important;
+    color: white !important;
+    font-size: 24px !important;
+    font-weight: bold !important;
+}
+
+.pdfx-clear-modal-title {
+    font-size: 18px !important;
+    font-weight: 600 !important;
+    color: #333 !important;
+    text-align: center !important;
+    margin-bottom: 8px !important;
+}
+
+.pdfx-clear-modal-message {
+    font-size: 14px !important;
+    color: #666 !important;
+    text-align: center !important;
+    line-height: 1.5 !important;
+    margin-bottom: 24px !important;
+}
+
+.pdfx-clear-modal-buttons {
+    display: flex !important;
+    gap: 12px !important;
+    justify-content: center !important;
+}
+
+.pdfx-clear-modal-button {
+    padding: 10px 20px !important;
+    border-radius: 5px !important;
+    border: none !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    cursor: pointer !important;
+    transition: all 0.2s ease !important;
+    min-width: 80px !important;
+}
+
+.pdfx-clear-modal-cancel {
+    background: #f8f9fa !important;
+    color: #333 !important;
+    border: 1px solid #dee2e6 !important;
+}
+
+.pdfx-clear-modal-cancel:hover {
+    background: #e9ecef !important;
+    border-color: #adb5bd !important;
+}
+
+.pdfx-clear-modal-confirm {
+    background: #dc3545 !important;
+    color: white !important;
+}
+
+.pdfx-clear-modal-confirm:hover {
+    background: #c82333 !important;
+}
+
+.pdfx-clear-modal-close {
+    position: absolute !important;
+    top: 12px !important;
+    right: 12px !important;
+    background: none !important;
+    border: none !important;
+    font-size: 20px !important;
+    color: #999 !important;
+    cursor: pointer !important;
+    padding: 4px !important;
+    line-height: 1 !important;
+}
+
+.pdfx-clear-modal-close:hover {
+    color: #333 !important;
+}
+
+/* ===== LOADING AND SUCCESS STATES ===== */
+.pdfx-loading-overlay {
+    position: absolute !important;
+    top: 0 !important;
+    left: 0 !important;
+    right: 0 !important;
+    bottom: 0 !important;
+    background: rgba(255, 255, 255, 0.8) !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    z-index: 10001 !important;
+}
+
+.pdfx-loading-spinner {
+    width: 40px !important;
+    height: 40px !important;
+    border: 4px solid #f3f3f3 !important;
+    border-top: 4px solid #007acc !important;
+    border-radius: 50% !important;
+    animation: pdfxSpin 1s linear infinite !important;
+}
+
+.pdfx-success-notification {
+    position: absolute !important;
+    top: 20px !important;
+    right: 20px !important;
+    background: #28a745 !important;
+    color: white !important;
+    padding: 12px 20px !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(40, 167, 69, 0.3) !important;
+    font-size: 14px !important;
+    font-weight: 500 !important;
+    z-index: 10002 !important;
+    animation: slideInFromRight 0.3s ease !important;
+    display: flex !important;
+    align-items: center !important;
+    gap: 8px !important;
+}
+
+.pdfx-success-notification::before {
+    content: "✓" !important;
+    font-size: 16px !important;
+    font-weight: bold !important;
+}
+
+/* ===== ANIMATIONS ===== */
+@keyframes fadeInModal {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes slideInModal {
+    from {
+        transform: translateY(-20px);
+        opacity: 0;
+    }
+    to {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes pdfxSpin {
+    0% {
+        transform: rotate(0deg);
+    }
+    100% {
+        transform: rotate(360deg);
+    }
+}
+
+@keyframes slideInFromRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
+}
+
+/* ===== RESPONSIVE STYLES ===== */
+@media (max-width: 768px) {
+    .pdfx-clear-modal {
+        margin: 20px !important;
+        padding: 20px !important;
+    }
+
+    .pdfx-clear-modal-buttons {
+        flex-direction: column !important;
+    }
+
+    .pdfx-clear-modal-button {
+        width: 100% !important;
+    }
+
+    .pdfx-success-notification {
+        top: 10px !important;
+        right: 10px !important;
+        left: 10px !important;
+        text-align: center !important;
     }
 }
