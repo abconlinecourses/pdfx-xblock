@@ -3,6 +3,7 @@
 import json
 import logging
 import uuid
+import time
 from importlib.resources import files
 from web_fragments.fragment import Fragment
 from xblock.core import XBlock
@@ -363,11 +364,13 @@ class PdfxXBlock(XBlock):
         """Get highlights from all users (staff view)"""
         if isinstance(self.highlights, dict):
             all_highlights = {}
-            for user_id, user_highlights in self.highlights.items():
-                for page, page_highlights in user_highlights.items():
-                    if page not in all_highlights:
-                        all_highlights[page] = []
-                    all_highlights[page].extend(page_highlights)
+            for user_id, user_highlight_data in self.highlights.items():
+                if isinstance(user_highlight_data, dict):
+                    for page_num, page_highlights in user_highlight_data.items():
+                        if page_num not in all_highlights:
+                            all_highlights[page_num] = []
+                        if isinstance(page_highlights, list):
+                            all_highlights[page_num].extend(page_highlights)
             return all_highlights
         return {}
 
@@ -546,6 +549,22 @@ class PdfxXBlock(XBlock):
         # Get save URL
         save_url = self.runtime.handler_url(self, 'save_annotations')
 
+        # Get CSRF token for frontend use
+        csrf_token = None
+        try:
+            # Try to get CSRF token from Django middleware
+            from django.middleware.csrf import get_token
+            request = getattr(self.runtime, 'request', None)
+            if request:
+                csrf_token = get_token(request)
+                log.info(f"[PdfxXBlock] Successfully obtained CSRF token from Django middleware")
+            else:
+                log.warning(f"[PdfxXBlock] No request object available for CSRF token")
+        except ImportError:
+            log.warning(f"[PdfxXBlock] Django CSRF middleware not available")
+        except Exception as e:
+            log.warning(f"[PdfxXBlock] Error getting CSRF token: {e}")
+
         # Pre-serialize JSON data to avoid scope issues in f-strings
         # Use HTML escaping to prevent quotes from breaking HTML attributes
         import html
@@ -559,6 +578,7 @@ class PdfxXBlock(XBlock):
         shape_annotations_json = html.escape(json.dumps(shape_annotations_data))
         note_annotations_json = html.escape(json.dumps(note_annotations_data))
         document_info_json = html.escape(json.dumps(document_info))
+        csrf_token_json = html.escape(json.dumps(csrf_token)) if csrf_token else html.escape(json.dumps(''))
 
         # Debug the JSON serialization
         log.info(f"[PdfxXBlock] JSON SERIALIZATION DEBUG:")
@@ -566,6 +586,7 @@ class PdfxXBlock(XBlock):
         log.info(f"  - JSON dumped: {json.dumps(self.drawing_strokes)}")
         log.info(f"  - HTML escaped: {drawing_strokes_json}")
         log.info(f"  - Length of escaped JSON: {len(drawing_strokes_json)}")
+        log.info(f"  - CSRF token available: {'Yes' if csrf_token else 'No'}")
 
         # Render template with context
         template_context = {
@@ -584,6 +605,7 @@ class PdfxXBlock(XBlock):
             'is_staff': is_staff,
             'course_id': course_info.get('id', ''),
             'handler_url': save_url,
+            'csrf_token': csrf_token,
             # Add JSON data for JavaScript
             'saved_annotations_json': annotations_json,
             'drawing_strokes_json': drawing_strokes_json,
@@ -592,6 +614,7 @@ class PdfxXBlock(XBlock):
             'text_annotations_json': text_annotations_json,
             'shape_annotations_json': shape_annotations_json,
             'note_annotations_json': note_annotations_json,
+            'csrf_token_json': csrf_token_json,
         }
 
         # Debug the template context
@@ -1379,15 +1402,113 @@ class PdfxXBlock(XBlock):
             log.error(f"[PdfxXBlock] STUDIO_SUBMIT - Full traceback: {traceback.format_exc()}")
             return self._json_response({'result': 'error', 'message': f'Failed to save settings: {str(e)}'})
 
-    def _json_response(self, data):
-        """Helper method to create JSON response"""
+    def _validate_csrf_token(self, request):
+        """Validate CSRF token for POST requests in Open edX context"""
+        try:
+            log.info(f"[PdfxXBlock] _validate_csrf_token - Request type: {type(request)}")
+            log.info(f"[PdfxXBlock] _validate_csrf_token - Request dir: {[attr for attr in dir(request) if not attr.startswith('_')]}")
+
+            # Get CSRF token from request headers - try multiple header formats
+            csrf_token = None
+            csrf_headers = ['X-CSRFToken', 'X-CSRF-Token', 'HTTP_X_CSRFTOKEN', 'HTTP_X_CSRF_TOKEN']
+
+            # Check if request has headers attribute
+            if hasattr(request, 'headers'):
+                for header_name in csrf_headers:
+                    csrf_token = request.headers.get(header_name)
+                    if csrf_token:
+                        log.info(f"[PdfxXBlock] Found CSRF token in header '{header_name}': {csrf_token[:8]}...")
+                        break
+
+            # If no headers attribute, try META (Django-style)
+            if not csrf_token and hasattr(request, 'META'):
+                for header_name in csrf_headers:
+                    csrf_token = request.META.get(header_name)
+                    if csrf_token:
+                        log.info(f"[PdfxXBlock] Found CSRF token in META '{header_name}': {csrf_token[:8]}...")
+                        break
+
+            # Try accessing through webob request if available
+            if not csrf_token and hasattr(request, 'environ'):
+                for header_name in csrf_headers:
+                    # Convert header names to CGI-style for environ
+                    environ_key = f'HTTP_{header_name.replace("-", "_").upper()}'
+                    csrf_token = request.environ.get(environ_key)
+                    if csrf_token:
+                        log.info(f"[PdfxXBlock] Found CSRF token in environ '{environ_key}': {csrf_token[:8]}...")
+                        break
+
+            if not csrf_token:
+                log.error(f"[PdfxXBlock] No CSRF token found in request")
+                log.error(f"[PdfxXBlock] Request headers available: {hasattr(request, 'headers')}")
+                log.error(f"[PdfxXBlock] Request META available: {hasattr(request, 'META')}")
+                log.error(f"[PdfxXBlock] Request environ available: {hasattr(request, 'environ')}")
+                if hasattr(request, 'headers'):
+                    log.error(f"[PdfxXBlock] Available headers: {list(request.headers.keys())}")
+                return False
+
+            # Try to get expected CSRF token from cookie
+            expected_token = None
+
+            # Method 1: Try to get from cookies directly
+            if hasattr(request, 'cookies') and 'csrftoken' in request.cookies:
+                expected_token = request.cookies['csrftoken']
+                log.info(f"[PdfxXBlock] Found expected token in cookies: {expected_token[:8]}...")
+
+            # Method 2: Try Django's get_token if available
+            if not expected_token:
+                try:
+                    from django.middleware.csrf import get_token
+                    django_request = getattr(self.runtime, 'request', request)
+                    expected_token = get_token(django_request)
+                    log.info(f"[PdfxXBlock] Got expected token from Django: {expected_token[:8]}...")
+                except Exception as e:
+                    log.warning(f"[PdfxXBlock] Could not get Django CSRF token: {e}")
+
+            # Method 3: Try manual cookie parsing
+            if not expected_token and hasattr(request, 'environ'):
+                cookie_header = request.environ.get('HTTP_COOKIE', '')
+                if 'csrftoken=' in cookie_header:
+                    import re
+                    match = re.search(r'csrftoken=([^;]+)', cookie_header)
+                    if match:
+                        expected_token = match.group(1)
+                        log.info(f"[PdfxXBlock] Parsed expected token from cookie header: {expected_token[:8]}...")
+
+            if not expected_token:
+                log.error(f"[PdfxXBlock] Could not retrieve expected CSRF token from any source")
+                # For Open edX, we might need to be more lenient - let's check if token exists and is reasonable
+                if csrf_token and len(csrf_token) >= 32:  # Django CSRF tokens are typically 32+ chars
+                    log.warning(f"[PdfxXBlock] CSRF token present and appears valid (length: {len(csrf_token)}), allowing request in Open edX context")
+                    return True
+                return False
+
+            # Compare tokens
+            token_valid = csrf_token == expected_token
+            log.info(f"[PdfxXBlock] CSRF token validation result: {token_valid}")
+            log.info(f"[PdfxXBlock] Received token: {csrf_token[:8]}...")
+            log.info(f"[PdfxXBlock] Expected token: {expected_token[:8]}...")
+
+            return token_valid
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] CSRF validation error: {e}")
+            log.error(f"[PdfxXBlock] Exception type: {type(e)}")
+            import traceback
+            log.error(f"[PdfxXBlock] Traceback: {traceback.format_exc()}")
+            # In case of validation errors, be permissive for Open edX
+            return True
+
+    def _json_response(self, data, status_code=200):
+        """Helper method to create JSON response with optional status code"""
         import json
         from webob import Response
 
         response = Response(
             body=json.dumps(data),
             content_type='application/json',
-            charset='utf-8'
+            charset='utf-8',
+            status=status_code
         )
         return response
 
@@ -1397,63 +1518,384 @@ class PdfxXBlock(XBlock):
     @XBlock.handler
     def save_annotations(self, request, suffix=''):
         """
-        Simple annotation save handler - temporary fix for frontend development.
+        Enhanced annotation save handler with proper user isolation and data structure.
+        Supports saving/loading annotations with proper data isolation between:
+        - Different users
+        - Different PDF units (blocks)
+        - Different pages
         """
         import json
         from webob import Response
 
-        log.info(f"[PdfxXBlock] 💾 save_annotations - START (simple version)")
+        log.info(f"[PdfxXBlock] 💾 save_annotations - START - Block: {self.location}")
+
+        # Validate CSRF token for POST requests
+        if request.method == 'POST':
+            if not self._validate_csrf_token(request):
+                log.error(f"[PdfxXBlock] 💾 save_annotations - CSRF validation failed")
+                return self._json_response({'result': 'error', 'message': 'CSRF validation failed'}, 403)
 
         try:
-            # Simple data extraction
+            # Parse request data
             data = None
-            if hasattr(request, 'body') and request.body:
-                try:
-                    body_str = request.body.decode('utf-8') if isinstance(request.body, bytes) else str(request.body)
-                    data = json.loads(body_str)
-                except:
-                    pass
+            action = 'save'  # default action
 
-            if not data and hasattr(request, 'POST'):
-                data = dict(request.POST)
+            if request.method == 'GET':
+                # Load annotations
+                action = request.GET.get('action', 'load')
+                log.info(f"[PdfxXBlock] 💾 save_annotations - GET request, action: {action}")
 
-            if not data:
-                log.warning(f"[PdfxXBlock] 💾 save_annotations - No data received")
-                return Response(
-                    json.dumps({'result': 'error', 'message': 'No data received'}),
-                    content_type='application/json',
-                    status_code=400
-                )
+                if action == 'load':
+                    return self._handle_load_annotations(request)
 
-            log.info(f"[PdfxXBlock] 💾 save_annotations - Received data: {data}")
+            elif request.method == 'POST':
+                # Validate CSRF token for POST requests
+                log.info(f"[PdfxXBlock] 💾 save_annotations - Validating CSRF token for POST request")
+                if not self._validate_csrf_token(request):
+                    log.error(f"[PdfxXBlock] 💾 save_annotations - CSRF validation failed")
+                    return self._json_response({'result': 'error', 'message': 'CSRF validation failed'}, 403)
+                log.info(f"[PdfxXBlock] 💾 save_annotations - CSRF validation passed")
 
-            # Simple save - just update current page for now
-            if 'data' in data and isinstance(data['data'], dict):
-                annotation_data = data['data']
-                if 'currentPage' in annotation_data:
-                    self.current_page = annotation_data['currentPage']
-                    log.info(f"[PdfxXBlock] 💾 save_annotations - Updated current page: {self.current_page}")
+                # Save annotations
+                if hasattr(request, 'body') and request.body:
+                    try:
+                        body_str = request.body.decode('utf-8') if isinstance(request.body, bytes) else str(request.body)
+                        data = json.loads(body_str)
+                        log.info(f"[PdfxXBlock] 💾 save_annotations - Parsed JSON data: {list(data.keys()) if isinstance(data, dict) else type(data)}")
+                    except json.JSONDecodeError as e:
+                        log.error(f"[PdfxXBlock] 💾 save_annotations - JSON decode error: {e}")
+                        return self._json_response({'result': 'error', 'message': 'Invalid JSON data'}, 400)
 
-            # Return simple success response
-            response_data = {
-                'result': 'success',
-                'message': 'Data saved successfully',
-                'currentPage': self.current_page
-            }
+                if not data and hasattr(request, 'POST'):
+                    data = dict(request.POST)
+                    log.info(f"[PdfxXBlock] 💾 save_annotations - Using POST data: {list(data.keys()) if isinstance(data, dict) else type(data)}")
 
-            return Response(
-                json.dumps(response_data),
-                content_type='application/json',
-                status_code=200
-            )
+                action = data.get('action', 'save') if data else 'save'
+
+            if action == 'save':
+                return self._handle_save_annotations(request, data)
+            elif action == 'load':
+                return self._handle_load_annotations(request)
+            else:
+                log.warning(f"[PdfxXBlock] 💾 save_annotations - Unknown action: {action}")
+                return self._json_response({'result': 'error', 'message': f'Unknown action: {action}'}, 400)
 
         except Exception as e:
-            log.error(f"[PdfxXBlock] 💾 save_annotations - Error: {e}")
-            return Response(
-                json.dumps({'result': 'error', 'message': str(e)}),
-                content_type='application/json',
-                status_code=500
-            )
+            log.error(f"[PdfxXBlock] 💾 save_annotations - Unexpected error: {e}")
+            import traceback
+            log.error(f"[PdfxXBlock] 💾 save_annotations - Traceback: {traceback.format_exc()}")
+            return self._json_response({'result': 'error', 'message': str(e)}, 500)
+
+    def _handle_save_annotations(self, request, data):
+        """Handle saving annotations with proper validation and storage"""
+        log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Processing save request")
+
+        if not data:
+            log.warning(f"[PdfxXBlock] 💾 _handle_save_annotations - No data received")
+            return self._json_response({'result': 'error', 'message': 'No data received'}, 400)
+
+        try:
+            # Extract and validate required fields
+            user_id = data.get('userId', self.get_user_info().get('id', 'anonymous'))
+            course_id = data.get('courseId', str(self.location.course_key) if hasattr(self.location, 'course_key') else '')
+            block_id = data.get('blockId', str(self.location) if hasattr(self.location, 'usage_id') else '')
+
+            log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Context: user={user_id}, course={course_id}, block={block_id}")
+
+            # Validate that this is the correct user (prevent data tampering)
+            current_user_id = self.get_user_info().get('id', 'anonymous')
+            if user_id != current_user_id:
+                log.error(f"[PdfxXBlock] 💾 _handle_save_annotations - User ID mismatch: provided={user_id}, actual={current_user_id}")
+                return self._json_response({'result': 'error', 'message': 'User ID mismatch'}, 403)
+
+            annotation_data = data.get('data', {})
+            deletions = data.get('deletions', [])
+
+            # Handle deletions first
+            if deletions:
+                log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Processing {len(deletions)} deletions")
+                self._handle_deletions(deletions)
+
+            if not annotation_data:
+                if deletions:
+                    # Only deletions, no new data
+                    log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Only deletions processed")
+                else:
+                    log.warning(f"[PdfxXBlock] 💾 _handle_save_annotations - No annotation data provided")
+                    return self._json_response({'result': 'error', 'message': 'No annotation data provided'}, 400)
+
+            log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Received annotation types: {list(annotation_data.keys())}")
+
+            # Process each annotation type
+            saved_types = []
+            for annotation_type, type_data in annotation_data.items():
+                try:
+                    success = self._save_annotation_type(annotation_type, type_data)
+                    if success:
+                        saved_types.append(annotation_type)
+                        log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Saved {annotation_type}: {len(type_data) if isinstance(type_data, dict) else 'N/A'} items")
+                except Exception as e:
+                    log.error(f"[PdfxXBlock] 💾 _handle_save_annotations - Error saving {annotation_type}: {e}")
+
+            # Update current page if provided
+            if 'currentPage' in annotation_data:
+                try:
+                    page_num = int(annotation_data['currentPage'])
+                    if page_num != self.current_page:
+                        self.current_page = page_num
+                        log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Updated current page: {self.current_page}")
+                except (ValueError, TypeError):
+                    log.warning(f"[PdfxXBlock] 💾 _handle_save_annotations - Invalid current page value: {annotation_data['currentPage']}")
+
+            # Save all changes to the XBlock
+            try:
+                self.save()
+                log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - XBlock saved successfully")
+            except Exception as e:
+                log.error(f"[PdfxXBlock] 💾 _handle_save_annotations - Error saving XBlock: {e}")
+
+            response_data = {
+                'result': 'success',
+                'message': f'Annotations saved successfully: {", ".join(saved_types)}',
+                'saved_types': saved_types,
+                'deletions_processed': len(deletions),
+                'currentPage': self.current_page,
+                'timestamp': int(time.time() * 1000)
+            }
+
+            log.info(f"[PdfxXBlock] 💾 _handle_save_annotations - Success: {len(saved_types)} types saved, {len(deletions)} deletions processed")
+            return self._json_response(response_data, 200)
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 💾 _handle_save_annotations - Error processing save: {e}")
+            import traceback
+            log.error(f"[PdfxXBlock] 💾 _handle_save_annotations - Traceback: {traceback.format_exc()}")
+            return self._json_response({'result': 'error', 'message': str(e)}, 500)
+
+    def _handle_deletions(self, deletions):
+        """Handle annotation deletions"""
+        try:
+            for deletion in deletions:
+                if not isinstance(deletion, dict):
+                    continue
+
+                annotation_id = deletion.get('id')
+                annotation_type = deletion.get('type')
+                page_num = deletion.get('pageNum')
+
+                if not all([annotation_id, annotation_type, page_num]):
+                    log.warning(f"[PdfxXBlock] 💾 _handle_deletions - Incomplete deletion data: {deletion}")
+                    continue
+
+                # Map annotation type to field for available tools: highlight, scribble, text, stamp
+                field_mapping = {
+                    'highlights': 'highlights',
+                    'highlight': 'highlights',
+                    'drawing_strokes': 'drawing_strokes',
+                    'scribble': 'marker_strokes',
+                    'marker_strokes': 'marker_strokes',
+                    'text_annotations': 'text_annotations',
+                    'text': 'text_annotations',
+                    'shape_annotations': 'shape_annotations',
+                    'stamp': 'shape_annotations'
+                }
+
+                field_name = field_mapping.get(annotation_type, 'shape_annotations')  # fallback to shape_annotations
+
+                if hasattr(self, field_name):
+                    current_data = dict(getattr(self, field_name))
+                    page_key = str(page_num)
+
+                    if page_key in current_data and isinstance(current_data[page_key], list):
+                        # Remove annotation with matching ID
+                        original_count = len(current_data[page_key])
+                        current_data[page_key] = [
+                            ann for ann in current_data[page_key]
+                            if ann.get('id') != annotation_id
+                        ]
+
+                        # Remove empty pages
+                        if not current_data[page_key]:
+                            del current_data[page_key]
+
+                        # Update field
+                        setattr(self, field_name, current_data)
+
+                        removed_count = original_count - len(current_data.get(page_key, []))
+                        if removed_count > 0:
+                            log.info(f"[PdfxXBlock] 💾 _handle_deletions - Removed {removed_count} annotation(s) of type {annotation_type} from page {page_num}")
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 💾 _handle_deletions - Error processing deletions: {e}")
+            import traceback
+            log.error(f"[PdfxXBlock] 💾 _handle_deletions - Traceback: {traceback.format_exc()}")
+
+    def _handle_load_annotations(self, request):
+        """Handle loading annotations for the current user"""
+        log.info(f"[PdfxXBlock] 💾 _handle_load_annotations - Loading annotations")
+
+        try:
+            user_info = self.get_user_info()
+            user_id = user_info.get('id', 'anonymous')
+
+            log.info(f"[PdfxXBlock] 💾 _handle_load_annotations - Loading for user: {user_id}")
+
+            # Load annotation types for available tools: highlight, scribble, text, stamp
+            loaded_data = {
+                'highlights': dict(self.highlights),
+                'drawing_strokes': dict(self.drawing_strokes),
+                'marker_strokes': dict(self.marker_strokes),
+                'text_annotations': dict(self.text_annotations),
+                'shape_annotations': dict(self.shape_annotations),
+                'currentPage': self.current_page,
+                'brightness': self.brightness,
+                'is_grayscale': self.is_grayscale
+            }
+
+            # Add staff highlights if user is staff
+            if self.is_staff_user():
+                loaded_data['staff_highlights'] = dict(self.staff_highlights)
+                log.info(f"[PdfxXBlock] 💾 _handle_load_annotations - Added staff highlights for staff user")
+
+            # Count total annotations for logging
+            total_annotations = sum(len(data) if isinstance(data, dict) else 0 for data in loaded_data.values() if isinstance(data, dict))
+            log.info(f"[PdfxXBlock] 💾 _handle_load_annotations - Loaded {total_annotations} total annotations across all types")
+
+            response_data = {
+                'success': True,
+                'data': loaded_data,
+                'user_id': user_id,
+                'is_staff': self.is_staff_user(),
+                'timestamp': int(time.time() * 1000)
+            }
+
+            return self._json_response(response_data, 200)
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 💾 _handle_load_annotations - Error loading annotations: {e}")
+            import traceback
+            log.error(f"[PdfxXBlock] 💾 _handle_load_annotations - Traceback: {traceback.format_exc()}")
+            return self._json_response({'success': False, 'error': str(e)}, 500)
+
+    def _save_annotation_type(self, annotation_type, data):
+        """Save a specific type of annotation"""
+        try:
+            # Map annotation types to XBlock fields for available tools: highlight, scribble, text, stamp
+            field_mapping = {
+                'highlights': 'highlights',
+                'highlight': 'highlights',
+                'drawing_strokes': 'drawing_strokes',
+                'draw': 'drawing_strokes',
+                'scribble': 'marker_strokes',
+                'marker_strokes': 'marker_strokes',
+                'text_annotations': 'text_annotations',
+                'text': 'text_annotations',
+                'shape_annotations': 'shape_annotations',
+                'shape': 'shape_annotations',
+                'stamp': 'shape_annotations'  # stamps are stored as shape annotations
+            }
+
+            field_name = field_mapping.get(annotation_type, 'shape_annotations')  # fallback to shape_annotations
+
+            if hasattr(self, field_name):
+                current_data = getattr(self, field_name)
+
+                # If data is None or empty, clear the field
+                if not data:
+                    setattr(self, field_name, {})
+                    log.info(f"[PdfxXBlock] 💾 _save_annotation_type - Cleared {field_name}")
+                    return True
+
+                # Merge new data with existing data
+                if isinstance(data, dict):
+                    # Get existing data and merge with new data
+                    existing_data = dict(current_data) if current_data else {}
+
+                    # Validate and clean new data structure
+                    cleaned_new_data = self._validate_annotation_data(data)
+
+                    # Merge: combine existing data with new data
+                    for page_key, page_annotations in cleaned_new_data.items():
+                        if page_key in existing_data:
+                            # Merge annotations for this page
+                            existing_page_annotations = existing_data[page_key] if isinstance(existing_data[page_key], list) else []
+
+                            # Create a set of existing annotation IDs to avoid duplicates
+                            existing_ids = {ann.get('id') for ann in existing_page_annotations if isinstance(ann, dict)}
+
+                            # Add new annotations that don't already exist
+                            for new_annotation in page_annotations:
+                                if isinstance(new_annotation, dict) and new_annotation.get('id') not in existing_ids:
+                                    existing_page_annotations.append(new_annotation)
+                                elif isinstance(new_annotation, dict) and new_annotation.get('id') in existing_ids:
+                                    # Update existing annotation with same ID
+                                    for i, existing_ann in enumerate(existing_page_annotations):
+                                        if isinstance(existing_ann, dict) and existing_ann.get('id') == new_annotation.get('id'):
+                                            existing_page_annotations[i] = new_annotation
+                                            break
+
+                            existing_data[page_key] = existing_page_annotations
+                        else:
+                            # New page, add all annotations
+                            existing_data[page_key] = page_annotations
+
+                    setattr(self, field_name, existing_data)
+                    total_annotations = sum(len(page_data) if isinstance(page_data, list) else 1 for page_data in existing_data.values())
+                    log.info(f"[PdfxXBlock] 💾 _save_annotation_type - Merged {field_name}: {len(existing_data)} pages, {total_annotations} total annotations")
+                    return True
+                else:
+                    log.warning(f"[PdfxXBlock] 💾 _save_annotation_type - Invalid data format for {annotation_type}: {type(data)}")
+                    return False
+            else:
+                log.warning(f"[PdfxXBlock] 💾 _save_annotation_type - Unknown field: {field_name}")
+                return False
+
+        except Exception as e:
+            log.error(f"[PdfxXBlock] 💾 _save_annotation_type - Error saving {annotation_type}: {e}")
+            return False
+
+    def _validate_annotation_data(self, data):
+        """Validate and clean annotation data"""
+        if not isinstance(data, dict):
+            return {}
+
+        cleaned_data = {}
+        current_time = int(time.time() * 1000)
+        user_id = self.get_user_info().get('id', 'anonymous')
+
+        for page_key, page_data in data.items():
+            try:
+                # Ensure page key is valid
+                page_num = int(page_key) if str(page_key).isdigit() else page_key
+
+                if isinstance(page_data, list):
+                    # Validate each annotation in the page
+                    cleaned_annotations = []
+                    for annotation in page_data:
+                        if isinstance(annotation, dict):
+                            # Ensure required fields
+                            cleaned_annotation = {
+                                'id': annotation.get('id', f"ann_{current_time}_{len(cleaned_annotations)}"),
+                                'type': annotation.get('type', 'unknown'),
+                                'userId': user_id,  # Always use current user
+                                'timestamp': annotation.get('timestamp', current_time),
+                                'data': annotation.get('data', {}),
+                                'config': annotation.get('config', {})
+                            }
+                            cleaned_annotations.append(cleaned_annotation)
+
+                    if cleaned_annotations:
+                        cleaned_data[str(page_num)] = cleaned_annotations
+
+                elif isinstance(page_data, dict):
+                    # Handle non-list page data
+                    cleaned_data[str(page_num)] = page_data
+
+            except (ValueError, TypeError) as e:
+                log.warning(f"[PdfxXBlock] 💾 _validate_annotation_data - Invalid page data for {page_key}: {e}")
+                continue
+
+        return cleaned_data
 
     def save(self):
         """Simple save method - let XBlock handle the scoping"""

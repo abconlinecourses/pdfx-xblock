@@ -22,8 +22,9 @@ DO NOT add unnecessary console.log,  console.warn, console.debug, add only when 
 
 * **CSS:** `pdf.css` (LMS), `pdf_edit.css` (Studio)
 
-**Note:** Write robust code, avoid quick fixes.
+**Note:** Write robust code, avoid quick silly fixes.
 
+JS: DO NOT Import js files dynamicaly. it does not support.
 
 DO NOT write extensive explanations.
 

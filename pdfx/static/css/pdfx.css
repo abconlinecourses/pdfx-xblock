@@ -2945,7 +2945,7 @@ canvas[data-main-rotation] {
     border-radius: 8px;
     box-shadow: 0 8px 32px rgba(0, 0, 0, 0.15), 0 2px 8px rgba(0, 0, 0, 0.1); /* Enhanced shadow for floating effect */
     padding: 20px;
-    min-width: 300px; /* Slightly wider for better usability */
+    min-width: auto; /* Slightly wider for better usability */
     max-width: 400px;
     z-index: 10000 !important; /* Very high z-index to appear above everything */
     display: none;
@@ -3535,4 +3535,147 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     /* CRITICAL: Must have opacity > 0 for text selection to work */
     /* opacity: 1 !important; */
     visibility: visible !important;
+}
+
+/* Stamp Tool Styles */
+.pdfx-block.pdfjs-viewer [id^="stampTool-"]::before {
+    content: "📷";
+}
+
+.stamp-annotation {
+    position: absolute;
+    cursor: move;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    transition: border-color 0.2s ease;
+    user-select: none;
+    z-index: 30;
+}
+
+.stamp-annotation:hover {
+    border-color: #007acc !important;
+}
+
+.stamp-annotation img {
+    display: block;
+    max-width: 100%;
+    height: auto;
+    user-select: none;
+    pointer-events: none;
+    border-radius: 2px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+}
+
+.stamp-annotation.dragging {
+    opacity: 0.8;
+    transform: scale(1.02);
+    z-index: 35;
+}
+
+.resize-handle {
+    position: absolute;
+    width: 8px;
+    height: 8px;
+    background-color: #007acc;
+    border: 1px solid white;
+    border-radius: 50%;
+    display: none;
+    z-index: 40;
+}
+
+.stamp-annotation:hover .resize-handle {
+    display: block;
+}
+
+.resize-handle.resize-nw {
+    top: -4px;
+    left: -4px;
+    cursor: nw-resize;
+}
+
+.resize-handle.resize-ne {
+    top: -4px;
+    right: -4px;
+    cursor: ne-resize;
+}
+
+.resize-handle.resize-sw {
+    bottom: -4px;
+    left: -4px;
+    cursor: sw-resize;
+}
+
+.resize-handle.resize-se {
+    bottom: -4px;
+    right: -4px;
+    cursor: se-resize;
+}
+
+.stamp-instructions {
+    position: fixed;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    background: rgba(0, 0, 0, 0.8);
+    color: white;
+    padding: 20px;
+    border-radius: 8px;
+    z-index: 1000;
+    text-align: center;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 16px;
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    animation: fadeIn 0.3s ease;
+}
+
+.stamp-instructions div:first-child {
+    font-weight: 500;
+    margin-bottom: 10px;
+}
+
+.stamp-instructions div:last-child {
+    font-size: 0.9em;
+    opacity: 0.8;
+}
+
+.stamp-error-notification {
+    position: fixed;
+    top: 20px;
+    right: 20px;
+    background: #ff4444;
+    color: white;
+    padding: 12px 20px;
+    border-radius: 4px;
+    z-index: 1001;
+    max-width: 300px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 14px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+    animation: slideInRight 0.3s ease;
+}
+
+.viewer.stamp-mode {
+    cursor: crosshair;
+}
+
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+        transform: translate(-50%, -50%) scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: translate(-50%, -50%) scale(1);
+    }
+}
+
+@keyframes slideInRight {
+    from {
+        transform: translateX(100%);
+        opacity: 0;
+    }
+    to {
+        transform: translateX(0);
+        opacity: 1;
+    }
 }

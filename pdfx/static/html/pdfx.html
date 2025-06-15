@@ -9,6 +9,7 @@
      data-user-id="${user_id}"
      data-course-id="${course_id}"
      data-handler-url="${handler_url}"
+     data-csrf-token="${csrf_token or ''}"
      data-saved-annotations="${saved_annotations_json}"
      data-drawing-strokes="${drawing_strokes_json}"
      data-highlights="${highlights_json}"
@@ -16,6 +17,11 @@
      data-text-annotations="${text_annotations_json}"
      data-shape-annotations="${shape_annotations_json}"
      data-note-annotations="${note_annotations_json}">
+
+  <!-- CSRF token meta tag for JavaScript access -->
+  % if csrf_token:
+  <meta name="csrf-token" content="${csrf_token}">
+  % endif
 
   <!-- PDF.js Viewer Container -->
   <div id="outerContainer-${block_id}" class="loadingInProgress">
@@ -116,22 +122,17 @@
 
             <!-- Stamp Tool with Parameters -->
             <div id="editorStamp-${block_id}" class="toolbarButtonWithContainer">
-              <button id="shapeTool-${block_id}" class="secondaryToolbarButton" type="button" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorStampParamsToolbar-${block_id}" title="Shapes">
-                <span>Shapes</span>
+              <button id="stampTool-${block_id}" class="secondaryToolbarButton" type="button" role="radio" aria-expanded="false" aria-haspopup="true" aria-controls="editorStampParamsToolbar-${block_id}" title="Add Image">
+                <span>Stamp</span>
               </button>
               <div class="editorParamsToolbar editorParamsToolbar-${block_id} hidden doorHangerRight menu" id="editorStampParamsToolbar-${block_id}">
                 <div id="stampMenuContainer-${block_id}" class="menuContainer">
                   <button id="editorStampAddImage-${block_id}" class="toolbarButton labeled" type="button" tabindex="0">
-                    <span class="editorParamsLabel">Add shape</span>
+                    <span class="editorParamsLabel">Add Image</span>
                   </button>
                 </div>
               </div>
             </div>
-
-            <!-- Notes Tool (Simple Button) -->
-            <button id="noteTool-${block_id}" class="secondaryToolbarButton" title="Notes">
-              <span>Notes</span>
-            </button>
 
             <div id="toolbarSeparator-${block_id}" class="horizontalToolbarSeparator"></div>
 
