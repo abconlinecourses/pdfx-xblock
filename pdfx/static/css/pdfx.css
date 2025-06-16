@@ -2496,7 +2496,10 @@ canvas[data-main-rotation] {
     position: relative;
     overflow: hidden;
 }
-
+.pdfx-block.pdfjs-viewer .contentArea button:hover,
+.pdfx-block.pdfjs-viewer .contentArea button:focus{
+    box-shadow: unset !important;
+}
 /* Enhanced Main Toolbar for PDF.js Viewer - Match Secondary Toolbar Style */
 .pdfx-block.pdfjs-viewer .toolbar {
     background: #f5f5f5;
@@ -2984,6 +2987,7 @@ canvas[data-main-rotation] {
     -moz-user-select: none !important;
     -ms-user-select: none !important;
     cursor: auto !important;
+    text-shadow: unset !important;
 }
 
 /* Override text cursor specifically for buttons and interactive elements */
@@ -3736,6 +3740,11 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     line-height: 1.2 !important;
     margin: 0 !important;
     padding: 0 !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clearCurrentPage"]:hover .editorParamsLabel,
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="clearEntirePdf"]:hover .editorParamsLabel {
+    color: white !important;
 }
 
 /* Add icons to clear buttons */

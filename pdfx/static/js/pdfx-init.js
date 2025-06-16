@@ -1340,6 +1340,8 @@ class ScribbleTool {
         canvases.forEach(canvas => {
             canvas.classList.remove('active');
             canvas.style.pointerEvents = 'none';
+            // Reset the listeners flag so they can be re-added when reactivated
+            canvas._drawingListenersAdded = false;
         });
     }
 
@@ -1372,6 +1374,10 @@ class ScribbleTool {
                 // Canvas already exists, just activate it
                 canvas.classList.add('active');
                 canvas.style.pointerEvents = 'auto';
+
+                // Re-add drawing event listeners in case they were lost during tool switching
+                this.addDrawingListeners(canvas);
+
                 console.log(`[ScribbleTool] Reactivated existing drawing canvas: ${canvas.id}`);
             } else {
                 // Create new drawing canvas
@@ -1404,6 +1410,11 @@ class ScribbleTool {
     }
 
     addDrawingListeners(canvas) {
+        // Remove existing listeners if they exist to prevent duplicates
+        if (canvas._drawingListenersAdded) {
+            return; // Listeners already added
+        }
+
         let isDrawing = false;
         let lastX = 0;
         let lastY = 0;
@@ -1493,6 +1504,9 @@ class ScribbleTool {
             const mouseEvent = new MouseEvent('mouseup', {});
             canvas.dispatchEvent(mouseEvent);
         });
+
+        // Mark that listeners have been added to prevent duplicates
+        canvas._drawingListenersAdded = true;
     }
 
     updateInkSettings() {
