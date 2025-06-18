@@ -1,570 +1,461 @@
 /**
  * TextTool - Text annotation functionality for PDF.js integration
- *
- * Provides text annotation capabilities with inline editing and positioning
+ * Integrates with pdfx-init.js PdfxViewer class
  */
-
-import { BaseTool } from '../base/BaseTool.js';
-
-export class TextTool extends BaseTool {
-    constructor(options = {}) {
-        super({
-            name: 'text',
-            ...options
-        });
+window.TextTool = class TextTool {
+    constructor(viewer, annotationInterface = null) {
+        this.viewer = viewer;
+        this.blockId = viewer.blockId;
+        this.annotationInterface = annotationInterface;
 
         // Text configuration
-        this.config = {
-            color: '#000000',
-            fontSize: 16,
-            fontFamily: 'Arial, sans-serif',
-            ...this.config
-        };
+        this.textColor = '#000000'; // Default black
+        this.textFontSize = 16; // Default font size
 
-        // Tool state
-        this.isAddingText = false;
-        this.activeTextEditor = null;
+        // Active text boxes tracking
+        this.activeTextBoxes = new Map();
+        this.currentEditingBox = null;
 
-        // Page event handlers
-        this.pageHandlers = new Map();
+        // Event handlers storage for cleanup
+        this.eventHandlers = new Map();
 
-        // Parameter toolbar controls
-        this.parameterControls = null;
+        // Initialize
+        this.init();
     }
 
-    /**
-     * Initialize the text tool
-     */
-    async init() {
-        try {
-            console.log(`[TextTool] Initializing for block: ${this.blockId}`);
-
-            // Setup parameter toolbar controls
-            this._setupParameterControls();
-
-        this.isEnabled = true;
-            console.log(`[TextTool] Initialized successfully`);
-
-        } catch (error) {
-            console.error(`[TextTool] Error during initialization:`, error);
-            throw error;
-        }
+    init() {
+        console.log(`[TextTool] Initializing for block: ${this.blockId}`);
+        this.setupToolButton();
+        this.initTextControls();
     }
 
-    /**
-     * Setup parameter toolbar controls
-     */
-    _setupParameterControls() {
-        this.parameterControls = {
-            colorPicker: document.getElementById(`editorFreeTextColor-${this.blockId}`),
-            fontSizeSlider: document.getElementById(`editorFreeTextFontSize-${this.blockId}`)
-        };
+    setupToolButton() {
+        const textBtn = document.getElementById(`textTool-${this.blockId}`);
+        const textToolbar = document.getElementById(`editorFreeTextParamsToolbar-${this.blockId}`);
 
-        // Setup color picker
-        if (this.parameterControls.colorPicker) {
-            this.parameterControls.colorPicker.addEventListener('change', (e) => {
-                this.config.color = e.target.value;
-                console.log(`[TextTool] Color changed to: ${this.config.color}`);
+        if (textBtn) {
+            textBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.viewer.setActiveTool('text');
+                this.viewer.toggleParameterToolbar(textBtn, textToolbar);
             });
-            this.parameterControls.colorPicker.value = this.config.color;
-        }
-
-        // Setup font size slider
-        if (this.parameterControls.fontSizeSlider) {
-            this.parameterControls.fontSizeSlider.addEventListener('input', (e) => {
-                this.config.fontSize = parseInt(e.target.value);
-                console.log(`[TextTool] Font size changed to: ${this.config.fontSize}px`);
-            });
-            this.parameterControls.fontSizeSlider.value = this.config.fontSize;
         }
     }
 
-    /**
-     * Enable the tool
-     */
-    enable() {
-        this.isEnabled = true;
-        console.log(`[TextTool] Tool enabled`);
-    }
-
-    /**
-     * Disable the tool
-     */
-    disable() {
-        if (this.isActive) {
-            this.deactivate();
-        }
-        this.isEnabled = false;
-        console.log(`[TextTool] Tool disabled`);
-    }
-
-    /**
-     * Activate the tool
-     */
     activate() {
-        if (!this.isEnabled) {
-            return false;
-        }
-
-        console.log(`[TextTool] Activating text tool`);
-        this.isActive = true;
-        this.isAddingText = true;
-
-        // Setup page click listeners
-        this._setupPageClickListeners();
-
-        // Show instructions
-        this._showTextInstructions();
-
-        return true;
+        console.log(`[TextTool] Activating text annotation mode for block: ${this.blockId}`);
+        this.enableTextAnnotationMode();
     }
 
-    /**
-     * Deactivate the tool
-     */
     deactivate() {
-        console.log(`[TextTool] Deactivating text tool`);
-        this.isActive = false;
-        this.isAddingText = false;
+        console.log(`[TextTool] Deactivating text annotation mode for block: ${this.blockId}`);
+        this.disableTextAnnotationMode();
+    }
+
+    enableTextAnnotationMode() {
+        // Add text annotation mode to viewer
+        const viewer = document.getElementById(`viewer-${this.blockId}`);
+        if (viewer) {
+            viewer.classList.add('text-annotation-mode');
+        }
+
+        // Setup click listeners on PDF pages
+        this.setupPageClickListeners();
+
+        console.log(`[TextTool] Text annotation mode enabled`);
+    }
+
+    disableTextAnnotationMode() {
+        // Remove text annotation mode from viewer
+        const viewer = document.getElementById(`viewer-${this.blockId}`);
+        if (viewer) {
+            viewer.classList.remove('text-annotation-mode');
+        }
 
         // Remove page click listeners
-        this._removePageClickListeners();
+        this.removePageClickListeners();
 
-        // Hide any active editors
-        if (this.activeTextEditor) {
-            this._finishTextEditing();
+        // Finalize any active text box being edited
+        if (this.currentEditingBox) {
+            this.finalizeTextBox(this.currentEditingBox);
         }
 
-        // Hide instructions
-        this._hideTextInstructions();
+        console.log(`[TextTool] Text annotation mode disabled`);
     }
 
-    /**
-     * Setup page click listeners for text placement
-     */
-    _setupPageClickListeners() {
+    setupPageClickListeners() {
         const viewer = document.getElementById(`viewer-${this.blockId}`);
         if (!viewer) return;
 
+        // Find all PDF pages
         const pages = viewer.querySelectorAll('.page');
 
         pages.forEach((page, pageIndex) => {
-            const handler = (event) => this._handlePageClick(event, page, pageIndex + 1);
-            page.addEventListener('click', handler);
-            this.pageHandlers.set(page, handler);
+            const onPageClick = (e) => this.handlePageClick(e, page, pageIndex);
+
+            page.addEventListener('click', onPageClick);
+
+            // Store listener for cleanup
+            const handlerKey = `page-${pageIndex}`;
+            this.eventHandlers.set(handlerKey, {
+                element: page,
+                listener: onPageClick
+            });
         });
+
+        console.log(`[TextTool] Set up click listeners on ${pages.length} pages`);
     }
 
-    /**
-     * Remove page click listeners
-     */
-    _removePageClickListeners() {
-        this.pageHandlers.forEach((handler, page) => {
-            page.removeEventListener('click', handler);
+    removePageClickListeners() {
+        this.eventHandlers.forEach((handler, key) => {
+            handler.element.removeEventListener('click', handler.listener);
         });
-        this.pageHandlers.clear();
+        this.eventHandlers.clear();
     }
 
-    /**
-     * Handle page click for text placement
-     */
-    _handlePageClick(event, page, pageNum) {
-        if (!this.isAddingText || this.activeTextEditor) {
+    handlePageClick(event, page, pageIndex) {
+        // Don't create text box if clicking on existing text box
+        if (event.target.classList.contains('text-annotation-input') ||
+            event.target.classList.contains('text-annotation-box')) {
             return;
         }
 
-        event.preventDefault();
-        event.stopPropagation();
+        // Finalize any currently editing text box
+        if (this.currentEditingBox) {
+            this.finalizeTextBox(this.currentEditingBox);
+        }
 
-        // Calculate position relative to the page
+        // Get click position relative to page
         const pageRect = page.getBoundingClientRect();
         const x = event.clientX - pageRect.left;
         const y = event.clientY - pageRect.top;
 
-        console.log(`[TextTool] Text placement at page ${pageNum}, position (${x}, ${y})`);
-
-        // Create text editor
-        this._createTextEditor(page, pageNum, x, y);
+        // Create new text box at click position
+        this.createTextBox(page, pageIndex, x, y);
     }
 
-    /**
-     * Create text editor at specified position
-     */
-    _createTextEditor(page, pageNum, x, y) {
-        // Hide instructions
-        this._hideTextInstructions();
+    createTextBox(page, pageIndex, x, y) {
+        console.log(`[TextTool] Creating text box at position (${x}, ${y}) on page ${pageIndex}`);
 
-        // Create editor container
-        const editor = document.createElement('div');
-        editor.className = 'text-annotation-editor';
-        editor.style.position = 'absolute';
-        editor.style.left = `${x}px`;
-        editor.style.top = `${y}px`;
-        editor.style.zIndex = '1000';
-        editor.style.minWidth = '200px';
-        editor.style.backgroundColor = 'white';
-        editor.style.border = '2px solid #007acc';
-        editor.style.borderRadius = '4px';
-        editor.style.padding = '8px';
-        editor.style.boxShadow = '0 2px 8px rgba(0,0,0,0.15)';
+        // Create text box container
+        const textBoxContainer = document.createElement('div');
+        textBoxContainer.className = 'text-annotation-box';
+        textBoxContainer.style.position = 'absolute';
+        textBoxContainer.style.left = `${x}px`;
+        textBoxContainer.style.top = `${y}px`;
+        textBoxContainer.style.zIndex = '30';
+        textBoxContainer.style.minWidth = '150px';
+        textBoxContainer.style.minHeight = '30px';
 
-        // Create text input
-        const textInput = document.createElement('textarea');
-        textInput.placeholder = 'Enter text...';
-        textInput.style.width = '100%';
-        textInput.style.border = 'none';
+        // Create text input element
+        const textInput = document.createElement('div');
+        textInput.className = 'text-annotation-input';
+        textInput.contentEditable = true;
+        textInput.style.border = '1px dashed #333';
+        textInput.style.padding = '5px';
+        textInput.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        textInput.style.color = this.textColor;
+        textInput.style.fontSize = `${this.textFontSize}px`;
+        textInput.style.fontFamily = 'Arial, sans-serif';
         textInput.style.outline = 'none';
-        textInput.style.resize = 'both';
-        textInput.style.minHeight = '40px';
-        textInput.style.fontFamily = this.config.fontFamily;
-        textInput.style.fontSize = `${this.config.fontSize}px`;
-        textInput.style.color = this.config.color;
-        textInput.style.backgroundColor = 'transparent';
+        textInput.style.minWidth = '140px';
+        textInput.style.minHeight = '20px';
+        textInput.style.cursor = 'text';
+        textInput.style.whiteSpace = 'pre-wrap';
+        textInput.style.wordWrap = 'break-word';
 
-        // Create button container
-        const buttonContainer = document.createElement('div');
-        buttonContainer.style.display = 'flex';
-        buttonContainer.style.justifyContent = 'flex-end';
-        buttonContainer.style.gap = '8px';
-        buttonContainer.style.marginTop = '8px';
+        // Set placeholder text
+        textInput.setAttribute('data-placeholder', 'Type your text here...');
+        textInput.innerHTML = '<span style="color: #999;">Type your text here...</span>';
 
-        // Create save button
-        const saveButton = document.createElement('button');
-        saveButton.textContent = 'Save';
-        saveButton.style.padding = '4px 12px';
-        saveButton.style.backgroundColor = '#007acc';
-        saveButton.style.color = 'white';
-        saveButton.style.border = 'none';
-        saveButton.style.borderRadius = '4px';
-        saveButton.style.cursor = 'pointer';
+        // Add event listeners to text input
+        this.setupTextInputListeners(textInput, textBoxContainer, pageIndex, x, y);
 
-        // Create cancel button
-        const cancelButton = document.createElement('button');
-        cancelButton.textContent = 'Cancel';
-        cancelButton.style.padding = '4px 12px';
-        cancelButton.style.backgroundColor = '#6c757d';
-        cancelButton.style.color = 'white';
-        cancelButton.style.border = 'none';
-        cancelButton.style.borderRadius = '4px';
-        cancelButton.style.cursor = 'pointer';
+        // Append input to container
+        textBoxContainer.appendChild(textInput);
 
-        // Assemble editor
-        buttonContainer.appendChild(cancelButton);
-        buttonContainer.appendChild(saveButton);
-        editor.appendChild(textInput);
-        editor.appendChild(buttonContainer);
+        // Make page relative positioned if not already
+        if (getComputedStyle(page).position === 'static') {
+            page.style.position = 'relative';
+        }
 
-        // Add to page
-        page.appendChild(editor);
+        // Append to page
+        page.appendChild(textBoxContainer);
 
-        // Setup event handlers
-        const saveHandler = () => {
-            const text = textInput.value.trim();
-            if (text) {
-                this._saveTextAnnotation(page, pageNum, x, y, text, editor);
-            } else {
-                this._cancelTextEditing(editor);
-            }
-        };
-
-        const cancelHandler = () => {
-            this._cancelTextEditing(editor);
-        };
-
-        const keyHandler = (event) => {
-            if (event.key === 'Escape') {
-                cancelHandler();
-            } else if (event.key === 'Enter' && (event.ctrlKey || event.metaKey)) {
-                saveHandler();
-            }
-        };
-
-        saveButton.addEventListener('click', saveHandler);
-        cancelButton.addEventListener('click', cancelHandler);
-        textInput.addEventListener('keydown', keyHandler);
-
-        // Focus the input
+        // Focus the input and select placeholder text
         textInput.focus();
+        if (textInput.firstChild && textInput.firstChild.nodeType === Node.TEXT_NODE) {
+            const range = document.createRange();
+            range.selectNodeContents(textInput);
+            const selection = window.getSelection();
+            selection.removeAllRanges();
+            selection.addRange(range);
+        }
 
-        // Store reference
-        this.activeTextEditor = {
-            element: editor,
-            textInput: textInput,
-            page: page,
-            pageNum: pageNum,
-            handlers: { saveHandler, cancelHandler, keyHandler }
+        // Set as currently editing
+        this.currentEditingBox = {
+            container: textBoxContainer,
+            input: textInput,
+            pageIndex: pageIndex,
+            x: x,
+            y: y
         };
+
+        // Store in active text boxes
+        const boxId = `textbox-${pageIndex}-${Date.now()}`;
+        this.activeTextBoxes.set(boxId, this.currentEditingBox);
+
+        return textBoxContainer;
+    }
+
+    setupTextInputListeners(textInput, container, pageIndex, x, y) {
+        // Handle focus to clear placeholder
+        const onFocus = () => {
+            if (textInput.innerHTML === '<span style="color: #999;">Type your text here...</span>') {
+                textInput.innerHTML = '';
+            }
+            textInput.style.border = '2px solid #007acc';
+        };
+
+        // Handle blur to restore placeholder if empty
+        const onBlur = () => {
+            if (textInput.textContent.trim() === '') {
+                textInput.innerHTML = '<span style="color: #999;">Type your text here...</span>';
+            }
+            textInput.style.border = '1px dashed #333';
+        };
+
+        // Handle input to update text styling
+        const onInput = () => {
+            // Update text color and font size for new content
+            const content = textInput.textContent;
+            if (content.trim() !== '' && !content.includes('Type your text here...')) {
+                textInput.style.color = this.textColor;
+                textInput.style.fontSize = `${this.textFontSize}px`;
+            }
+        };
+
+        // Handle key events
+        const onKeyDown = (e) => {
+            // Escape key to finish editing
+            if (e.key === 'Escape') {
+                this.finalizeTextBox({
+                    container: container,
+                    input: textInput,
+                    pageIndex: pageIndex,
+                    x: x,
+                    y: y
+                });
+                e.preventDefault();
+            }
+            // Enter key to create new line (allow normal behavior)
+            else if (e.key === 'Enter') {
+                // Allow normal enter behavior for multi-line text
+            }
+        };
+
+        // Prevent click events from bubbling to page
+        const onContainerClick = (e) => {
+            e.stopPropagation();
+        };
+
+        // Add event listeners
+        textInput.addEventListener('focus', onFocus);
+        textInput.addEventListener('blur', onBlur);
+        textInput.addEventListener('input', onInput);
+        textInput.addEventListener('keydown', onKeyDown);
+        container.addEventListener('click', onContainerClick);
+    }
+
+    finalizeTextBox(textBoxData) {
+        if (!textBoxData || !textBoxData.input) return;
+
+        const { container, input } = textBoxData;
+        const content = input.textContent.trim();
+
+        // If text is empty or just placeholder, remove the text box
+        if (content === '' || content === 'Type your text here...') {
+            container.remove();
+            console.log(`[TextTool] Removed empty text box`);
+        } else {
+            // Convert to final text annotation
+            this.convertToFinalAnnotation(textBoxData);
+            console.log(`[TextTool] TOOL_ACTION: Finalized text box with content: "${content}"`);
+
+            // Save text annotation
+            this.saveTextAnnotation(textBoxData, content);
+        }
+
+        // Clear current editing reference
+        if (this.currentEditingBox === textBoxData) {
+            this.currentEditingBox = null;
+        }
+    }
+
+    convertToFinalAnnotation(textBoxData) {
+        const { container, input } = textBoxData;
+        const content = input.textContent.trim();
+
+        // Replace editable input with static text display
+        const finalText = document.createElement('div');
+        finalText.className = 'text-annotation-final';
+        finalText.textContent = content;
+        finalText.style.color = this.textColor;
+        finalText.style.fontSize = `${this.textFontSize}px`;
+        finalText.style.fontFamily = 'Arial, sans-serif';
+        finalText.style.padding = '5px';
+        finalText.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        finalText.style.border = '1px solid #ccc';
+        finalText.style.borderRadius = '3px';
+        finalText.style.cursor = 'pointer';
+        finalText.style.whiteSpace = 'pre-wrap';
+        finalText.style.wordWrap = 'break-word';
+        finalText.style.minWidth = '140px';
+        finalText.style.minHeight = '20px';
+
+        // Add double-click to edit functionality
+        finalText.addEventListener('dblclick', (e) => {
+            e.stopPropagation();
+            this.editExistingTextBox(textBoxData, finalText);
+        });
+
+        // Replace input with final text
+        container.removeChild(input);
+        container.appendChild(finalText);
+
+        // Update the text box data
+        textBoxData.input = finalText;
+        textBoxData.isEditable = false;
+    }
+
+    editExistingTextBox(textBoxData, finalText) {
+        if (this.currentEditingBox) {
+            this.finalizeTextBox(this.currentEditingBox);
+        }
+
+        const { container } = textBoxData;
+        const currentContent = finalText.textContent;
+
+        // Create new editable input
+        const textInput = document.createElement('div');
+        textInput.className = 'text-annotation-input';
+        textInput.contentEditable = true;
+        textInput.style.border = '2px solid #007acc';
+        textInput.style.padding = '5px';
+        textInput.style.backgroundColor = 'rgba(255, 255, 255, 0.9)';
+        textInput.style.color = this.textColor;
+        textInput.style.fontSize = `${this.textFontSize}px`;
+        textInput.style.fontFamily = 'Arial, sans-serif';
+        textInput.style.outline = 'none';
+        textInput.style.minWidth = '140px';
+        textInput.style.minHeight = '20px';
+        textInput.style.cursor = 'text';
+        textInput.style.whiteSpace = 'pre-wrap';
+        textInput.style.wordWrap = 'break-word';
+        textInput.textContent = currentContent;
+
+        // Add event listeners
+        this.setupTextInputListeners(textInput, container, textBoxData.pageIndex, textBoxData.x, textBoxData.y);
+
+        // Replace final text with editable input
+        container.removeChild(finalText);
+        container.appendChild(textInput);
+
+        // Focus and select all content
+        textInput.focus();
+        const range = document.createRange();
+        range.selectNodeContents(textInput);
+        const selection = window.getSelection();
+        selection.removeAllRanges();
+        selection.addRange(range);
+
+        // Update text box data
+        textBoxData.input = textInput;
+        textBoxData.isEditable = true;
+        this.currentEditingBox = textBoxData;
+
+        console.log(`[TextTool] Re-editing text box with content: "${currentContent}"`);
+    }
+
+    initTextControls() {
+        const colorPicker = document.getElementById(`editorFreeTextColor-${this.blockId}`);
+        const fontSizeSlider = document.getElementById(`editorFreeTextFontSize-${this.blockId}`);
+
+        if (colorPicker) {
+            colorPicker.addEventListener('input', (e) => {
+                this.textColor = e.target.value;
+                this.updateActiveTextStyles();
+                console.log(`[TextTool] Text color changed to: ${this.textColor}`);
+            });
+            this.textColor = colorPicker.value || '#000000';
+        }
+
+        if (fontSizeSlider) {
+            fontSizeSlider.addEventListener('input', (e) => {
+                this.textFontSize = parseInt(e.target.value);
+                this.updateActiveTextStyles();
+                console.log(`[TextTool] Text font size changed to: ${this.textFontSize}px`);
+            });
+            this.textFontSize = parseInt(fontSizeSlider.value) || 16;
+        }
+    }
+
+    updateActiveTextStyles() {
+        // Update currently editing text box if any
+        if (this.currentEditingBox && this.currentEditingBox.input) {
+            const input = this.currentEditingBox.input;
+            if (input.contentEditable === 'true') {
+                input.style.color = this.textColor;
+                input.style.fontSize = `${this.textFontSize}px`;
+            }
+        }
     }
 
     /**
      * Save text annotation
      */
-    _saveTextAnnotation(page, pageNum, x, y, text, editorElement) {
-        console.log(`[TextTool] Saving text annotation: "${text}" at (${x}, ${y}) on page ${pageNum}`);
+    saveTextAnnotation(textBoxData, content) {
+        const { pageIndex, x, y } = textBoxData;
 
-        // Create annotation data
-        const annotationData = {
-            text: text,
-            x: x,
-            y: y,
-            width: editorElement.offsetWidth,
-            height: editorElement.offsetHeight,
-            fontSize: this.config.fontSize,
-            color: this.config.color,
-            fontFamily: this.config.fontFamily
+        // Create annotation object
+        const annotation = {
+            id: `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: 'text_annotations',
+            pageNum: pageIndex + 1, // pageIndex is 0-based, pageNum is 1-based
+            data: {
+                text: content,
+                x: x,
+                y: y,
+                color: this.textColor,
+                fontSize: this.textFontSize,
+                fontFamily: 'Arial, sans-serif'
+            },
+            config: {
+                color: this.textColor,
+                fontSize: this.textFontSize,
+                position: { x, y }
+            }
         };
 
-        // Set current page for annotation
-        this.currentPage = pageNum;
-
-        // Create annotation
-        const annotation = this.createAnnotation(annotationData);
-
-        // Create permanent text element
-        this._createTextElement(page, annotation);
-
-        // Finish editing
-        this._finishTextEditing();
-
-        // Save to storage if available
-        // Save through annotation interface
+        // Save annotation through interface
         if (this.annotationInterface) {
+            console.log(`[TextTool] ANNOTATION_SAVE: Saving text annotation:`, annotation.id);
             this.annotationInterface.saveAnnotation(annotation);
-        } else if (this.storageManager) {
-            this.storageManager.saveAnnotation(annotation);
+        } else {
+            console.warn(`[TextTool] ANNOTATION_MISSING: No annotation interface - text will not be saved!`);
         }
     }
 
-    /**
-     * Create permanent text element
-     */
-    _createTextElement(page, annotation) {
-        const textElement = document.createElement('div');
-        textElement.className = 'text-annotation';
-        textElement.dataset.annotationId = annotation.id;
-        textElement.style.position = 'absolute';
-        textElement.style.left = `${annotation.data.x}px`;
-        textElement.style.top = `${annotation.data.y}px`;
-        textElement.style.fontSize = `${annotation.data.fontSize}px`;
-        textElement.style.color = annotation.data.color;
-        textElement.style.fontFamily = annotation.data.fontFamily;
-        textElement.style.cursor = 'pointer';
-        textElement.style.padding = '4px';
-        textElement.style.border = '1px solid transparent';
-        textElement.style.borderRadius = '2px';
-        textElement.style.userSelect = 'none';
-        textElement.style.pointerEvents = 'auto';
-        textElement.style.zIndex = '100';
-        textElement.textContent = annotation.data.text;
+    cleanup() {
+        // Remove all event handlers
+        this.removePageClickListeners();
 
-        // Add hover effect
-        textElement.addEventListener('mouseenter', () => {
-            textElement.style.backgroundColor = 'rgba(0, 122, 204, 0.1)';
-            textElement.style.borderColor = '#007acc';
-        });
-
-        textElement.addEventListener('mouseleave', () => {
-            textElement.style.backgroundColor = 'transparent';
-            textElement.style.borderColor = 'transparent';
-        });
-
-        // Add click handler for editing
-        textElement.addEventListener('click', (event) => {
-            event.stopPropagation();
-            if (this.isActive) {
-                this._editTextAnnotation(annotation, textElement);
-            }
-        });
-
-        page.appendChild(textElement);
-
-        // Store reference in annotation
-        annotation.element = textElement;
-    }
-
-    /**
-     * Edit existing text annotation
-     */
-    _editTextAnnotation(annotation, textElement) {
-        if (this.activeTextEditor) return;
-
-        console.log(`[TextTool] Editing text annotation: ${annotation.id}`);
-
-        const page = textElement.parentElement;
-        const rect = textElement.getBoundingClientRect();
-        const pageRect = page.getBoundingClientRect();
-        const x = rect.left - pageRect.left;
-        const y = rect.top - pageRect.top;
-
-        // Hide the original element
-        textElement.style.display = 'none';
-
-        // Create editor with existing text
-        this._createTextEditor(page, annotation.pageNum, x, y);
-        this.activeTextEditor.textInput.value = annotation.data.text;
-        this.activeTextEditor.editingAnnotation = annotation;
-        this.activeTextEditor.originalElement = textElement;
-    }
-
-    /**
-     * Cancel text editing
-     */
-    _cancelTextEditing(editorElement) {
-        console.log(`[TextTool] Cancelling text editing`);
-
-        if (this.activeTextEditor && this.activeTextEditor.originalElement) {
-            // Show the original element if we were editing
-            this.activeTextEditor.originalElement.style.display = 'block';
+        // Finalize any active text box
+        if (this.currentEditingBox) {
+            this.finalizeTextBox(this.currentEditingBox);
         }
 
-        this._finishTextEditing();
+        // Clear text boxes
+        this.activeTextBoxes.clear();
     }
-
-    /**
-     * Finish text editing
-     */
-    _finishTextEditing() {
-        if (this.activeTextEditor) {
-            // Remove editor element
-            this.activeTextEditor.element.remove();
-            this.activeTextEditor = null;
-        }
-
-        // Show instructions again
-        if (this.isActive) {
-            this._showTextInstructions();
-        }
-    }
-
-    /**
-     * Show text tool instructions
-     */
-    _showTextInstructions() {
-        // Don't show if editor is active
-        if (this.activeTextEditor) return;
-
-        const existing = document.getElementById(`text-instructions-${this.blockId}`);
-        if (existing) return;
-
-        const instructions = document.createElement('div');
-        instructions.id = `text-instructions-${this.blockId}`;
-        instructions.className = 'text-instructions';
-        instructions.style.position = 'fixed';
-        instructions.style.top = '50%';
-        instructions.style.left = '50%';
-        instructions.style.transform = 'translate(-50%, -50%)';
-        instructions.style.backgroundColor = 'rgba(0, 0, 0, 0.8)';
-        instructions.style.color = 'white';
-        instructions.style.padding = '20px';
-        instructions.style.borderRadius = '8px';
-        instructions.style.zIndex = '10000';
-        instructions.style.textAlign = 'center';
-        instructions.style.fontFamily = 'Arial, sans-serif';
-        instructions.style.fontSize = '16px';
-        instructions.innerHTML = `
-            <div style="font-weight: 500; margin-bottom: 10px;">Text Tool Active</div>
-            <div style="font-size: 0.9em; opacity: 0.8;">Click anywhere on the PDF to add text</div>
-        `;
-
-        document.body.appendChild(instructions);
-
-        // Auto-hide after 3 seconds
-        setTimeout(() => {
-            if (instructions.parentElement) {
-                instructions.remove();
-            }
-        }, 3000);
-    }
-
-    /**
-     * Hide text tool instructions
-     */
-    _hideTextInstructions() {
-        const instructions = document.getElementById(`text-instructions-${this.blockId}`);
-        if (instructions) {
-            instructions.remove();
-        }
-    }
-
-    /**
-     * Handle page change
-     */
-    handlePageChange(pageNum) {
-        super.handlePageChange(pageNum);
-
-        // Cancel any active editing when page changes
-        if (this.activeTextEditor) {
-            this._finishTextEditing();
-        }
-    }
-
-    /**
-     * Load annotations from data
-     */
-    async loadAnnotations(annotationsData) {
-        console.log(`[TextTool] Loading text annotations:`, annotationsData);
-
-        // Use parent class method
-        await super.loadAnnotations(annotationsData);
-
-        // Render all loaded annotations
-        this._renderAllAnnotations();
-    }
-
-    /**
-     * Render all annotations on their respective pages
-     */
-    _renderAllAnnotations() {
-        const viewer = document.getElementById(`viewer-${this.blockId}`);
-        if (!viewer) return;
-
-        this.annotations.forEach(annotation => {
-            const page = viewer.querySelector(`.page:nth-child(${annotation.pageNum})`);
-            if (page) {
-                this._createTextElement(page, annotation);
-            }
-        });
-    }
-
-    /**
-     * Delete annotation
-     */
-    deleteAnnotation(annotationId) {
-        const annotation = this.annotations.get(annotationId);
-        if (annotation && annotation.element) {
-            annotation.element.remove();
-        }
-
-        return super.deleteAnnotation(annotationId);
-    }
-
-    /**
-     * Clean up tool resources
-     */
-    async cleanup() {
-        console.log(`[TextTool] Cleaning up text tool`);
-
-        // Cancel any active editing
-        if (this.activeTextEditor) {
-            this._finishTextEditing();
-        }
-
-        // Remove page handlers
-        this._removePageClickListeners();
-
-        // Hide instructions
-        this._hideTextInstructions();
-
-        // Remove all text elements
-        this.annotations.forEach(annotation => {
-            if (annotation.element) {
-                annotation.element.remove();
-            }
-        });
-
-        this.isEnabled = false;
-        this.isActive = false;
-    }
-}
-
-export default TextTool;
+};

@@ -2,65 +2,30 @@
  * HighlightTool - Modern text highlighting for PDF.js integration
  * Integrates with pdfx-init.js PdfxViewer class
  */
-
-import { BaseTool } from '../base/BaseTool.js';
-
-export class HighlightTool extends BaseTool {
-    constructor(options = {}) {
-        super({
-            name: 'highlight',
-            ...options
-        });
-
-        this.viewer = options.viewer; // Backwards compatibility
-        this.blockId = options.blockId || (this.viewer && this.viewer.blockId);
+window.HighlightTool = class HighlightTool {
+    constructor(viewer, annotationInterface = null) {
+        this.viewer = viewer;
+        this.blockId = viewer.blockId;
+        this.annotationInterface = annotationInterface;
         this.currentTool = null;
 
         // Highlight configuration
-        this.config = {
-            color: '#FFFF98', // Default yellow
-            thickness: 12,
-            showAll: true,
-            ...this.config
-        };
+        this.highlightColor = '#FFFF98'; // Default yellow
+        this.highlightThickness = 12;
+        this.highlightShowAll = true;
 
         // Event handlers storage for cleanup
         this.eventHandlers = new Map();
+
+        // Initialize
+        this.init();
     }
 
-    async init() {
+    init() {
         console.log(`[HighlightTool] Initializing for block: ${this.blockId}`);
         this.setupToolButton();
         this.initHighlightColorPicker();
         this.initHighlightControls();
-
-        // Load existing highlights
-        await this.loadExistingHighlights();
-    }
-
-    enable() {
-        this.isEnabled = true;
-        console.log(`[HighlightTool] Tool enabled for block: ${this.blockId}`);
-    }
-
-    disable() {
-        this.isEnabled = false;
-        this.deactivate();
-        console.log(`[HighlightTool] Tool disabled for block: ${this.blockId}`);
-    }
-
-    activate() {
-        if (!this.isEnabled) return;
-
-        this.isActive = true;
-        console.log(`[HighlightTool] Activating text highlighting for block: ${this.blockId}`);
-        this.enableTextHighlighting();
-    }
-
-    deactivate() {
-        this.isActive = false;
-        console.log(`[HighlightTool] Deactivating text highlighting for block: ${this.blockId}`);
-        this.disableTextHighlighting();
     }
 
     setupToolButton() {
@@ -70,14 +35,20 @@ export class HighlightTool extends BaseTool {
         if (highlightBtn) {
             highlightBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
-                if (this.viewer && this.viewer.setActiveTool) {
-                    this.viewer.setActiveTool('highlight');
-                }
-                if (this.viewer && this.viewer.toggleParameterToolbar) {
-                    this.viewer.toggleParameterToolbar(highlightBtn, highlightToolbar);
-                }
+                this.viewer.setActiveTool('highlight');
+                this.viewer.toggleParameterToolbar(highlightBtn, highlightToolbar);
             });
         }
+    }
+
+    activate() {
+        console.log(`[HighlightTool] Activating text highlighting for block: ${this.blockId}`);
+        this.enableTextHighlighting();
+    }
+
+    deactivate() {
+        console.log(`[HighlightTool] Deactivating text highlighting for block: ${this.blockId}`);
+        this.disableTextHighlighting();
     }
 
     enableTextHighlighting() {
@@ -240,53 +211,35 @@ export class HighlightTool extends BaseTool {
         const selectedText = range.toString().trim();
         if (!selectedText) return;
 
-        console.log(`[HighlightTool] Creating highlight for text: "${selectedText}"`);
+        console.log(`[HighlightTool] TOOL_ACTION: Creating highlight for text: "${selectedText}"`);
 
         // Get page number from text layer
-        const pageNum = this.getPageNumberFromTextLayer(textLayer);
+        const pageNum = this.getPageNumber(textLayer);
 
-        // Calculate position from range
-        const rects = range.getClientRects();
-        if (rects.length === 0) return;
-
-        const textLayerRect = textLayer.getBoundingClientRect();
-        const highlightRects = [];
-
-        for (let i = 0; i < rects.length; i++) {
-            const rect = rects[i];
-            highlightRects.push({
-                left: rect.left - textLayerRect.left,
-                top: rect.top - textLayerRect.top,
-                width: rect.width,
-                height: rect.height
-            });
-        }
-
-        // Create annotation object using BaseTool method
-        const annotation = this.createAnnotation({
+        // Create annotation object
+        const annotation = {
+            id: `highlight_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            type: 'highlights',
+            pageNum: pageNum,
             text: selectedText,
-            rects: highlightRects,
-            pageElement: textLayer.closest('.page'),
-            color: this.config.color,
-            thickness: this.config.thickness
-        });
+            color: this.highlightColor,
+            data: {
+                selectedText: selectedText,
+                color: this.highlightColor
+            },
+            config: {
+                thickness: this.highlightThickness || 12,
+                showAll: this.highlightShowAll !== false
+            }
+        };
 
-        // Render the highlight immediately
-        this.renderHighlight(annotation, textLayer);
-
-        // Save annotation through storage manager
-        if (this.storageManager) {
-            this.storageManager.saveAnnotation(annotation);
+        // Save annotation through interface
+        if (this.annotationInterface) {
+            console.log(`[HighlightTool] ANNOTATION_SAVE: Saving highlight annotation:`, annotation.id);
+            this.annotationInterface.saveAnnotation(annotation);
+        } else {
+            console.warn(`[HighlightTool] ANNOTATION_MISSING: No annotation interface - highlight will not be saved!`);
         }
-
-        // Clear selection after highlight is created
-        window.getSelection().removeAllRanges();
-
-        console.log(`[HighlightTool] Created highlight annotation:`, annotation);
-    }
-
-    renderHighlight(annotation, textLayer) {
-        if (!annotation || !annotation.data) return;
 
         // Get or create highlight container for this text layer
         let highlightContainer = textLayer.querySelector('.highlight-container');
@@ -303,89 +256,76 @@ export class HighlightTool extends BaseTool {
             textLayer.appendChild(highlightContainer);
         }
 
-        // Create a highlight group for this annotation
-        const highlightGroup = document.createElement('div');
-        highlightGroup.className = 'highlight-group';
-        highlightGroup.setAttribute('data-annotation-id', annotation.id);
-        highlightGroup.setAttribute('data-text', annotation.data.text);
+        // Calculate position from range
+        const rects = range.getClientRects();
+        if (rects.length > 0) {
+            const textLayerRect = textLayer.getBoundingClientRect();
 
-        // Create highlight rectangles
-        annotation.data.rects.forEach(rect => {
-            const highlightRect = document.createElement('div');
-            highlightRect.className = 'highlight-element';
-            highlightRect.style.position = 'absolute';
-            highlightRect.style.left = `${rect.left}px`;
-            highlightRect.style.top = `${rect.top}px`;
-            highlightRect.style.width = `${rect.width}px`;
-            highlightRect.style.height = `${rect.height}px`;
-            highlightRect.style.backgroundColor = annotation.data.color || this.config.color;
-            highlightRect.style.opacity = '0.4';
-            highlightRect.style.pointerEvents = 'none';
-            highlightRect.style.borderRadius = '2px';
+            // Store rectangle data for later rendering
+            const rectData = [];
+            for (let i = 0; i < rects.length; i++) {
+                const rect = rects[i];
+                rectData.push({
+                    left: rect.left - textLayerRect.left,
+                    top: rect.top - textLayerRect.top,
+                    width: rect.width,
+                    height: rect.height
+                });
+            }
 
-            highlightGroup.appendChild(highlightRect);
-        });
+            // Update annotation with rectangle data for saving
+            annotation.data.rects = rectData;
 
-        highlightContainer.appendChild(highlightGroup);
-        console.log(`[HighlightTool] Rendered highlight with ${annotation.data.rects.length} rectangles`);
+            // Create a highlight group for this selection
+            const highlightGroup = document.createElement('div');
+            highlightGroup.className = 'highlight-group';
+            highlightGroup.setAttribute('data-text', selectedText);
+            highlightGroup.setAttribute('data-annotation-id', annotation.id);
+
+            for (let i = 0; i < rects.length; i++) {
+                const rect = rects[i];
+                const highlightRect = document.createElement('div');
+                highlightRect.className = 'highlight-element';
+                highlightRect.style.position = 'absolute';
+                highlightRect.style.left = `${rect.left - textLayerRect.left}px`;
+                highlightRect.style.top = `${rect.top - textLayerRect.top}px`;
+                highlightRect.style.width = `${rect.width}px`;
+                highlightRect.style.height = `${rect.height}px`;
+                highlightRect.style.backgroundColor = this.highlightColor;
+                highlightRect.style.opacity = '0.4';
+                highlightRect.style.pointerEvents = 'none';
+                highlightRect.style.borderRadius = '2px';
+
+                highlightGroup.appendChild(highlightRect);
+            }
+
+            highlightContainer.appendChild(highlightGroup);
+            console.log(`[HighlightTool] Created highlight UI with ${rects.length} rectangles for annotation: ${annotation.id}`);
+        }
+
+        // Clear selection after highlight is created
+        window.getSelection().removeAllRanges();
     }
 
-    getPageNumberFromTextLayer(textLayer) {
-        // Try to find page number from text layer's parent page element
-        const pageElement = textLayer.closest('.page');
+    /**
+     * Get page number from text layer element
+     */
+    getPageNumber(textLayer) {
+        // Try to find page number from page element
+        let pageElement = textLayer.closest('.page');
         if (pageElement) {
-            const pageNumber = pageElement.getAttribute('data-page-number');
-            if (pageNumber) {
-                return parseInt(pageNumber, 10);
+            const pageId = pageElement.id;
+            const match = pageId.match(/pageContainer(\d+)/);
+            if (match) {
+                return parseInt(match[1]);
             }
         }
 
-        // Fallback to current page from viewer or tool
-        if (this.viewer && this.viewer.currentPage) {
-            return this.viewer.currentPage;
-        }
+        // Fallback: try to find from data attributes
+        const pageNum = textLayer.getAttribute('data-page-number') ||
+                       textLayer.closest('[data-page-number]')?.getAttribute('data-page-number');
 
-        return this.currentPage || 1;
-    }
-
-    async loadExistingHighlights() {
-        console.log(`[HighlightTool] Loading existing highlights for block: ${this.blockId}`);
-
-        // Wait for storage manager to load data
-        if (this.storageManager) {
-            try {
-                const highlightData = await this.storageManager.getAnnotationsByType('highlight');
-                if (highlightData && typeof highlightData === 'object') {
-                    await this.loadAnnotations(highlightData);
-                }
-            } catch (error) {
-                console.error(`[HighlightTool] Error loading existing highlights:`, error);
-            }
-        }
-    }
-
-    handlePageChange(pageNum) {
-        super.handlePageChange(pageNum);
-
-        // Re-render highlights for the new page
-        this.renderHighlightsForPage(pageNum);
-    }
-
-    renderHighlightsForPage(pageNum) {
-        const annotations = this.getAnnotationsForPage(pageNum);
-
-        // Find text layer for this page
-        const textLayers = document.querySelectorAll(`#viewerContainer-${this.blockId} .textLayer`);
-
-        annotations.forEach(annotation => {
-            // Find the appropriate text layer and render the highlight
-            textLayers.forEach(textLayer => {
-                const layerPageNum = this.getPageNumberFromTextLayer(textLayer);
-                if (layerPageNum === pageNum) {
-                    this.renderHighlight(annotation, textLayer);
-                }
-            });
-        });
+        return pageNum ? parseInt(pageNum) : 1;
     }
 
     initHighlightColorPicker() {
@@ -400,21 +340,21 @@ export class HighlightTool extends BaseTool {
                 button.setAttribute('aria-selected', 'true');
 
                 // Store selected color
-                this.config.color = button.dataset.color;
-                console.log(`[HighlightTool-${this.blockId}] Highlight color changed to: ${this.config.color}`);
+                this.highlightColor = button.dataset.color;
+                console.log(`[HighlightTool-${this.blockId}] Highlight color changed to: ${this.highlightColor}`);
             });
         });
 
         // Set default color (yellow button which is already marked as selected in HTML)
         const defaultSelected = document.querySelector(`#highlightColorPickerButtons-${this.blockId} .colorPickerButton[aria-selected="true"]`);
         if (defaultSelected) {
-            this.config.color = defaultSelected.dataset.color;
+            this.highlightColor = defaultSelected.dataset.color;
         } else if (colorButtons.length > 0) {
             // Fallback to first button if none selected
             colorButtons[0].setAttribute('aria-selected', 'true');
-            this.config.color = colorButtons[0].dataset.color;
+            this.highlightColor = colorButtons[0].dataset.color;
         } else {
-            this.config.color = '#FFFF98'; // Fallback color
+            this.highlightColor = '#FFFF98'; // Fallback color
         }
     }
 
@@ -424,16 +364,16 @@ export class HighlightTool extends BaseTool {
 
         if (thicknessSlider) {
             thicknessSlider.addEventListener('input', (e) => {
-                this.config.thickness = e.target.value;
+                this.highlightThickness = e.target.value;
             });
-            this.config.thickness = thicknessSlider.value;
+            this.highlightThickness = thicknessSlider.value;
         }
 
         if (showAllToggle) {
             showAllToggle.addEventListener('click', () => {
                 const pressed = showAllToggle.getAttribute('aria-pressed') === 'true';
                 showAllToggle.setAttribute('aria-pressed', !pressed);
-                this.config.showAll = !pressed;
+                this.highlightShowAll = !pressed;
             });
         }
     }
@@ -447,8 +387,5 @@ export class HighlightTool extends BaseTool {
             document.removeEventListener('selectionchange', listeners.selectionchange);
         });
         this.eventHandlers.clear();
-
-        // Call parent cleanup
-        super.cleanup();
     }
-}
+};

@@ -3583,12 +3583,14 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     background-color: #007acc;
     border: 1px solid white;
     border-radius: 50%;
-    display: none;
-    z-index: 40;
+    opacity: 0;
+    transition: opacity 0.2s ease;
+    z-index: 31;
+    pointer-events: all;
 }
 
 .stamp-annotation:hover .resize-handle {
-    display: block;
+    opacity: 1;
 }
 
 .resize-handle.resize-nw {
@@ -3613,6 +3615,87 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     bottom: -4px;
     right: -4px;
     cursor: se-resize;
+}
+
+/* Improve stamp annotation interaction */
+.stamp-annotation {
+    position: absolute;
+    border: 2px solid transparent;
+    border-radius: 4px;
+    user-select: none;
+    cursor: move;
+    transition: border-color 0.2s ease;
+    z-index: 30;
+}
+
+.stamp-annotation:hover {
+    border-color: #007acc;
+}
+
+.stamp-annotation.dragging {
+    opacity: 0.8;
+    z-index: 32;
+}
+
+.stamp-annotation img {
+    display: block;
+    user-select: none;
+    pointer-events: none;
+    border-radius: 2px;
+}
+
+/* Stamp popup menu styles */
+.stamp-popup-menu {
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    padding: 4px;
+    z-index: 1000;
+    animation: stamp-popup-fade-in 0.15s ease-out;
+}
+
+.stamp-popup-delete {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    width: 28px;
+    height: 28px;
+    border: none;
+    background: transparent;
+    color: #666;
+    cursor: pointer;
+    border-radius: 3px;
+    transition: all 0.15s ease;
+    padding: 0;
+    margin: 0;
+}
+
+.stamp-popup-delete:hover {
+    background: #f0f0f0;
+    color: #333;
+    transform: scale(1.05);
+}
+
+.stamp-popup-delete:active {
+    background: #e0e0e0;
+    transform: scale(0.95);
+}
+
+.stamp-popup-delete svg {
+    pointer-events: none;
+}
+
+@keyframes stamp-popup-fade-in {
+    from {
+        opacity: 0;
+        transform: scale(0.9);
+    }
+    to {
+        opacity: 1;
+        transform: scale(1);
+    }
 }
 
 .stamp-instructions {

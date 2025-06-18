@@ -15,6 +15,7 @@ class ClearTool {
     init() {
         console.log(`[ClearTool] Initializing for block: ${this.blockId}`);
         this.setupToolButton();
+        this.setupClearOptions();
     }
 
     setupToolButton() {
@@ -28,16 +29,6 @@ class ClearTool {
                 this.viewer.toggleParameterToolbar(clearBtn, clearToolbar);
             });
         }
-    }
-
-    activate() {
-        console.log(`[ClearTool] Activating clear mode for block: ${this.blockId}`);
-        // No specific activation needed - just show the toolbar
-    }
-
-    deactivate() {
-        console.log(`[ClearTool] Deactivating clear mode for block: ${this.blockId}`);
-        // No specific deactivation needed
     }
 
     setupClearOptions() {
@@ -57,10 +48,20 @@ class ClearTool {
         }
     }
 
+    activate() {
+        console.log(`[ClearTool] Activating clear mode for block: ${this.blockId}`);
+        // No specific activation needed - just show the toolbar
+    }
+
+    deactivate() {
+        console.log(`[ClearTool] Deactivating clear mode for block: ${this.blockId}`);
+        // No specific deactivation needed
+    }
+
     clearCurrentPageAnnotations() {
         const currentPage = this.viewer.pdfViewer ? this.viewer.pdfViewer.currentPageNumber : 1;
 
-        if (confirm(`Are you sure you want to clear all annotations on page ${currentPage}?`)) {
+        this.showConfirmModal('current_page', currentPage, () => {
             console.log(`[ClearTool] TOOL_ACTION: Clearing annotations for page ${currentPage}`);
 
             // Clear visual annotations for current page
@@ -74,19 +75,15 @@ class ClearTool {
                 _clearPage: currentPage
             };
 
-            if (this.annotationInterface) {
-                this.sendClearRequest(clearData);
-            } else {
-                console.warn(`[ClearTool] No annotation interface available - page clear will not be saved!`);
-            }
+            this.sendClearRequest(clearData, 'current_page');
 
             // Close the toolbar after action
             this.closeClearToolbar();
-        }
+        });
     }
 
     clearAllAnnotations() {
-        if (confirm('Are you sure you want to clear all annotations in the entire PDF?')) {
+        this.showConfirmModal('entire_pdf', null, () => {
             console.log(`[ClearTool] TOOL_ACTION: Clearing all annotations in PDF`);
 
             // Clear all visual annotations
@@ -99,21 +96,211 @@ class ClearTool {
                 _clearAll: true
             };
 
-            if (this.annotationInterface) {
-                this.sendClearRequest(clearData);
-            } else {
-                console.warn(`[ClearTool] No annotation interface available - clear all will not be saved!`);
-            }
+            this.sendClearRequest(clearData, 'entire_pdf');
 
             // Close the toolbar after action
             this.closeClearToolbar();
+        });
+    }
+
+    showConfirmModal(action, pageNum, onConfirm) {
+        const titles = {
+            'current_page': 'Clear Current Page',
+            'entire_pdf': 'Clear Entire PDF'
+        };
+
+        const messages = {
+            'current_page': `Do you really want to delete all annotations on page ${pageNum}? This process cannot be undone.`,
+            'entire_pdf': 'Do you really want to delete all annotations in the entire PDF? This process cannot be undone.'
+        };
+
+        this.createModal(titles[action], messages[action], onConfirm);
+    }
+
+    createModal(title, message, onConfirm) {
+        // Remove any existing modal
+        this.removeModal();
+
+        // Create modal overlay
+        const overlay = document.createElement('div');
+        overlay.className = 'pdfx-clear-modal-overlay';
+        overlay.id = `clearModalOverlay-${this.blockId}`;
+
+        // Create modal
+        const modal = document.createElement('div');
+        modal.className = 'pdfx-clear-modal';
+
+        modal.innerHTML = `
+            <button class="pdfx-clear-modal-close" id="clearModalClose-${this.blockId}">×</button>
+            <div class="pdfx-clear-modal-header">
+                <div class="pdfx-clear-modal-icon"></div>
+            </div>
+            <div class="pdfx-clear-modal-title">${title}</div>
+            <div class="pdfx-clear-modal-message">${message}</div>
+            <div class="pdfx-clear-modal-buttons">
+                <button class="pdfx-clear-modal-button pdfx-clear-modal-cancel" id="clearModalCancel-${this.blockId}">Cancel</button>
+                <button class="pdfx-clear-modal-button pdfx-clear-modal-confirm" id="clearModalConfirm-${this.blockId}">Delete</button>
+            </div>
+        `;
+
+        overlay.appendChild(modal);
+
+        // Append to the content area instead of document.body
+        const contentArea = document.getElementById(`contentArea-${this.blockId}`);
+        if (contentArea) {
+            contentArea.appendChild(overlay);
+        } else {
+            // Fallback to document.body if contentArea not found
+            document.body.appendChild(overlay);
         }
+
+        // Add event listeners
+        const closeBtn = document.getElementById(`clearModalClose-${this.blockId}`);
+        const cancelBtn = document.getElementById(`clearModalCancel-${this.blockId}`);
+        const confirmBtn = document.getElementById(`clearModalConfirm-${this.blockId}`);
+
+        const closeModal = () => this.removeModal();
+
+        closeBtn.addEventListener('click', closeModal);
+        cancelBtn.addEventListener('click', closeModal);
+        overlay.addEventListener('click', (e) => {
+            if (e.target === overlay) closeModal();
+        });
+
+        confirmBtn.addEventListener('click', () => {
+            // Don't close modal, transition to loading state
+            this.transitionModalToLoading(modal);
+            onConfirm();
+        });
+
+        // Handle ESC key
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                closeModal();
+                document.removeEventListener('keydown', handleEsc);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+
+        // Focus on confirm button
+        setTimeout(() => confirmBtn.focus(), 100);
+    }
+
+    removeModal() {
+        const modal = document.getElementById(`clearModalOverlay-${this.blockId}`);
+        if (modal) {
+            modal.remove();
+        }
+    }
+
+    transitionModalToLoading(modalElement) {
+        // Update modal content to show loading state
+        modalElement.innerHTML = `
+            <div class="pdfx-clear-modal-header">
+                <div class="pdfx-loading-spinner"></div>
+            </div>
+            <div class="pdfx-clear-modal-title">Processing...</div>
+            <div class="pdfx-clear-modal-message">Please wait while we clear the annotations.</div>
+        `;
+    }
+
+    transitionModalToSuccess(modalElement, message) {
+        // Update modal content to show success state
+        modalElement.innerHTML = `
+            <div class="pdfx-clear-modal-header">
+                <div class="pdfx-clear-modal-success-icon"></div>
+            </div>
+            <div class="pdfx-clear-modal-title">Success!</div>
+            <div class="pdfx-clear-modal-message">${message}</div>
+        `;
+
+        // Auto-close after 2 seconds
+        setTimeout(() => {
+            this.removeModal();
+        }, 2000);
+    }
+
+    transitionModalToError(modalElement, error) {
+        // Update modal content to show error state
+        modalElement.innerHTML = `
+            <button class="pdfx-clear-modal-close" onclick="document.getElementById('clearModalOverlay-${this.blockId}').remove()">×</button>
+            <div class="pdfx-clear-modal-header">
+                <div class="pdfx-clear-modal-error-icon"></div>
+            </div>
+            <div class="pdfx-clear-modal-title">Error</div>
+            <div class="pdfx-clear-modal-message">Failed to clear annotations: ${error.message || 'Unknown error'}</div>
+            <div class="pdfx-clear-modal-buttons">
+                <button class="pdfx-clear-modal-button pdfx-clear-modal-cancel" onclick="document.getElementById('clearModalOverlay-${this.blockId}').remove()">Close</button>
+            </div>
+        `;
+    }
+
+    showLoadingState() {
+        // Remove any existing loading overlay
+        this.hideLoadingState();
+
+        // Create loading overlay
+        const loadingOverlay = document.createElement('div');
+        loadingOverlay.className = 'pdfx-loading-overlay';
+        loadingOverlay.id = `clearLoadingOverlay-${this.blockId}`;
+
+        loadingOverlay.innerHTML = `
+            <div class="pdfx-loading-spinner"></div>
+        `;
+
+        // Append to the content area instead of document.body
+        const contentArea = document.getElementById(`contentArea-${this.blockId}`);
+        if (contentArea) {
+            contentArea.appendChild(loadingOverlay);
+        } else {
+            // Fallback to document.body if contentArea not found
+            document.body.appendChild(loadingOverlay);
+        }
+    }
+
+    hideLoadingState() {
+        const loadingOverlay = document.getElementById(`clearLoadingOverlay-${this.blockId}`);
+        if (loadingOverlay) {
+            loadingOverlay.remove();
+        }
+    }
+
+    showSuccessMessage(message) {
+        // Hide loading state
+        this.hideLoadingState();
+
+        // Create success notification
+        const notification = document.createElement('div');
+        notification.className = 'pdfx-success-notification';
+        notification.id = `clearSuccessNotification-${this.blockId}`;
+        notification.textContent = message;
+
+        // Append to the content area instead of document.body
+        const contentArea = document.getElementById(`contentArea-${this.blockId}`);
+        if (contentArea) {
+            contentArea.appendChild(notification);
+        } else {
+            // Fallback to document.body if contentArea not found
+            document.body.appendChild(notification);
+        }
+
+        // Auto-hide after 3 seconds
+        setTimeout(() => {
+            if (notification.parentNode) {
+                notification.remove();
+            }
+        }, 3000);
     }
 
     clearPageVisualAnnotations(pageNum) {
         // Clear highlights for the page
-        const highlights = document.querySelectorAll(`#viewerContainer-${this.blockId} .highlight-group[data-page="${pageNum}"]`);
-        highlights.forEach(highlight => highlight.remove());
+        const highlights = document.querySelectorAll(`#viewerContainer-${this.blockId} .highlight-group`);
+        highlights.forEach(highlight => {
+            const pageContainer = highlight.closest('.page');
+            if (pageContainer && this.getPageNumberFromContainer(pageContainer) === pageNum) {
+                highlight.remove();
+            }
+        });
 
         // Clear drawing canvases for the page
         const drawingCanvases = document.querySelectorAll(`#pdfx-block-${this.blockId} .drawing-canvas`);
@@ -133,14 +320,19 @@ class ClearTool {
             }
         });
 
-        // Clear stamps for the page
-        const stamps = document.querySelectorAll(`#pdfx-block-${this.blockId} .stamp-annotation`);
-        stamps.forEach(stamp => {
-            const pageContainer = stamp.closest('.page');
-            if (pageContainer && this.getPageNumberFromContainer(pageContainer) === pageNum) {
-                stamp.remove();
-            }
-        });
+        // Clear stamps for the page using StampTool integration
+        if (this.viewer.stampTool) {
+            this.viewer.stampTool.clearPageStamps(pageNum);
+        } else {
+            // Fallback: clear stamps manually
+            const stamps = document.querySelectorAll(`#pdfx-block-${this.blockId} .stamp-annotation`);
+            stamps.forEach(stamp => {
+                const pageContainer = stamp.closest('.page');
+                if (pageContainer && this.getPageNumberFromContainer(pageContainer) === pageNum) {
+                    stamp.remove();
+                }
+            });
+        }
 
         console.log(`[ClearTool] Cleared visual annotations for page ${pageNum}`);
     }
@@ -161,14 +353,19 @@ class ClearTool {
         const textAnnotations = document.querySelectorAll(`#pdfx-block-${this.blockId} .text-annotation-final, #pdfx-block-${this.blockId} .text-annotation-box`);
         textAnnotations.forEach(textAnnotation => textAnnotation.remove());
 
-        // Clear all stamps
-        const stamps = document.querySelectorAll(`#pdfx-block-${this.blockId} .stamp-annotation`);
-        stamps.forEach(stamp => stamp.remove());
+        // Clear all stamps using StampTool integration
+        if (this.viewer.stampTool) {
+            this.viewer.stampTool.clearAllStamps();
+        } else {
+            // Fallback: clear stamps manually
+            const stamps = document.querySelectorAll(`#pdfx-block-${this.blockId} .stamp-annotation`);
+            stamps.forEach(stamp => stamp.remove());
+        }
 
         console.log(`[ClearTool] Cleared all visual annotations`);
     }
 
-    sendClearRequest(clearData) {
+    sendClearRequest(clearData, actionType) {
         // Use the existing annotation storage system to send clear request
         if (this.viewer.annotationStorage) {
             // Create a special clear annotation
@@ -180,10 +377,77 @@ class ClearTool {
                 timestamp: Date.now()
             };
 
+            // Listen for the save completion
+            const handleSaveCompletion = (savedData) => {
+                // Check if our clear annotation was processed
+                if (savedData && savedData.clear_action) {
+                    this.handleClearSuccess(actionType, clearData);
+                    // Remove the listener
+                    this.viewer.annotationStorage.removeListener('annotationsSaved', handleSaveCompletion);
+                }
+            };
+
+            // Listen for save errors
+            const handleSaveError = (error) => {
+                this.handleClearError(actionType, error);
+                this.viewer.annotationStorage.removeListener('saveError', handleSaveError);
+            };
+
+            // Add listeners
+            this.viewer.annotationStorage.on('annotationsSaved', handleSaveCompletion);
+            this.viewer.annotationStorage.on('saveError', handleSaveError);
+
+            // Send the annotation
             this.viewer.annotationStorage.saveAnnotation(clearAnnotation);
+
+            // Fallback timeout in case events don't fire
+            setTimeout(() => {
+                if (document.getElementById(`clearLoadingOverlay-${this.blockId}`)) {
+                    this.handleClearSuccess(actionType, clearData);
+                    this.viewer.annotationStorage.removeListener('annotationsSaved', handleSaveCompletion);
+                    this.viewer.annotationStorage.removeListener('saveError', handleSaveError);
+                }
+            }, 5000);
         } else {
             console.warn(`[ClearTool] No annotation storage available for clear request`);
+            this.hideLoadingState();
         }
+    }
+
+    handleClearSuccess(actionType, clearData) {
+        let message;
+        if (actionType === 'current_page') {
+            message = `Page ${clearData.pageNum} annotations cleared successfully`;
+        } else {
+            message = 'All annotations cleared successfully';
+        }
+
+        // Find the modal and transition to success
+        const modalOverlay = document.getElementById(`clearModalOverlay-${this.blockId}`);
+        if (modalOverlay) {
+            const modal = modalOverlay.querySelector('.pdfx-clear-modal');
+            if (modal) {
+                this.transitionModalToSuccess(modal, message);
+            }
+        } else {
+            // Fallback to separate success message if modal not found
+            this.showSuccessMessage(message);
+        }
+
+        console.log(`[ClearTool] Clear request completed successfully: ${actionType}`);
+    }
+
+    handleClearError(actionType, error) {
+        // Find the modal and show error state
+        const modalOverlay = document.getElementById(`clearModalOverlay-${this.blockId}`);
+        if (modalOverlay) {
+            const modal = modalOverlay.querySelector('.pdfx-clear-modal');
+            if (modal) {
+                this.transitionModalToError(modal, error);
+            }
+        }
+
+        console.error(`[ClearTool] Clear request failed:`, error);
     }
 
     getPageNumberFromCanvas(canvas) {
@@ -215,7 +479,16 @@ class ClearTool {
     }
 
     cleanup() {
-        // Clean up event listeners if needed
+        // Clean up modals and overlays
+        this.removeModal();
+        this.hideLoadingState();
+
+        // Remove any success notifications
+        const notification = document.getElementById(`clearSuccessNotification-${this.blockId}`);
+        if (notification) {
+            notification.remove();
+        }
+
         console.log(`[ClearTool] Cleanup completed`);
     }
 }

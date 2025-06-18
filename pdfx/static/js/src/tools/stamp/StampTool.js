@@ -1,17 +1,12 @@
 /**
  * StampTool - Image stamp functionality for PDF.js integration
  * Integrates with pdfx-init.js PdfxViewer class
- * Based on Mozilla's PDF.js StampEditor implementation
  */
-
-import { BaseTool } from '../base/BaseTool.js';
-
-export class StampTool extends BaseTool {
-    constructor(options = {}) {
-        super({
-            name: 'stamp',
-            ...options
-        });
+class StampTool {
+    constructor(viewer, annotationInterface = null) {
+        this.viewer = viewer;
+        this.blockId = viewer.blockId;
+        this.annotationInterface = annotationInterface;
 
         // Stamp configuration
         this.supportedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -20,94 +15,131 @@ export class StampTool extends BaseTool {
         this.activeStamps = new Map();
         this.stampCounter = 0;
 
-        // State
-        this.isInStampMode = false;
-        this.currentImageData = null;
-
         // Event handlers storage for cleanup
-        this.pageHandlers = new Map();
-        this.escapeHandler = null;
+        this.eventHandlers = new Map();
 
-        // Parameter toolbar controls
-        this.parameterControls = null;
+        // Global event handlers (stored separately for proper cleanup)
+        this.globalMouseMoveHandler = null;
+        this.globalMouseUpHandler = null;
+
+        // Drag and resize state
+        this.dragState = {
+            isDragging: false,
+            isResizing: false,
+            startX: 0,
+            startY: 0,
+            startLeft: 0,
+            startTop: 0,
+            startWidth: 0,
+            startHeight: 0,
+            resizeHandle: null,
+            hasMoved: false, // Track if mouse has moved to distinguish click from drag
+            currentStamp: null // Track which stamp is being manipulated
+        };
+
+        // Popup menu state
+        this.activePopup = null;
+        this.activeConfirmationModal = null;
+        this.clickStartTime = 0;
+        this.clickThreshold = 300; // ms to distinguish click from drag start
+
+        // Initialize
+        this.init();
     }
 
-    /**
-     * Initialize the stamp tool
-     */
-    async init() {
-        try {
-            console.log(`[StampTool] Initializing for block: ${this.blockId}`);
+    init() {
+        console.log(`[StampTool] Initializing for block: ${this.blockId}`);
 
-            // Setup parameter toolbar controls
-            this._setupParameterControls();
+        // Verify annotation interface is available
+        if (this.annotationInterface) {
+            console.log(`[StampTool] Annotation interface available for saving/deleting stamps`);
+        } else {
+            console.warn(`[StampTool] No annotation interface available - stamps will not be saved!`);
+        }
 
-            this.isEnabled = true;
-            console.log(`[StampTool] Initialized successfully`);
+        this.setupToolButton();
+        this.setupImageUploadButton();
+        this.setupGlobalClickHandler();
+        this.setupGlobalEventHandlers();
+    }
 
-        } catch (error) {
-            console.error(`[StampTool] Error during initialization:`, error);
-            throw error;
+    setupToolButton() {
+        const stampBtn = document.getElementById(`stampTool-${this.blockId}`);
+        const stampToolbar = document.getElementById(`editorStampParamsToolbar-${this.blockId}`);
+
+        if (stampBtn) {
+            stampBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                this.viewer.setActiveTool('stamp');
+                this.viewer.toggleParameterToolbar(stampBtn, stampToolbar);
+            });
         }
     }
 
-    /**
-     * Setup parameter toolbar controls
-     */
-    _setupParameterControls() {
-        this.parameterControls = {
-            addImageButton: document.getElementById(`editorStampAddImage-${this.blockId}`)
-        };
+    setupImageUploadButton() {
+        const uploadBtn = document.getElementById(`editorStampAddImage-${this.blockId}`);
 
-        // Setup add image button
-        if (this.parameterControls.addImageButton) {
-            this.parameterControls.addImageButton.addEventListener('click', (e) => {
+        if (uploadBtn) {
+            uploadBtn.addEventListener('click', (e) => {
                 e.stopPropagation();
                 this.openImagePicker();
             });
         }
     }
 
-    /**
-     * Enable the tool
-     */
-    enable() {
-        this.isEnabled = true;
-        console.log(`[StampTool] Tool enabled`);
+    setupGlobalClickHandler() {
+        // Global click handler to close popup when clicking outside
+        document.addEventListener('click', (e) => {
+            if (this.activePopup && !e.target.closest('.stamp-popup-menu') && !e.target.closest('.stamp-annotation')) {
+                this.hidePopupMenu();
+            }
+        });
     }
 
-    /**
-     * Disable the tool
-     */
-    disable() {
-        if (this.isActive) {
-            this.deactivate();
-        }
-        this.isEnabled = false;
-        console.log(`[StampTool] Tool disabled`);
+    setupGlobalEventHandlers() {
+        // Set up global mouse handlers for drag and resize
+        this.globalMouseMoveHandler = (e) => {
+            if (this.dragState.isDragging || this.dragState.isResizing) {
+                // Mark that mouse has moved for click detection
+                if (!this.dragState.hasMoved) {
+                    const deltaX = Math.abs(e.clientX - this.dragState.startX);
+                    const deltaY = Math.abs(e.clientY - this.dragState.startY);
+                    if (deltaX > 3 || deltaY > 3) { // 3px threshold
+                        this.dragState.hasMoved = true;
+                        this.hidePopupMenu(); // Hide popup if drag starts
+                    }
+                }
+
+                if (this.dragState.isDragging && this.dragState.currentStamp) {
+                    this.handleDrag(e, this.dragState.currentStamp.container);
+                } else if (this.dragState.isResizing && this.dragState.currentStamp) {
+                    const imgElement = this.dragState.currentStamp.container.querySelector('img');
+                    this.handleResize(e, this.dragState.currentStamp.container, imgElement, this.dragState.currentStamp.imageData);
+                }
+            }
+        };
+
+        this.globalMouseUpHandler = () => {
+            if (this.dragState.isDragging || this.dragState.isResizing) {
+                if (this.dragState.currentStamp) {
+                    this.endDragOrResize(this.dragState.currentStamp.container, this.dragState.currentStamp.imageData);
+                }
+            }
+        };
+
+        document.addEventListener('mousemove', this.globalMouseMoveHandler);
+        document.addEventListener('mouseup', this.globalMouseUpHandler);
     }
 
-    /**
-     * Activate the tool
-     */
     activate() {
-        if (!this.isEnabled) {
-            return false;
-        }
-
-        console.log(`[StampTool] Activating stamp tool`);
-        this.isActive = true;
+        console.log(`[StampTool] Activating stamp mode for block: ${this.blockId}`);
         this.enableStampMode();
-        return true;
     }
 
-    /**
-     * Deactivate the tool
-     */
     deactivate() {
-        console.log(`[StampTool] Deactivating stamp tool`);
-        this.isActive = false;
+        console.log(`[StampTool] Deactivating stamp mode for block: ${this.blockId}`);
         this.disableStampMode();
+        this.hidePopupMenu();
     }
 
     enableStampMode() {
@@ -116,9 +148,6 @@ export class StampTool extends BaseTool {
         if (viewer) {
             viewer.classList.add('stamp-mode');
         }
-
-        this.isInStampMode = true;
-        console.log(`[StampTool] Stamp mode enabled`);
     }
 
     disableStampMode() {
@@ -127,12 +156,66 @@ export class StampTool extends BaseTool {
         if (viewer) {
             viewer.classList.remove('stamp-mode');
         }
+    }
 
-        // Clean up any active stamp placement
-        this.cleanupStampPlacement();
+    /**
+     * Recreate proper stamp containers for saved stamps (called from pdfx-init.js)
+     */
+    recreateSavedStamps() {
+        console.log(`[StampTool] Recreating saved stamps for proper interaction`);
 
-        this.isInStampMode = false;
-        console.log(`[StampTool] Stamp mode disabled`);
+        // Find all existing stamp images that were rendered as simple img elements
+        const existingImages = document.querySelectorAll(`#pdfx-block-${this.blockId} img[src*="data:image"]`);
+
+        existingImages.forEach((img, index) => {
+            // Skip if already processed (has stamp-annotation parent)
+            if (img.closest('.stamp-annotation')) {
+                return;
+            }
+
+            const pageContainer = img.closest('.page');
+            if (!pageContainer) return;
+
+            // Get page number
+            let pageIndex = 0;
+            const pageNum = pageContainer.getAttribute('data-page-number');
+            if (pageNum) {
+                pageIndex = parseInt(pageNum) - 1; // Convert to 0-based
+            }
+
+            // Extract position and size from existing img
+            const x = parseInt(img.style.left) || 0;
+            const y = parseInt(img.style.top) || 0;
+            const width = parseInt(img.style.width) || 100;
+            const height = parseInt(img.style.height) || 100;
+
+            // Try to extract original annotation ID from data attributes if available
+            let originalAnnotationId = img.getAttribute('data-annotation-id');
+            console.log(`[StampTool] Recreating stamp - found annotation ID: ${originalAnnotationId} for image at (${x}, ${y})`);
+
+            if (!originalAnnotationId) {
+                // Generate a stable ID based on image properties for saved stamps
+                originalAnnotationId = `saved_stamp_${pageIndex}_${x}_${y}_${Date.now()}`;
+                console.log(`[StampTool] No annotation ID found, generated: ${originalAnnotationId}`);
+            }
+
+            // Create imageData object for compatibility
+            const imageData = {
+                id: `saved-stamp-${this.blockId}-${++this.stampCounter}`,
+                dataUrl: img.src,
+                width: width,
+                height: height,
+                aspectRatio: width / height,
+                file: { name: 'saved_stamp.png' }, // Placeholder
+                originalAnnotationId: originalAnnotationId // Preserve original ID
+            };
+
+            // Remove the old img element
+            img.remove();
+
+            // Create proper stamp container with interaction handlers
+            this.createStampElement(pageContainer, pageIndex, x, y, imageData, true);
+        });
     }
 
     openImagePicker() {
@@ -156,7 +239,6 @@ export class StampTool extends BaseTool {
 
         // Handle cancel (when user closes dialog without selecting)
         input.addEventListener('cancel', () => {
-            console.log(`[StampTool] Image picker cancelled`);
             document.body.removeChild(input);
         });
 
@@ -170,7 +252,6 @@ export class StampTool extends BaseTool {
 
         // Validate file type
         if (!this.supportedImageTypes.includes(file.type)) {
-            console.error(`[StampTool] Unsupported file type: ${file.type}`);
             this.showError(`Unsupported file type. Please select a valid image file.`);
             return;
         }
@@ -178,7 +259,6 @@ export class StampTool extends BaseTool {
         // Validate file size (limit to 10MB)
         const maxSize = 10 * 1024 * 1024; // 10MB
         if (file.size > maxSize) {
-            console.error(`[StampTool] File too large: ${file.size} bytes`);
             this.showError(`File too large. Please select an image smaller than 10MB.`);
             return;
         }
@@ -230,10 +310,10 @@ export class StampTool extends BaseTool {
                         canvas: canvas,
                         width: width,
                         height: height,
-                        dataUrl: canvas.toDataURL('image/png')
+                        dataUrl: canvas.toDataURL('image/png'),
+                        aspectRatio: width / height
                     };
 
-                    console.log(`[StampTool] Created image data:`, imageData.id, `${width}x${height}`);
                     resolve(imageData);
                 };
 
@@ -282,16 +362,14 @@ export class StampTool extends BaseTool {
 
             // Store listener for cleanup
             const handlerKey = `stamp-page-${pageIndex}`;
-            this.pageHandlers.set(handlerKey, {
+            this.eventHandlers.set(handlerKey, {
                 element: page,
                 listener: onPageClick
             });
         });
-
-        console.log(`[StampTool] Set up click listeners on ${pages.length} pages for stamp placement`);
     }
 
-    async handleStampPlacement(event, page, pageIndex, imageData) {
+    handleStampPlacement(event, page, pageIndex, imageData) {
         console.log(`[StampTool] Placing stamp on page ${pageIndex} at position:`, event.offsetX, event.offsetY);
 
         // Get click position relative to page
@@ -300,38 +378,19 @@ export class StampTool extends BaseTool {
         const y = event.clientY - pageRect.top;
 
         // Create stamp element
-        await this.createStampElement(page, pageIndex, x, y, imageData);
+        this.createStampElement(page, pageIndex, x, y, imageData);
 
         // Clean up placement mode
         this.cleanupStampPlacement();
     }
 
-    async createStampElement(page, pageIndex, x, y, imageData) {
-        console.log(`[StampTool] Creating stamp element at (${x}, ${y}) on page ${pageIndex + 1}`);
-
-        // Create annotation data
-        const annotationData = {
-            imageUrl: imageData.dataUrl,
-            fileName: imageData.file.name,
-            x: x,
-            y: y,
-            width: imageData.width,
-            height: imageData.height,
-            originalWidth: imageData.width,
-            originalHeight: imageData.height
-        };
-
-        // Set current page for annotation
-        this.currentPage = pageIndex + 1;
-
-        // Create annotation through BaseTool
-        const annotation = this.createAnnotation(annotationData);
+    createStampElement(page, pageIndex, x, y, imageData, isSaved = false) {
+        console.log(`[StampTool] Creating stamp element at (${x}, ${y}) on page ${pageIndex}`);
 
         // Create stamp container
         const stampContainer = document.createElement('div');
         stampContainer.className = 'stamp-annotation';
         stampContainer.id = imageData.id;
-        stampContainer.dataset.annotationId = annotation.id;
         stampContainer.style.position = 'absolute';
         stampContainer.style.left = `${x}px`;
         stampContainer.style.top = `${y}px`;
@@ -339,6 +398,7 @@ export class StampTool extends BaseTool {
         stampContainer.style.cursor = 'move';
         stampContainer.style.border = '2px solid transparent';
         stampContainer.style.borderRadius = '4px';
+        stampContainer.style.userSelect = 'none';
 
         // Create image element
         const imgElement = document.createElement('img');
@@ -350,11 +410,11 @@ export class StampTool extends BaseTool {
         imgElement.style.pointerEvents = 'none';
         imgElement.draggable = false;
 
-        // Add resize handles
-        this.addResizeHandles(stampContainer);
+        // Create resize handles
+        this.createResizeHandles(stampContainer);
 
         // Add interaction handlers
-        this.addStampInteractionHandlers(stampContainer, annotation);
+        this.addStampInteractionHandlers(stampContainer, imageData, pageIndex);
 
         // Append image to container
         stampContainer.appendChild(imgElement);
@@ -367,34 +427,39 @@ export class StampTool extends BaseTool {
         // Append to page
         page.appendChild(stampContainer);
 
-        // Store stamp data with annotation reference
-        this.activeStamps.set(imageData.id, {
-            container: stampContainer,
-            imageData: imageData,
-            annotation: annotation,
-            pageIndex: pageIndex,
-            x: x,
-            y: y
-        });
-
-        // Store element reference in annotation
-        annotation.element = stampContainer;
-
-        console.log(`[StampTool] Created stamp element and annotation:`, annotation.id);
-
-        // Save to storage if available
-        // Save annotation through annotation interface
-        if (this.annotationInterface) {
-            await this.annotationInterface.saveAnnotation(annotation);
-        } else if (this.storageManager) {
-            await this.storageManager.saveAnnotation(annotation);
+        // Create annotation ID for this stamp
+        let annotationId;
+        if (isSaved && imageData.originalAnnotationId) {
+            // Use the original annotation ID for saved stamps to maintain consistency
+            annotationId = imageData.originalAnnotationId;
+        } else if (isSaved) {
+            // Fallback for saved stamps without original ID
+            annotationId = `saved_stamp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        } else {
+            // New stamps get new IDs
+            annotationId = `stamp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         }
 
-        return annotation;
+        // Store stamp data
+        const stampData = {
+            container: stampContainer,
+            imageData: imageData,
+            pageIndex: pageIndex,
+            x: x,
+            y: y,
+            width: imageData.width,
+            height: imageData.height,
+            annotationId: annotationId
+        };
+        this.activeStamps.set(imageData.id, stampData);
+
+        // Save initial annotation for new stamps (not for saved/recreated ones)
+        if (!isSaved) {
+            this.saveStampAnnotation(stampData);
+        }
     }
 
-    addResizeHandles(container) {
-        // Add resize handles at corners
+    createResizeHandles(container) {
         const handles = ['nw', 'ne', 'sw', 'se'];
 
         handles.forEach(position => {
@@ -407,9 +472,11 @@ export class StampTool extends BaseTool {
             handle.style.border = '1px solid white';
             handle.style.borderRadius = '50%';
             handle.style.cursor = `${position}-resize`;
-            handle.style.display = 'none'; // Hidden by default
+            handle.style.opacity = '0';
+            handle.style.transition = 'opacity 0.2s';
+            handle.style.zIndex = '1';
 
-            // Position the handle
+            // Position handles
             switch(position) {
                 case 'nw':
                     handle.style.top = '-4px';
@@ -429,94 +496,645 @@ export class StampTool extends BaseTool {
                     break;
             }
 
+            handle.dataset.resizeDirection = position;
             container.appendChild(handle);
         });
     }
 
-    addStampInteractionHandlers(container, annotation) {
-        let isDragging = false;
-        let isResizing = false;
-        let startX, startY, startLeft, startTop;
+    addStampInteractionHandlers(container, imageData, pageIndex) {
+        const imgElement = container.querySelector('img');
+        const handles = container.querySelectorAll('.resize-handle');
 
-        // Mouse enter/leave for showing handles
+        // Show/hide handles on hover
         container.addEventListener('mouseenter', () => {
             container.style.border = '2px solid #007acc';
-            container.querySelectorAll('.resize-handle').forEach(handle => {
-                handle.style.display = 'block';
-            });
+            handles.forEach(handle => handle.style.opacity = '1');
         });
 
         container.addEventListener('mouseleave', () => {
-            if (!isDragging && !isResizing) {
+            if (!this.dragState.isDragging && !this.dragState.isResizing) {
                 container.style.border = '2px solid transparent';
-                container.querySelectorAll('.resize-handle').forEach(handle => {
-                    handle.style.display = 'none';
-                });
+                handles.forEach(handle => handle.style.opacity = '0');
             }
         });
 
-        // Drag functionality
+        // Mouse down handler for drag, resize, and click detection
         container.addEventListener('mousedown', (e) => {
+            this.clickStartTime = Date.now();
+            this.dragState.hasMoved = false;
+
+            console.log(`[StampTool] Mouse down on stamp:`, imageData.id, `at time:`, this.clickStartTime);
+
+            // Find the stamp data
+            const stampData = this.activeStamps.get(imageData.id);
+            this.dragState.currentStamp = stampData;
+
             if (e.target.classList.contains('resize-handle')) {
-                isResizing = true;
-                // TODO: Implement resize functionality
+                console.log(`[StampTool] Starting resize on handle:`, e.target.dataset.resizeDirection);
+                this.startResize(e, container, imageData);
+            } else {
+                console.log(`[StampTool] Starting drag on stamp`);
+                this.startDrag(e, container, imageData);
+            }
+        });
+
+        // Single click handler for popup menu with improved logic
+        container.addEventListener('click', (e) => {
+            console.log(`[StampTool] Click event fired for stamp:`, imageData.id);
+
+            // Don't show popup if clicking on resize handle
+            if (e.target.classList.contains('resize-handle')) {
+                console.log(`[StampTool] Clicked on resize handle, not showing popup`);
                 return;
             }
 
-            isDragging = true;
-            startX = e.clientX;
-            startY = e.clientY;
-            startLeft = parseInt(container.style.left);
-            startTop = parseInt(container.style.top);
+            const clickDuration = Date.now() - this.clickStartTime;
+            console.log(`[StampTool] Click duration: ${clickDuration}ms, Has moved: ${this.dragState.hasMoved}`);
 
-            e.preventDefault();
-        });
-
-        document.addEventListener('mousemove', (e) => {
-            if (!isDragging) return;
-
-            const deltaX = e.clientX - startX;
-            const deltaY = e.clientY - startY;
-
-            container.style.left = `${startLeft + deltaX}px`;
-            container.style.top = `${startTop + deltaY}px`;
-        });
-
-        document.addEventListener('mouseup', () => {
-            if (isDragging) {
-                isDragging = false;
-                // Update annotation position
-                if (annotation) {
-                    annotation.data.x = parseInt(container.style.left);
-                    annotation.data.y = parseInt(container.style.top);
-
-                    // Save to storage if available
-                    if (this.annotationInterface) {
-                        this.annotationInterface.saveAnnotation(annotation);
-                    } else if (this.storageManager) {
-                        this.storageManager.saveAnnotation(annotation);
-                    }
-                }
-            }
-            isResizing = false;
-        });
-
-        // Double-click to delete
-        container.addEventListener('dblclick', (e) => {
-            e.stopPropagation();
-            if (confirm('Delete this stamp?')) {
-                this.deleteAnnotation(annotation.id);
+            // Show popup for quick clicks without significant movement
+            // Increased threshold to 300ms for better user experience
+            if (!this.dragState.hasMoved && clickDuration < 300) {
+                console.log(`[StampTool] Showing popup menu for stamp:`, imageData.id);
+                e.stopPropagation();
+                e.preventDefault();
+                this.showPopupMenu(container, imageData);
+            } else {
+                console.log(`[StampTool] Not showing popup - moved: ${this.dragState.hasMoved}, duration: ${clickDuration}ms`);
             }
         });
     }
 
-    deleteStamp(stampId) {
-        const stampData = this.activeStamps.get(stampId);
-        if (stampData) {
-            stampData.container.remove();
-            this.activeStamps.delete(stampId);
-            console.log(`[StampTool] Deleted stamp:`, stampId);
+        showPopupMenu(container, imageData) {
+        console.log(`[StampTool] showPopupMenu called for stamp:`, imageData.id);
+
+        // Hide any existing popup
+        this.hidePopupMenu();
+
+        // Create popup menu with professional styling
+        const popup = document.createElement('div');
+        popup.className = `stamp-popup-menu stamp-popup-${this.blockId}`;
+
+        // Professional popup styling
+        popup.style.cssText = `
+            position: fixed;
+            background: white;
+            border: 1px solid #ddd;
+            border-radius: 6px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 4px;
+            z-index: 10000;
+            display: block;
+            visibility: visible;
+            opacity: 1;
+            min-width: 36px;
+            min-height: 36px;
+        `;
+
+        popup.innerHTML = `
+            <button class="stamp-popup-delete" title="Delete Image" style="
+                background: #dc3545;
+                color: white;
+                border: none;
+                border-radius: 4px;
+                padding: 8px;
+                cursor: pointer;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                font-size: 12px;
+                line-height: 1;
+                width: 28px;
+                height: 28px;
+                transition: background-color 0.2s;
+            " onmouseover="this.style.backgroundColor='#c82333'" onmouseout="this.style.backgroundColor='#dc3545'">
+                <svg width="14" height="14" viewBox="0 0 16 16" fill="currentColor">
+                    <path d="M5.5 5.5A.5.5 0 0 1 6 6v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm2.5 0a.5.5 0 0 1 .5.5v6a.5.5 0 0 1-1 0V6a.5.5 0 0 1 .5-.5zm3 .5a.5.5 0 0 0-1 0v6a.5.5 0 0 0 1 0V6z"/>
+                    <path fill-rule="evenodd" d="M14.5 3a1 1 0 0 1-1 1H13v9a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V4h-.5a1 1 0 0 1-1-1V2a1 1 0 0 1 1-1H6a1 1 0 0 1 1-1h2a1 1 0 0 1 1 1h3.5a1 1 0 0 1 1 1v1zM4.118 4 4 4.059V13a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1V4.059L11.882 4H4.118zM2.5 3V2h11v1h-11z"/>
+                </svg>
+            </button>
+        `;
+
+        // Position popup relative to stamp
+        const containerRect = container.getBoundingClientRect();
+
+        // Position popup to the top-right of the stamp
+        const leftPos = containerRect.right + 8;
+        const topPos = containerRect.top - 8;
+
+        // Ensure popup stays within viewport
+        const popupWidth = 44;
+        const popupHeight = 44;
+
+        let finalLeft = leftPos;
+        let finalTop = topPos;
+
+        // Adjust if popup would go off right edge
+        if (leftPos + popupWidth > window.innerWidth) {
+            finalLeft = containerRect.left - popupWidth - 8;
         }
+
+        // Adjust if popup would go off top edge
+        if (topPos < 0) {
+            finalTop = containerRect.bottom + 8;
+        }
+
+        // Adjust if popup would go off bottom edge
+        if (finalTop + popupHeight > window.innerHeight) {
+            finalTop = containerRect.top - popupHeight - 8;
+        }
+
+        popup.style.left = `${finalLeft}px`;
+        popup.style.top = `${finalTop}px`;
+
+        // Add popup to document body
+        document.body.appendChild(popup);
+
+        // Add delete functionality with custom confirmation
+        const deleteBtn = popup.querySelector('.stamp-popup-delete');
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                console.log(`[StampTool] Delete button clicked for stamp:`, imageData.id);
+                e.stopPropagation();
+                this.showConfirmationModal(popup, imageData);
+            });
+        }
+
+        // Store reference
+        this.activePopup = popup;
+        console.log(`[StampTool] Popup menu created and displayed`);
+
+        // Auto-hide after 5 seconds
+        setTimeout(() => {
+            if (this.activePopup === popup) {
+                console.log(`[StampTool] Auto-hiding popup after 5 seconds`);
+                this.hidePopupMenu();
+            }
+        }, 5000);
+    }
+
+    hidePopupMenu() {
+        if (this.activePopup) {
+            console.log(`[StampTool] Hiding popup menu`);
+            this.activePopup.remove();
+            this.activePopup = null;
+        }
+        // Also hide any confirmation modal
+        this.hideConfirmationModal();
+    }
+
+    showConfirmationModal(parentPopup, imageData) {
+        console.log(`[StampTool] Showing confirmation modal for stamp:`, imageData.id);
+
+        // Hide any existing confirmation modal
+        this.hideConfirmationModal();
+
+        // Create confirmation modal
+        const modal = document.createElement('div');
+        modal.className = `stamp-confirmation-modal stamp-confirmation-${this.blockId}`;
+
+        // Position the modal horizontally near the delete button
+        const parentRect = parentPopup.getBoundingClientRect();
+
+        // Modal styling - positioned to the right of the delete popup
+        modal.style.cssText = `
+            position: fixed;
+            background: white;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.2);
+            padding: 12px;
+            z-index: 10001;
+            display: block;
+            visibility: visible;
+            opacity: 1;
+            min-width: 140px;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            font-size: 13px;
+            animation: confirmModalSlideIn 0.2s ease-out;
+        `;
+
+        // Add CSS animation if not already added
+        if (!document.getElementById('stamp-confirmation-styles')) {
+            const style = document.createElement('style');
+            style.id = 'stamp-confirmation-styles';
+            style.textContent = `
+                @keyframes confirmModalSlideIn {
+                    from {
+                        opacity: 0;
+                        transform: translateX(-10px) scale(0.95);
+                    }
+                    to {
+                        opacity: 1;
+                        transform: translateX(0) scale(1);
+                    }
+                }
+                .stamp-confirmation-modal {
+                    transform-origin: left center;
+                }
+            `;
+            document.head.appendChild(style);
+        }
+
+        modal.innerHTML = `
+            <div style="
+                margin-bottom: 10px;
+                color: #333;
+                font-weight: 500;
+                line-height: 1.3;
+            ">Delete this image?</div>
+            <div style="
+                display: flex;
+                gap: 8px;
+                justify-content: flex-end;
+            ">
+                <button class="stamp-confirm-cancel" style="
+                    background: #f8f9fa;
+                    color: #6c757d;
+                    border: 1px solid #dee2e6;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    font-weight: 500;
+                    transition: all 0.15s;
+                " onmouseover="
+                    this.style.backgroundColor='#e9ecef';
+                    this.style.borderColor='#adb5bd';
+                " onmouseout="
+                    this.style.backgroundColor='#f8f9fa';
+                    this.style.borderColor='#dee2e6';
+                ">Cancel</button>
+                <button class="stamp-confirm-delete" style="
+                    background: #dc3545;
+                    color: white;
+                    border: 1px solid #dc3545;
+                    border-radius: 4px;
+                    padding: 6px 12px;
+                    cursor: pointer;
+                    font-size: 12px;
+                    font-weight: 500;
+                    transition: all 0.15s;
+                " onmouseover="
+                    this.style.backgroundColor='#c82333';
+                    this.style.borderColor='#bd2130';
+                " onmouseout="
+                    this.style.backgroundColor='#dc3545';
+                    this.style.borderColor='#dc3545';
+                ">Delete</button>
+            </div>
+        `;
+
+        // Position modal to the right of the popup, or left if no space
+        let modalLeft = parentRect.right + 8;
+        const modalTop = parentRect.top;
+        const modalWidth = 140;
+
+        // If modal would go off right edge, position it to the left
+        if (modalLeft + modalWidth > window.innerWidth) {
+            modalLeft = parentRect.left - modalWidth - 8;
+        }
+
+        // If still off screen, position it below
+        if (modalLeft < 0) {
+            modalLeft = parentRect.left;
+            modal.style.top = `${parentRect.bottom + 8}px`;
+        } else {
+            modal.style.top = `${modalTop}px`;
+        }
+
+        modal.style.left = `${modalLeft}px`;
+
+        // Add modal to document body
+        document.body.appendChild(modal);
+
+        // Add event handlers
+        const cancelBtn = modal.querySelector('.stamp-confirm-cancel');
+        const deleteBtn = modal.querySelector('.stamp-confirm-delete');
+
+        if (cancelBtn) {
+            cancelBtn.addEventListener('click', (e) => {
+                console.log(`[StampTool] Confirmation cancelled`);
+                e.stopPropagation();
+                this.hideConfirmationModal();
+            });
+        }
+
+        if (deleteBtn) {
+            deleteBtn.addEventListener('click', (e) => {
+                console.log(`[StampTool] Deletion confirmed for stamp:`, imageData.id);
+                e.stopPropagation();
+                this.hideConfirmationModal();
+                this.hidePopupMenu();
+                this.deleteStamp(imageData.id);
+            });
+        }
+
+        // Store reference
+        this.activeConfirmationModal = modal;
+        console.log(`[StampTool] Confirmation modal created and displayed`);
+
+        // Auto-hide after 10 seconds
+        setTimeout(() => {
+            if (this.activeConfirmationModal === modal) {
+                console.log(`[StampTool] Auto-hiding confirmation modal after 10 seconds`);
+                this.hideConfirmationModal();
+            }
+        }, 10000);
+    }
+
+    hideConfirmationModal() {
+        if (this.activeConfirmationModal) {
+            console.log(`[StampTool] Hiding confirmation modal`);
+            this.activeConfirmationModal.remove();
+            this.activeConfirmationModal = null;
+        }
+    }
+
+
+
+    startDrag(e, container, imageData) {
+        this.dragState.isDragging = true;
+        this.dragState.startX = e.clientX;
+        this.dragState.startY = e.clientY;
+        this.dragState.startLeft = parseInt(container.style.left);
+        this.dragState.startTop = parseInt(container.style.top);
+        e.preventDefault();
+    }
+
+    startResize(e, container, imageData) {
+        this.dragState.isResizing = true;
+        this.dragState.resizeHandle = e.target.dataset.resizeDirection;
+        this.dragState.startX = e.clientX;
+        this.dragState.startY = e.clientY;
+
+        const imgElement = container.querySelector('img');
+        this.dragState.startWidth = parseInt(imgElement.style.width);
+        this.dragState.startHeight = parseInt(imgElement.style.height);
+
+        e.preventDefault();
+        e.stopPropagation();
+    }
+
+    handleDrag(e, container) {
+        const deltaX = e.clientX - this.dragState.startX;
+        const deltaY = e.clientY - this.dragState.startY;
+
+        container.style.left = `${this.dragState.startLeft + deltaX}px`;
+        container.style.top = `${this.dragState.startTop + deltaY}px`;
+    }
+
+    handleResize(e, container, imgElement, imageData) {
+        const deltaX = e.clientX - this.dragState.startX;
+        const deltaY = e.clientY - this.dragState.startY;
+
+        let newWidth = this.dragState.startWidth;
+        let newHeight = this.dragState.startHeight;
+
+        const direction = this.dragState.resizeHandle;
+        const aspectRatio = imageData.aspectRatio;
+
+        // Calculate new dimensions based on resize direction
+        switch(direction) {
+            case 'se':
+                newWidth = this.dragState.startWidth + deltaX;
+                newHeight = newWidth / aspectRatio;
+                break;
+            case 'sw':
+                newWidth = this.dragState.startWidth - deltaX;
+                newHeight = newWidth / aspectRatio;
+                // Adjust position for left side resize
+                container.style.left = `${this.dragState.startLeft + deltaX}px`;
+                break;
+            case 'ne':
+                newWidth = this.dragState.startWidth + deltaX;
+                newHeight = newWidth / aspectRatio;
+                // Adjust position for top side resize
+                const heightDelta = newHeight - this.dragState.startHeight;
+                container.style.top = `${this.dragState.startTop - heightDelta}px`;
+                break;
+            case 'nw':
+                newWidth = this.dragState.startWidth - deltaX;
+                newHeight = newWidth / aspectRatio;
+                // Adjust position for both left and top
+                container.style.left = `${this.dragState.startLeft + deltaX}px`;
+                const heightDeltaNW = newHeight - this.dragState.startHeight;
+                container.style.top = `${this.dragState.startTop - heightDeltaNW}px`;
+                break;
+        }
+
+        // Apply minimum size constraints
+        const minSize = 20;
+        if (newWidth >= minSize && newHeight >= minSize) {
+            imgElement.style.width = `${newWidth}px`;
+            imgElement.style.height = `${newHeight}px`;
+        }
+    }
+
+    endDragOrResize(container, imageData) {
+        if (this.dragState.isDragging || this.dragState.isResizing) {
+            // Update stored data
+            const stampData = this.activeStamps.get(imageData.id);
+            if (stampData) {
+                // Update position and size in stored data
+                stampData.x = parseInt(container.style.left);
+                stampData.y = parseInt(container.style.top);
+
+                const imgElement = container.querySelector('img');
+                stampData.width = parseInt(imgElement.style.width);
+                stampData.height = parseInt(imgElement.style.height);
+
+                // Only save if there was actual movement/resize to avoid unnecessary saves
+                if (this.dragState.hasMoved) {
+                    console.log(`[StampTool] Updating stamp position/size:`, stampData.annotationId, `to (${stampData.x}, ${stampData.y}) size ${stampData.width}x${stampData.height}`);
+                    this.saveStampAnnotation(stampData);
+                }
+            } else {
+                console.warn(`[StampTool] Could not find stamp data for imageData.id:`, imageData.id);
+            }
+
+            // Hide handles
+            const handles = container.querySelectorAll('.resize-handle');
+            handles.forEach(handle => handle.style.opacity = '0');
+            container.style.border = '2px solid transparent';
+        }
+
+        // Reset drag state
+        this.dragState = {
+            isDragging: false,
+            isResizing: false,
+            startX: 0,
+            startY: 0,
+            startLeft: 0,
+            startTop: 0,
+            startWidth: 0,
+            startHeight: 0,
+            resizeHandle: null,
+            hasMoved: false,
+            currentStamp: null
+        };
+    }
+
+        deleteStamp(stampId) {
+        console.log(`[StampTool] deleteStamp called for stampId:`, stampId);
+
+        const stampData = this.activeStamps.get(stampId);
+        if (!stampData) {
+            console.warn(`[StampTool] No stamp data found for stampId:`, stampId);
+            return;
+        }
+
+        console.log(`[StampTool] Found stamp data for deletion:`, {
+            annotationId: stampData.annotationId,
+            pageIndex: stampData.pageIndex,
+            position: { x: stampData.x, y: stampData.y }
+        });
+
+        // Send deletion request to server BEFORE removing from DOM
+        // This ensures we have all the data needed for the deletion request
+        this.saveStampDeletion(stampData);
+
+        // Remove from DOM
+        if (stampData.container && stampData.container.parentNode) {
+            stampData.container.remove();
+            console.log(`[StampTool] Removed stamp container from DOM`);
+        }
+
+        // Remove from active stamps map
+        this.activeStamps.delete(stampId);
+
+        console.log(`[StampTool] Successfully deleted stamp:`, stampId, `(annotation ID: ${stampData.annotationId})`);
+    }
+
+    /**
+     * Save stamp deletion to server
+     */
+    saveStampDeletion(stampData) {
+        const { annotationId, pageIndex } = stampData;
+
+        if (!this.annotationInterface) {
+            console.warn(`[StampTool] No annotation interface available - deletion will not be saved!`);
+            return;
+        }
+
+        // Create deletion annotation that will be processed by the annotation system
+        const deletionAnnotation = {
+            id: annotationId, // Use same ID to overwrite/delete existing annotation
+            type: 'shape_annotations',
+            pageNum: pageIndex + 1, // Convert 0-based to 1-based page number
+            data: {
+                _deleted: true,
+                _action: 'delete',
+                stampId: stampData.imageData.id,
+                timestamp: Date.now()
+            },
+            config: {
+                type: 'stamp_deletion',
+                action: 'delete'
+            },
+            timestamp: Date.now()
+        };
+
+        // Save deletion through the annotation interface
+        this.annotationInterface.saveAnnotation(deletionAnnotation)
+            .then(() => {
+                console.log(`[StampTool] Successfully sent deletion request for stamp:`, annotationId);
+            })
+            .catch((error) => {
+                console.error(`[StampTool] Failed to send deletion request for stamp:`, annotationId, error);
+            });
+
+        console.log(`[StampTool] Queued deletion request for stamp:`, annotationId, `on page ${pageIndex + 1}`);
+    }
+
+    /**
+     * Save stamp annotation with current position and size
+     */
+    saveStampAnnotation(stampData) {
+        const { imageData, x, y, width, height, pageIndex, annotationId } = stampData;
+
+        // Create annotation object with consistent ID for updates
+        const annotation = {
+            id: annotationId, // Keep the same ID for updates
+            type: 'shape_annotations',
+            pageNum: pageIndex + 1, // pageIndex is 0-based, pageNum is 1-based
+            data: {
+                stampId: imageData.id,
+                imageDataUrl: imageData.dataUrl,
+                fileName: imageData.file.name,
+                x: x,
+                y: y,
+                width: width,
+                height: height,
+                _action: 'update' // Mark as update operation
+            },
+            config: {
+                type: 'stamp',
+                position: { x, y },
+                dimensions: {
+                    width: width,
+                    height: height
+                }
+            }
+        };
+
+        // Save annotation through interface
+        if (this.annotationInterface) {
+            this.annotationInterface.saveAnnotation(annotation);
+            console.log(`[StampTool] Saved stamp annotation update:`, annotationId, `at (${x}, ${y}) size ${width}x${height}`);
+        } else {
+            console.warn(`[StampTool] No annotation interface - stamp will not be saved!`);
+        }
+    }
+
+    /**
+     * Clear all stamps (called by ClearTool)
+     */
+    clearAllStamps() {
+        console.log(`[StampTool] Clearing all stamps`);
+
+        // Remove all stamp containers from DOM
+        this.activeStamps.forEach((stampData, stampId) => {
+            if (stampData.container && stampData.container.parentNode) {
+                stampData.container.remove();
+            }
+        });
+
+        // Clear the active stamps map
+        this.activeStamps.clear();
+
+        // Hide any active popup
+        this.hidePopupMenu();
+
+        console.log(`[StampTool] All stamps cleared`);
+    }
+
+    /**
+     * Clear stamps for specific page (called by ClearTool)
+     */
+    clearPageStamps(pageNum) {
+        console.log(`[StampTool] Clearing stamps for page ${pageNum}`);
+
+        const stampsToRemove = [];
+
+        // Find stamps on the specified page
+        this.activeStamps.forEach((stampData, stampId) => {
+            if (stampData.pageIndex === pageNum - 1) { // Convert 1-based to 0-based
+                if (stampData.container && stampData.container.parentNode) {
+                    stampData.container.remove();
+                }
+                stampsToRemove.push(stampId);
+            }
+        });
+
+        // Remove from active stamps map
+        stampsToRemove.forEach(stampId => {
+            this.activeStamps.delete(stampId);
+        });
+
+        // Hide popup if it was for a cleared stamp
+        this.hidePopupMenu();
+
+        console.log(`[StampTool] Cleared ${stampsToRemove.length} stamps from page ${pageNum}`);
     }
 
     cleanupStampPlacement() {
@@ -527,23 +1145,21 @@ export class StampTool extends BaseTool {
         }
 
         // Remove click listeners
-        this.pageHandlers.forEach((handler, key) => {
+        this.eventHandlers.forEach((handler, key) => {
             if (key.startsWith('stamp-page-')) {
                 handler.element.removeEventListener('click', handler.listener);
             }
         });
 
         // Clear stamp placement handlers
-        Array.from(this.pageHandlers.keys()).forEach(key => {
+        Array.from(this.eventHandlers.keys()).forEach(key => {
             if (key.startsWith('stamp-page-')) {
-                this.pageHandlers.delete(key);
+                this.eventHandlers.delete(key);
             }
         });
 
         // Hide instruction message
         this.hidePlacementInstructions();
-
-        console.log(`[StampTool] Cleaned up stamp placement mode`);
     }
 
     showPlacementInstructions() {
@@ -627,155 +1243,37 @@ export class StampTool extends BaseTool {
         }, 5000);
     }
 
-    /**
-     * Handle page change
-     */
-    handlePageChange(pageNum) {
-        super.handlePageChange(pageNum);
+    cleanup() {
+        // Hide popup menu and confirmation modal
+        this.hidePopupMenu();
+        this.hideConfirmationModal();
 
-        // Cancel any active stamp placement when page changes
-        if (this.isInStampMode && this.currentImageData) {
-            this.cleanupStampPlacement();
+        // Remove global event handlers
+        if (this.globalMouseMoveHandler) {
+            document.removeEventListener('mousemove', this.globalMouseMoveHandler);
         }
-    }
-
-    /**
-     * Load annotations from data
-     */
-    async loadAnnotations(annotationsData) {
-        console.log(`[StampTool] Loading stamp annotations:`, annotationsData);
-
-        // Use parent class method
-        await super.loadAnnotations(annotationsData);
-
-        // Render all loaded annotations
-        this._renderAllAnnotations();
-    }
-
-    /**
-     * Render all annotations on their respective pages
-     */
-    _renderAllAnnotations() {
-        const viewer = document.getElementById(`viewer-${this.blockId}`);
-        if (!viewer) return;
-
-        this.annotations.forEach(annotation => {
-            const page = viewer.querySelector(`.page:nth-child(${annotation.pageNum})`);
-            if (page) {
-                this._createStampElementFromAnnotation(page, annotation);
-            }
-        });
-    }
-
-    /**
-     * Create stamp element from existing annotation data
-     */
-    _createStampElementFromAnnotation(page, annotation) {
-        const data = annotation.data;
-
-        // Create stamp container
-        const stampContainer = document.createElement('div');
-        stampContainer.className = 'stamp-annotation';
-        stampContainer.dataset.annotationId = annotation.id;
-        stampContainer.style.position = 'absolute';
-        stampContainer.style.left = `${data.x}px`;
-        stampContainer.style.top = `${data.y}px`;
-        stampContainer.style.zIndex = '30';
-        stampContainer.style.cursor = 'move';
-        stampContainer.style.border = '2px solid transparent';
-        stampContainer.style.borderRadius = '4px';
-
-        // Create image element
-        const imgElement = document.createElement('img');
-        imgElement.src = data.imageUrl;
-        imgElement.style.width = `${data.width}px`;
-        imgElement.style.height = `${data.height}px`;
-        imgElement.style.display = 'block';
-        imgElement.style.userSelect = 'none';
-        imgElement.style.pointerEvents = 'none';
-        imgElement.draggable = false;
-
-        // Add resize handles
-        this.addResizeHandles(stampContainer);
-
-        // Add interaction handlers
-        this.addStampInteractionHandlers(stampContainer, annotation);
-
-        // Append image to container
-        stampContainer.appendChild(imgElement);
-
-        // Make page relative positioned if not already
-        if (getComputedStyle(page).position === 'static') {
-            page.style.position = 'relative';
-        }
-
-        // Append to page
-        page.appendChild(stampContainer);
-
-        // Store element reference in annotation
-        annotation.element = stampContainer;
-
-        console.log(`[StampTool] Rendered stamp annotation:`, annotation.id);
-    }
-
-    /**
-     * Delete annotation
-     */
-    deleteAnnotation(annotationId) {
-        const annotation = this.annotations.get(annotationId);
-        if (annotation && annotation.element) {
-            annotation.element.remove();
-        }
-
-        // Remove from active stamps if present
-        for (const [stampId, stampData] of this.activeStamps) {
-            if (stampData.annotation && stampData.annotation.id === annotationId) {
-                this.activeStamps.delete(stampId);
-                break;
-            }
-        }
-
-        return super.deleteAnnotation(annotationId);
-    }
-
-    /**
-     * Clean up tool resources
-     */
-    async cleanup() {
-        console.log(`[StampTool] Cleaning up stamp tool`);
-
-        // Deactivate if active
-        if (this.isActive) {
-            this.deactivate();
+        if (this.globalMouseUpHandler) {
+            document.removeEventListener('mouseup', this.globalMouseUpHandler);
         }
 
         // Remove all event handlers
-        this.pageHandlers.forEach((handler, key) => {
+        this.eventHandlers.forEach((handler, key) => {
             handler.element.removeEventListener('click', handler.listener);
         });
-        this.pageHandlers.clear();
+        this.eventHandlers.clear();
 
         // Clean up any active stamps
         this.activeStamps.forEach((stampData, stampId) => {
-            if (stampData.container && stampData.container.parentElement) {
-                stampData.container.remove();
-            }
+            stampData.container.remove();
         });
         this.activeStamps.clear();
-
-        // Remove all stamp elements
-        this.annotations.forEach(annotation => {
-            if (annotation.element) {
-                annotation.element.remove();
-            }
-        });
 
         // Clean up placement mode
         this.cleanupStampPlacement();
 
-        this.isEnabled = false;
-        this.isActive = false;
-
         console.log(`[StampTool] Cleanup completed`);
     }
 }
+
+// Expose StampTool globally for current architecture compatibility
+window.StampTool = StampTool;
