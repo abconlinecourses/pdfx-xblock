@@ -334,6 +334,20 @@ class ClearTool {
             });
         }
 
+        // Clear scribble strokes for the page using ScribbleTool integration
+        if (this.viewer.scribbleTool) {
+            this.viewer.scribbleTool.clearPageStrokes(pageNum);
+        } else {
+            // Fallback: clear stroke SVGs manually
+            const strokes = document.querySelectorAll(`#pdfx-block-${this.blockId} .stroke-svg`);
+            strokes.forEach(stroke => {
+                const pageContainer = stroke.closest('.page');
+                if (pageContainer && this.getPageNumberFromContainer(pageContainer) === pageNum) {
+                    stroke.remove();
+                }
+            });
+        }
+
         console.log(`[ClearTool] Cleared visual annotations for page ${pageNum}`);
     }
 
@@ -360,6 +374,15 @@ class ClearTool {
             // Fallback: clear stamps manually
             const stamps = document.querySelectorAll(`#pdfx-block-${this.blockId} .stamp-annotation`);
             stamps.forEach(stamp => stamp.remove());
+        }
+
+        // Clear all scribble strokes using ScribbleTool integration
+        if (this.viewer.scribbleTool) {
+            this.viewer.scribbleTool.clearAllStrokes();
+        } else {
+            // Fallback: clear stroke SVGs manually
+            const strokes = document.querySelectorAll(`#pdfx-block-${this.blockId} .stroke-svg`);
+            strokes.forEach(stroke => stroke.remove());
         }
 
         console.log(`[ClearTool] Cleared all visual annotations`);

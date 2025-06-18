@@ -2061,38 +2061,177 @@ class PdfxViewer {
                 return;
             }
 
-            // Find or create drawing canvas for this page
-            let canvas = pageContainer.querySelector('.drawing-canvas');
-            if (!canvas) {
-                canvas = document.createElement('canvas');
-                canvas.className = 'drawing-canvas';
-                canvas.style.position = 'absolute';
-                canvas.style.top = '0';
-                canvas.style.left = '0';
-                canvas.style.zIndex = '25';
-                canvas.style.pointerEvents = 'none';
-
-                // Set canvas size to match page
-                const pageRect = pageContainer.getBoundingClientRect();
-                canvas.width = pageRect.width;
-                canvas.height = pageRect.height;
+            // Find or create drawing container for this page
+            let container = pageContainer.querySelector('.drawing-container');
+            if (!container) {
+                container = document.createElement('div');
+                container.className = 'drawing-container';
+                container.setAttribute('data-page-number', page);
+                container.style.position = 'absolute';
+                container.style.top = '0';
+                container.style.left = '0';
+                container.style.width = '100%';
+                container.style.height = '100%';
+                container.style.zIndex = '25';
+                container.style.pointerEvents = 'none';
 
                 pageContainer.style.position = 'relative';
-                pageContainer.appendChild(canvas);
+                pageContainer.appendChild(container);
             }
 
-            // Render strokes on canvas
-            const ctx = canvas.getContext('2d');
+            // Render strokes as SVG elements
             pageStrokes.forEach(stroke => {
-                if (stroke.data && stroke.data.imageData) {
-                    const img = new Image();
-                    img.onload = () => {
-                        ctx.drawImage(img, 0, 0);
-                    };
-                    img.src = stroke.data.imageData;
+                if (stroke.data && stroke.data.strokeData) {
+                    // Pass annotation ID to stroke data for deletion tracking
+                    stroke.data.strokeData.annotationId = stroke.id;
+                    stroke.data.annotationId = stroke.id;
+
+                    // Use new SVG-based stroke data
+                    this.renderSvgStroke(container, stroke.data.strokeData, stroke.data);
+                } else if (stroke.data && stroke.data.imageData) {
+                    // Fallback for legacy canvas-based strokes - convert to div
+                    this.renderLegacyCanvasStroke(container, stroke.data);
                 }
             });
         });
+    }
+
+    renderSvgStroke(container, strokeData, strokeConfig) {
+        if (!strokeData || !strokeData.points) return;
+
+        // Check if this stroke already exists to prevent duplicates
+        const existingStroke = container.querySelector(`[data-stroke-id="${strokeData.id}"]`);
+        if (existingStroke) {
+            console.log(`[PdfxViewer] Stroke ${strokeData.id} already exists in container, skipping render`);
+            return;
+        }
+
+        // Use ScribbleTool's optimized SVG creation if available
+        let svgElement = null;
+        if (this.scribbleTool && this.scribbleTool.createOptimizedSvgElement) {
+            console.log(`[PdfxViewer] Using ScribbleTool's optimized SVG creation for stroke: ${strokeData.id}`);
+
+            // Ensure annotation ID is preserved from server data for deletion tracking
+            if (!strokeData.annotationId && strokeConfig.annotationId) {
+                strokeData.annotationId = strokeConfig.annotationId;
+            }
+
+            svgElement = this.scribbleTool.createOptimizedSvgElement(container, strokeData);
+            if (svgElement) {
+                svgElement.classList.add('saved-stroke');
+                return; // ScribbleTool handles the complete creation and adding to container
+            }
+        }
+
+        // Fallback to old method if ScribbleTool not available or failed
+        console.log(`[PdfxViewer] Using fallback full-page SVG creation for stroke: ${strokeData.id}`);
+        svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+        svgElement.setAttribute('class', 'stroke-svg saved-stroke fallback-stroke');
+        svgElement.setAttribute('data-stroke-id', strokeData.id);
+        // Use full-page dimensions for fallback strokes
+        svgElement.style.setProperty('position', 'absolute', 'important');
+        svgElement.style.setProperty('top', '0px', 'important');
+        svgElement.style.setProperty('left', '0px', 'important');
+        svgElement.style.setProperty('width', '100%', 'important');
+        svgElement.style.setProperty('height', '100%', 'important');
+        svgElement.style.setProperty('pointer-events', 'auto', 'important');
+        svgElement.style.setProperty('z-index', '10', 'important');
+        svgElement.style.setProperty('cursor', 'pointer', 'important');
+        svgElement.style.setProperty('overflow', 'visible', 'important');
+
+        // Create path element
+        const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+        pathElement.setAttribute('fill', 'none');
+
+        // Handle different stroke data formats
+        if (strokeData.points && strokeData.points.length > 0) {
+            pathElement.setAttribute('stroke', strokeData.points[0].color || '#FF0000');
+            pathElement.setAttribute('stroke-width', strokeData.points[0].thickness || 2);
+            pathElement.setAttribute('stroke-opacity', strokeData.points[0].opacity || 1);
+        } else {
+            // Fallback for older data format
+            pathElement.setAttribute('stroke', strokeData.color || '#FF0000');
+            pathElement.setAttribute('stroke-width', strokeData.thickness || 2);
+            pathElement.setAttribute('stroke-opacity', strokeData.opacity || 1);
+        }
+
+        pathElement.setAttribute('stroke-linecap', 'round');
+        pathElement.setAttribute('stroke-linejoin', 'round');
+
+        // Create path data
+        let pathData = '';
+        if (strokeData.pathData) {
+            // Use stored path data if available
+            pathData = strokeData.pathData;
+        } else {
+            // Reconstruct path from points
+            if (strokeData.points.length === 1) {
+                const point = strokeData.points[0];
+                const radius = point.thickness / 2;
+                pathData = `M ${point.x - radius} ${point.y} A ${radius} ${radius} 0 1 1 ${point.x + radius} ${point.y} A ${radius} ${radius} 0 1 1 ${point.x - radius} ${point.y}`;
+            } else {
+                pathData = `M ${strokeData.points[0].x} ${strokeData.points[0].y}`;
+                for (let i = 1; i < strokeData.points.length; i++) {
+                    pathData += ` L ${strokeData.points[i].x} ${strokeData.points[i].y}`;
+                }
+            }
+        }
+
+        pathElement.setAttribute('d', pathData);
+        svgElement.appendChild(pathElement);
+        container.appendChild(svgElement);
+    }
+
+    renderLegacyCanvasStroke(container, strokeData) {
+        // Convert legacy canvas stroke to div representation
+        if (!strokeData.imageData) return;
+
+        const strokeElement = document.createElement('div');
+        strokeElement.className = 'stroke-path legacy-stroke';
+        strokeElement.style.position = 'absolute';
+        strokeElement.style.pointerEvents = 'none';
+        strokeElement.style.zIndex = '1';
+        strokeElement.style.top = '0';
+        strokeElement.style.left = '0';
+        strokeElement.style.width = '100%';
+        strokeElement.style.height = '100%';
+
+        // Create an image element to display the legacy canvas data
+        const img = document.createElement('img');
+        img.src = strokeData.imageData;
+        img.style.position = 'absolute';
+        img.style.top = '0';
+        img.style.left = '0';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.opacity = strokeData.opacity || 1;
+
+        strokeElement.appendChild(img);
+        container.appendChild(strokeElement);
+    }
+
+    createLineSegment(point1, point2) {
+        const segment = document.createElement('div');
+        segment.style.position = 'absolute';
+
+        // Calculate line properties
+        const dx = point2.x - point1.x;
+        const dy = point2.y - point1.y;
+        const length = Math.sqrt(dx * dx + dy * dy);
+        const angle = Math.atan2(dy, dx) * 180 / Math.PI;
+
+        // Style the line segment
+        segment.style.left = `${point1.x}px`;
+        segment.style.top = `${point1.y}px`;
+        segment.style.width = `${length}px`;
+        segment.style.height = `${point1.thickness}px`;
+        segment.style.backgroundColor = point1.color;
+        segment.style.opacity = point1.opacity;
+        segment.style.transformOrigin = '0 50%';
+        segment.style.transform = `rotate(${angle}deg)`;
+        segment.style.borderRadius = `${point1.thickness / 2}px`;
+
+        return segment;
     }
 
     renderHighlightAnnotations(highlights) {
@@ -2800,6 +2939,34 @@ window.repositionHighlights = function(blockId) {
 
         if (viewers.length === 0) {
             console.warn(`[Global] No PDF viewers found to reposition`);
+        }
+    }
+};
+
+// Global function to debug ScribbleTool drawing data (for debugging)
+window.debugScribbleData = function(blockId) {
+    if (blockId) {
+        const viewer = window[`pdfxViewer_${blockId}`];
+        if (viewer && viewer.scribbleTool) {
+            viewer.scribbleTool.debugDrawingData();
+        } else {
+            console.error(`[Global] No viewer or scribble tool found for block: ${blockId}`);
+        }
+    } else {
+        // Find all viewers and debug them
+        const viewers = Object.keys(window).filter(key => key.startsWith('pdfxViewer_'));
+        console.log(`[Global] Found ${viewers.length} PDF viewers, debugging all...`);
+
+        viewers.forEach(viewerKey => {
+            const viewer = window[viewerKey];
+            if (viewer && viewer.scribbleTool && viewer.scribbleTool.debugDrawingData) {
+                console.log(`[Global] Debugging ${viewerKey}:`);
+                viewer.scribbleTool.debugDrawingData();
+            }
+        });
+
+        if (viewers.length === 0) {
+            console.warn(`[Global] No PDF viewers found to debug`);
         }
     }
 };
