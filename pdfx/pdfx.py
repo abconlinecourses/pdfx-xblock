@@ -651,6 +651,7 @@ class PdfxXBlock(XBlock):
         frag.add_javascript(self.resource_string("static/js/src/tools/scribble/ScribbleTool.js"))
         frag.add_javascript(self.resource_string("static/js/src/tools/text/TextTool.js"))
         frag.add_javascript(self.resource_string("static/js/src/tools/stamp/StampTool.js"))
+        frag.add_javascript(self.resource_string("static/js/src/tools/ManualSaveTool.js"))
         frag.add_javascript(self.resource_string("static/js/pdfx-init.js"))
         frag.add_javascript(self.resource_string("static/js/src/tools/base/ClearTool.js"))
 

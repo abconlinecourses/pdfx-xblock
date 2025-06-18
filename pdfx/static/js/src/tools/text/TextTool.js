@@ -8,18 +8,23 @@ window.TextTool = class TextTool {
         this.blockId = viewer.blockId;
         this.annotationInterface = annotationInterface;
 
-        // Text configuration
-        this.textColor = '#000000'; // Default black
-        this.textFontSize = 16; // Default font size
-
-        // Active text boxes tracking
+        // Current state
+        this.isActive = false;
         this.activeTextBoxes = new Map();
         this.currentEditingBox = null;
 
         // Event handlers storage for cleanup
+        this.pageClickHandlers = [];
         this.eventHandlers = new Map();
 
-        // Initialize
+        // Text configuration
+        this.textColor = '#0000ff';
+        this.textFontSize = 12;
+
+        // Zoom handling
+        this.currentScale = 1;
+        this.zoomHandler = null;
+
         this.init();
     }
 
@@ -27,6 +32,7 @@ window.TextTool = class TextTool {
         console.log(`[TextTool] Initializing for block: ${this.blockId}`);
         this.setupToolButton();
         this.initTextControls();
+        this.setupZoomHandler();
     }
 
     setupToolButton() {
@@ -44,11 +50,13 @@ window.TextTool = class TextTool {
 
     activate() {
         console.log(`[TextTool] Activating text annotation mode for block: ${this.blockId}`);
+        this.isActive = true;
         this.enableTextAnnotationMode();
     }
 
     deactivate() {
         console.log(`[TextTool] Deactivating text annotation mode for block: ${this.blockId}`);
+        this.isActive = false;
         this.disableTextAnnotationMode();
     }
 
@@ -293,39 +301,87 @@ window.TextTool = class TextTool {
     }
 
     convertToFinalAnnotation(textBoxData) {
-        const { container, input } = textBoxData;
+        const { container, input, pageIndex, x, y } = textBoxData;
         const content = input.textContent.trim();
+        const color = this.textColor;
+        const fontSize = this.textFontSize;
 
-        // Replace editable input with static text display
-        const finalText = document.createElement('div');
-        finalText.className = 'text-annotation-final';
-        finalText.textContent = content;
-        finalText.style.color = this.textColor;
-        finalText.style.fontSize = `${this.textFontSize}px`;
-        finalText.style.fontFamily = 'Arial, sans-serif';
-        finalText.style.padding = '5px';
-        finalText.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
-        finalText.style.border = '1px solid #ccc';
-        finalText.style.borderRadius = '3px';
-        finalText.style.cursor = 'pointer';
-        finalText.style.whiteSpace = 'pre-wrap';
-        finalText.style.wordWrap = 'break-word';
-        finalText.style.minWidth = '140px';
-        finalText.style.minHeight = '20px';
+        // Get page element from container
+        const page = container.closest('.page');
+        if (!page) {
+            console.error(`[TextTool] Could not find page element for text annotation`);
+            return;
+        }
+
+        // Get page rect for percentage calculations
+        const pageRect = page.getBoundingClientRect();
+        const percentageData = this.convertPositionToPercentages(x, y, fontSize, pageRect);
+
+        // Remove the temporary text input
+        const tempTextBox = textBoxData.container;
+        if (tempTextBox && tempTextBox.parentNode) {
+            tempTextBox.remove();
+        }
+
+        // Create final text box element
+        const finalTextBox = document.createElement('div');
+        finalTextBox.className = 'text-annotation-final';
+        finalTextBox.textContent = content;
+        finalTextBox.style.position = 'absolute';
+        finalTextBox.style.left = `${x}px`;
+        finalTextBox.style.top = `${y}px`;
+        finalTextBox.style.color = color;
+        finalTextBox.style.fontSize = `${fontSize}px`;
+        finalTextBox.style.fontFamily = 'Arial, sans-serif';
+        finalTextBox.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
+        finalTextBox.style.border = '1px solid #ccc';
+        finalTextBox.style.borderRadius = '3px';
+        finalTextBox.style.padding = '5px';
+        finalTextBox.style.zIndex = '30';
+        finalTextBox.style.cursor = 'pointer';
+        finalTextBox.style.whiteSpace = 'pre-wrap';
+        finalTextBox.style.wordWrap = 'break-word';
+        finalTextBox.style.minWidth = '140px';
+        finalTextBox.style.minHeight = '20px';
+
+        // Generate unique ID
+        const annotationId = `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        finalTextBox.setAttribute('data-annotation-id', annotationId);
+
+        // Store percentage data for zoom handling
+        finalTextBox.setAttribute('data-percentage-position', JSON.stringify(percentageData));
 
         // Add double-click to edit functionality
-        finalText.addEventListener('dblclick', (e) => {
+        finalTextBox.addEventListener('dblclick', (e) => {
             e.stopPropagation();
-            this.editExistingTextBox(textBoxData, finalText);
+            console.log(`[TextTool] Double-clicked text annotation for editing:`, annotationId);
+            this.editExistingTextBox({
+                ...textBoxData,
+                content: content,
+                annotationId: annotationId,
+                finalElement: finalTextBox,
+                percentageData: percentageData
+            }, finalTextBox);
         });
 
-        // Replace input with final text
-        container.removeChild(input);
-        container.appendChild(finalText);
+        // Make page relative positioned if not already
+        if (getComputedStyle(page).position === 'static') {
+            page.style.position = 'relative';
+        }
 
-        // Update the text box data
-        textBoxData.input = finalText;
-        textBoxData.isEditable = false;
+        page.appendChild(finalTextBox);
+
+        // Save annotation with percentage data
+        this.saveTextAnnotation({
+            ...textBoxData,
+            content: content,
+            annotationId: annotationId,
+            percentageData: percentageData
+        }, content);
+
+        console.log(`[TextTool] Created final text annotation: "${content}" at (${x}, ${y}) on page ${pageIndex + 1}`);
+
+        return finalTextBox;
     }
 
     editExistingTextBox(textBoxData, finalText) {
@@ -333,7 +389,7 @@ window.TextTool = class TextTool {
             this.finalizeTextBox(this.currentEditingBox);
         }
 
-        const { container } = textBoxData;
+        const container = finalText.parentElement || finalText.closest('.page');
         const currentContent = finalText.textContent;
 
         // Create new editable input
@@ -415,47 +471,114 @@ window.TextTool = class TextTool {
      * Save text annotation
      */
     saveTextAnnotation(textBoxData, content) {
-        const { pageIndex, x, y } = textBoxData;
+        if (!this.annotationInterface) {
+            console.warn(`[TextTool] No annotation interface - text will not be saved!`);
+            return;
+        }
 
-        // Create annotation object
+        const { pageIndex, x, y, color, fontSize, annotationId, percentageData } = textBoxData;
+
         const annotation = {
-            id: `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: annotationId || `text_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type: 'text_annotations',
-            pageNum: pageIndex + 1, // pageIndex is 0-based, pageNum is 1-based
+            pageNum: pageIndex + 1, // Convert 0-based to 1-based
             data: {
                 text: content,
                 x: x,
                 y: y,
-                color: this.textColor,
-                fontSize: this.textFontSize,
-                fontFamily: 'Arial, sans-serif'
+                color: color,
+                fontSize: fontSize,
+                fontFamily: 'Arial, sans-serif',
+                percentageData: percentageData // Store percentage data for zoom scaling
             },
-            config: {
-                color: this.textColor,
-                fontSize: this.textFontSize,
-                position: { x, y }
-            }
+            config: {},
+            timestamp: Date.now()
         };
 
-        // Save annotation through interface
-        if (this.annotationInterface) {
-            console.log(`[TextTool] ANNOTATION_SAVE: Saving text annotation:`, annotation.id);
-            this.annotationInterface.saveAnnotation(annotation);
-        } else {
-            console.warn(`[TextTool] ANNOTATION_MISSING: No annotation interface - text will not be saved!`);
+        console.log(`[TextTool] Saving text annotation:`, annotation.id);
+        this.annotationInterface.saveAnnotation(annotation);
+    }
+
+    /**
+     * Setup zoom event handling for text repositioning
+     */
+    setupZoomHandler() {
+        if (this.viewer.eventBus) {
+            this.zoomHandler = (evt) => {
+                const newScale = evt.scale;
+                if (newScale !== this.currentScale) {
+                    console.log(`[TextTool] Scale changed from ${this.currentScale} to ${newScale}`);
+                    this.currentScale = newScale;
+                    this.repositionAllTextAnnotations();
+                }
+            };
+            this.viewer.eventBus.on('scalechanging', this.zoomHandler);
         }
     }
 
-    cleanup() {
-        // Remove all event handlers
-        this.removePageClickListeners();
+    /**
+     * Reposition all text annotations when zoom changes
+     */
+    repositionAllTextAnnotations() {
+        const textAnnotations = document.querySelectorAll(`#viewerContainer-${this.blockId} .text-annotation-final`);
+        textAnnotations.forEach(textElement => {
+            const storedData = textElement.getAttribute('data-percentage-position');
 
-        // Finalize any active text box
-        if (this.currentEditingBox) {
-            this.finalizeTextBox(this.currentEditingBox);
+            if (storedData) {
+                try {
+                    const percentageData = JSON.parse(storedData);
+                    this.updateTextPosition(textElement, percentageData);
+                } catch (e) {
+                    console.warn(`[TextTool] Failed to parse stored position data for text annotation`);
+                }
+            }
+        });
+    }
+
+    /**
+     * Update text position based on percentage data
+     */
+    updateTextPosition(textElement, percentageData) {
+        const page = textElement.closest('.page');
+        if (!page) return;
+
+        const pageRect = page.getBoundingClientRect();
+
+        if (percentageData) {
+            const newX = (percentageData.xPercent / 100) * pageRect.width;
+            const newY = (percentageData.yPercent / 100) * pageRect.height;
+            const newFontSize = (percentageData.fontSizePercent / 100) * pageRect.height;
+
+            textElement.style.left = `${newX}px`;
+            textElement.style.top = `${newY}px`;
+            textElement.style.fontSize = `${newFontSize}px`;
+        }
+    }
+
+    /**
+     * Convert pixel coordinates to percentages relative to page
+     */
+    convertPositionToPercentages(x, y, fontSize, pageRect) {
+        return {
+            xPercent: (x / pageRect.width) * 100,
+            yPercent: (y / pageRect.height) * 100,
+            fontSizePercent: (fontSize / pageRect.height) * 100
+        };
+    }
+
+    cleanup() {
+        // Remove zoom handler
+        if (this.viewer.eventBus && this.zoomHandler) {
+            this.viewer.eventBus.off('scalechanging', this.zoomHandler);
+            this.zoomHandler = null;
         }
 
-        // Clear text boxes
+        // Remove page click listeners
+        this.removePageClickListeners();
+
+        // Clear active text boxes
         this.activeTextBoxes.clear();
+
+        console.log(`[TextTool] Cleanup completed`);
     }
 };

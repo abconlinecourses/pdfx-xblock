@@ -31,6 +31,19 @@ class SimpleEventEmitter {
         }
     }
 
+    removeListener(event, listener) {
+        if (this._events[event]) {
+            const index = this._events[event].indexOf(listener);
+            if (index > -1) {
+                this._events[event].splice(index, 1);
+            }
+            // Clean up empty event arrays
+            if (this._events[event].length === 0) {
+                delete this._events[event];
+            }
+        }
+    }
+
     removeAllListeners() {
         this._events = {};
     }
@@ -1348,6 +1361,7 @@ class PdfxViewer {
         this.initStampTool();
         this.initNoteTool();
         this.initClearTool();
+        this.initManualSaveTool();
 
         // Add global click listener to close parameter toolbars
         this.initGlobalClickHandler();
@@ -1390,6 +1404,16 @@ class PdfxViewer {
         // Initialize the ClearTool with annotation interface
         this.clearTool = new ClearTool(this, this.annotationInterface);
         console.log(`[PdfxViewer] ClearTool initialized successfully with annotation interface`);
+    }
+
+    initManualSaveTool() {
+        // Initialize the ManualSaveTool with storage manager
+        if (this.storageManager) {
+            this.manualSaveTool = new ManualSaveTool(this.blockId, this, this.storageManager);
+            console.log(`[PdfxViewer] ManualSaveTool initialized successfully with storage manager`);
+        } else {
+            console.warn(`[PdfxViewer] ManualSaveTool initialization skipped - no storage manager available`);
+        }
     }
 
     setActiveTool(toolName) {
@@ -2126,8 +2150,18 @@ class PdfxViewer {
                     return;
                 }
 
-                // Create highlight visualization
-                this.renderSavedHighlight(highlight, targetTextLayer);
+                console.log(`[PdfxViewer] About to render highlight ${highlight.id} on page ${page}`);
+                console.log(`[PdfxViewer] Highlight data:`, highlight.data);
+                console.log(`[PdfxViewer] Target text layer:`, targetTextLayer);
+
+                // Create highlight visualization using HighlightTool
+                if (this.highlightTool && this.highlightTool.renderSavedHighlight) {
+                    this.highlightTool.renderSavedHighlight(highlight, targetTextLayer);
+                } else {
+                    // Fallback to old method if HighlightTool not available
+                    console.warn(`[PdfxViewer] HighlightTool not available, using fallback`);
+                    this.renderSavedHighlight(highlight, targetTextLayer);
+                }
             });
         });
     }
@@ -2222,6 +2256,12 @@ class PdfxViewer {
         }
 
         highlightContainer.appendChild(highlightGroup);
+
+        // Make saved highlight interactive if highlight tool is available
+        if (this.highlightTool && typeof this.highlightTool.makeHighlightInteractive === 'function') {
+            this.highlightTool.makeHighlightInteractive(highlightGroup);
+            console.log(`[PdfxViewer] Made saved highlight interactive: ${highlight.id}`);
+        }
     }
 
     renderTextAnnotations(textAnnotations) {
@@ -2279,10 +2319,26 @@ class PdfxViewer {
                 textBox.className = 'text-annotation-final saved-text-annotation';
                 textBox.textContent = textAnnotation.data.text || '';
                 textBox.style.position = 'absolute';
-                textBox.style.left = `${textAnnotation.data.x || 0}px`;
-                textBox.style.top = `${textAnnotation.data.y || 0}px`;
+
+                // Use percentage data if available for zoom-scalable positioning
+                if (textAnnotation.data.percentageData) {
+                    const pageRect = pageContainer.getBoundingClientRect();
+                    const percentData = textAnnotation.data.percentageData;
+
+                    textBox.style.left = `${(percentData.xPercent / 100) * pageRect.width}px`;
+                    textBox.style.top = `${(percentData.yPercent / 100) * pageRect.height}px`;
+                    textBox.style.fontSize = `${(percentData.fontSizePercent / 100) * pageRect.height}px`;
+
+                    // Store percentage data for zoom handling
+                    textBox.setAttribute('data-percentage-position', JSON.stringify(percentData));
+                } else {
+                    // Fallback to pixel positioning for legacy annotations
+                    textBox.style.left = `${textAnnotation.data.x || 0}px`;
+                    textBox.style.top = `${textAnnotation.data.y || 0}px`;
+                    textBox.style.fontSize = `${textAnnotation.data.fontSize || 16}px`;
+                }
+
                 textBox.style.color = textAnnotation.data.color || '#000000';
-                textBox.style.fontSize = `${textAnnotation.data.fontSize || 16}px`;
                 textBox.style.fontFamily = textAnnotation.data.fontFamily || 'Arial, sans-serif';
                 textBox.style.backgroundColor = 'rgba(255, 255, 255, 0.8)';
                 textBox.style.border = '1px solid #ccc';
@@ -2311,7 +2367,7 @@ class PdfxViewer {
                 }
 
                 pageContainer.appendChild(textBox);
-                console.log(`[PdfxViewer] Rendered text annotation "${textAnnotation.data.text}" at (${textAnnotation.data.x}, ${textAnnotation.data.y}) on page ${page}`);
+                console.log(`[PdfxViewer] Rendered text annotation "${textAnnotation.data.text}" on page ${page}`);
             });
         });
     }
@@ -2336,11 +2392,24 @@ class PdfxViewer {
                     const img = document.createElement('img');
                     img.src = shape.data.imageDataUrl;
                     img.style.position = 'absolute';
-                    img.style.left = `${shape.data.x || 0}px`;
-                    img.style.top = `${shape.data.y || 0}px`;
-                    img.style.width = `${shape.data.width || 100}px`;
-                    img.style.height = `${shape.data.height || 100}px`;
                     img.style.zIndex = '30';
+
+                    // Use percentage data if available for zoom-scalable positioning
+                    if (shape.data.percentageData) {
+                        const pageRect = pageContainer.getBoundingClientRect();
+                        const percentData = shape.data.percentageData;
+
+                        img.style.left = `${(percentData.xPercent / 100) * pageRect.width}px`;
+                        img.style.top = `${(percentData.yPercent / 100) * pageRect.height}px`;
+                        img.style.width = `${(percentData.widthPercent / 100) * pageRect.width}px`;
+                        img.style.height = `${(percentData.heightPercent / 100) * pageRect.height}px`;
+                    } else {
+                        // Fallback to pixel positioning for legacy stamps
+                        img.style.left = `${shape.data.x || 0}px`;
+                        img.style.top = `${shape.data.y || 0}px`;
+                        img.style.width = `${shape.data.width || 100}px`;
+                        img.style.height = `${shape.data.height || 100}px`;
+                    }
 
                     // Store the original annotation ID as a data attribute
                     if (shape.id) {
@@ -2350,7 +2419,7 @@ class PdfxViewer {
                     pageContainer.style.position = 'relative';
                     pageContainer.appendChild(img);
 
-                    console.log(`[PdfxViewer] Rendered saved stamp with ID: ${shape.id} at (${shape.data.x}, ${shape.data.y})`);
+                    console.log(`[PdfxViewer] Rendered saved stamp with ID: ${shape.id}`);
                 }
             });
         });
@@ -2541,6 +2610,9 @@ class PdfxViewer {
         if (this.clearTool) {
             this.clearTool.cleanup();
         }
+        if (this.manualSaveTool) {
+            this.manualSaveTool.destroy();
+        }
     }
 
     /**
@@ -2671,6 +2743,100 @@ window.restartPdfxAnnotationSaving = function(blockId) {
 
         if (viewers.length === 0) {
             console.warn(`[Global] No PDF viewers found to restart`);
+        }
+    }
+};
+
+// Global function to test highlight percentage positioning (for debugging)
+window.testHighlightPositioning = function(blockId) {
+    if (blockId) {
+        const viewer = window[`pdfxViewer_${blockId}`];
+        if (viewer && viewer.highlightTool) {
+            viewer.highlightTool.testPercentagePositioning();
+        } else {
+            console.error(`[Global] No viewer or highlight tool found for block: ${blockId}`);
+        }
+    } else {
+        // Find all viewers and test them
+        const viewers = Object.keys(window).filter(key => key.startsWith('pdfxViewer_'));
+        console.log(`[Global] Found ${viewers.length} PDF viewers, testing all...`);
+
+        viewers.forEach(viewerKey => {
+            const viewer = window[viewerKey];
+            if (viewer && viewer.highlightTool && viewer.highlightTool.testPercentagePositioning) {
+                console.log(`[Global] Testing ${viewerKey}:`);
+                viewer.highlightTool.testPercentagePositioning();
+            }
+        });
+
+        if (viewers.length === 0) {
+            console.warn(`[Global] No PDF viewers found to test`);
+        }
+    }
+};
+
+// Global function to manually trigger highlight repositioning (for debugging)
+window.repositionHighlights = function(blockId) {
+    if (blockId) {
+        const viewer = window[`pdfxViewer_${blockId}`];
+        if (viewer && viewer.highlightTool) {
+            console.log(`[Global] Manually repositioning highlights for block: ${blockId}`);
+            viewer.highlightTool.repositionAllHighlights();
+        } else {
+            console.error(`[Global] No viewer or highlight tool found for block: ${blockId}`);
+        }
+    } else {
+        // Find all viewers and reposition highlights
+        const viewers = Object.keys(window).filter(key => key.startsWith('pdfxViewer_'));
+        console.log(`[Global] Found ${viewers.length} PDF viewers, repositioning all...`);
+
+        viewers.forEach(viewerKey => {
+            const viewer = window[viewerKey];
+            if (viewer && viewer.highlightTool && viewer.highlightTool.repositionAllHighlights) {
+                console.log(`[Global] Repositioning highlights for ${viewerKey}`);
+                viewer.highlightTool.repositionAllHighlights();
+            }
+        });
+
+        if (viewers.length === 0) {
+            console.warn(`[Global] No PDF viewers found to reposition`);
+        }
+    }
+};
+
+// Global function to test context menu behavior (for debugging)
+window.testContextMenu = function(blockId) {
+    if (blockId) {
+        const viewer = window[`pdfxViewer_${blockId}`];
+        if (viewer && viewer.highlightTool) {
+            const contextMenu = document.getElementById(`highlight-context-menu-${blockId}`);
+            console.log(`[Global] Context menu for block ${blockId}:`, contextMenu);
+            console.log(`[Global] Context menu classes:`, contextMenu ? contextMenu.className : 'not found');
+            console.log(`[Global] Context menu visible:`, contextMenu ? contextMenu.classList.contains('visible') && !contextMenu.classList.contains('hidden') : 'not found');
+
+            const highlights = document.querySelectorAll(`#viewerContainer-${blockId} .highlight-group`);
+            console.log(`[Global] Found ${highlights.length} highlights for testing`);
+
+            highlights.forEach((highlight, index) => {
+                const id = highlight.getAttribute('data-annotation-id');
+                console.log(`[Global] Highlight ${index} (${id}): clickable=${highlight.style.pointerEvents !== 'none'}`);
+            });
+        } else {
+            console.error(`[Global] No viewer or highlight tool found for block: ${blockId}`);
+        }
+    } else {
+        // Find all viewers and test context menus
+        const viewers = Object.keys(window).filter(key => key.startsWith('pdfxViewer_'));
+        console.log(`[Global] Found ${viewers.length} PDF viewers, testing all context menus...`);
+
+        viewers.forEach(viewerKey => {
+            const blockId = viewerKey.replace('pdfxViewer_', '');
+            console.log(`[Global] Testing context menu for ${viewerKey}:`);
+            window.testContextMenu(blockId);
+        });
+
+        if (viewers.length === 0) {
+            console.warn(`[Global] No PDF viewers found to test`);
         }
     }
 };

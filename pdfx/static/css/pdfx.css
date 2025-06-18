@@ -491,7 +491,7 @@ input[type="range"] {
 /* Individual highlight elements */
 .highlight, .highlight-element, [class^="highlight-"] {
     position: absolute;
-    background-color: rgba(255, 235, 0, 0.4); /* Light yellow with better visibility */
+    background-color: rgba(255, 235, 0, 0.6); /* Light yellow with better visibility */
     border-radius: 2px;
     box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1);
     transition: all 0.2s ease;
@@ -2845,12 +2845,13 @@ canvas[data-main-rotation] {
     box-shadow: none !important;
     padding: 10px 0 !important;
     min-width: auto !important;
-    z-index: 100;
+    z-index: 200 !important; /* Ensure toolbar is above parameter toolbars */
     display: flex !important;
     flex-direction: column !important;
     gap: 5px !important;
     overflow-y: auto !important;
     flex-shrink: 0 !important;
+    pointer-events: auto !important; /* Always allow clicks on toolbar buttons */
 }
 
 /* Always show secondary toolbar - override hidden class */
@@ -2881,6 +2882,8 @@ canvas[data-main-rotation] {
     transition: all 0.2s ease;
     margin: 0 auto 5px auto;
     position: relative;
+    pointer-events: auto !important; /* Always ensure buttons are clickable */
+    z-index: 210 !important; /* Above parameter toolbars */
 }
 
 .pdfx-block.pdfjs-viewer .secondaryToolbarButton:hover {
@@ -2931,6 +2934,31 @@ canvas[data-main-rotation] {
     content: "\f2ed"; /* fa-eraser */
 }
 
+.pdfx-block.pdfjs-viewer .manualSaveButton::before {
+    content: "\f0c7"; /* fa-save */
+}
+
+.pdfx-block.pdfjs-viewer .saveStatusIndicator {
+    height: 8px !important;
+    width: 8px !important;
+    background: #00c63c;
+    display: block;
+    top: 7px;
+    right: 5px;
+    position: absolute;
+    border-radius: 500px;
+    animation: blink 2s infinite;
+}
+
+@keyframes blink {
+    0%, 50% {
+        opacity: 1;
+    }
+    51%, 100% {
+        opacity: 0.3;
+    }
+}
+
 /* Parameter Toolbars for Annotation Tools */
 .pdfx-block.pdfjs-viewer .toolbarButtonWithContainer {
     position: relative;
@@ -2942,7 +2970,7 @@ canvas[data-main-rotation] {
 
 /* Block-specific parameter toolbar styling to prevent interference between multiple PDF blocks */
 .pdfx-block.pdfjs-viewer .editorParamsToolbar[class*="editorParamsToolbar-"] {
-    position: fixed !important; /* Changed from absolute to fixed for better positioning */
+    position: fixed !important; /* Use absolute positioning relative to button */
     background: #ffffff;
     border: 1px solid #d0d0d0;
     border-radius: 8px;
@@ -2950,11 +2978,9 @@ canvas[data-main-rotation] {
     padding: 20px;
     min-width: auto; /* Slightly wider for better usability */
     max-width: 400px;
-    z-index: 10000 !important; /* Very high z-index to appear above everything */
+    z-index: 1000 !important; /* High enough to appear above content but not block toolbar */
     display: none;
     pointer-events: auto !important; /* Ensure toolbar is always clickable */
-    /* Remove transform - we'll handle positioning in JS */
-    position: relative; /* For auto-hide indicator positioning */
     cursor: auto !important;
 }
 
@@ -3546,6 +3572,8 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     content: "📷";
 }
 
+/* Stamp Tool Styles - Updated for new container structure */
+.stamp-container,
 .stamp-annotation {
     position: absolute;
     cursor: move;
@@ -3554,22 +3582,29 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     transition: border-color 0.2s ease;
     user-select: none;
     z-index: 30;
+    overflow: hidden; /* Ensure content fits within container */
+    box-sizing: border-box;
 }
 
+.stamp-container:hover,
 .stamp-annotation:hover {
     border-color: #007acc !important;
 }
 
+.stamp-container img,
 .stamp-annotation img {
     display: block;
-    max-width: 100%;
-    height: auto;
+    width: 100%;
+    height: 100%;
     user-select: none;
     pointer-events: none;
     border-radius: 2px;
     box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+    object-fit: contain; /* Maintain aspect ratio */
+    background: white; /* Ensure visibility */
 }
 
+.stamp-container.dragging,
 .stamp-annotation.dragging {
     opacity: 0.8;
     transform: scale(1.02);
@@ -4113,5 +4148,139 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
         right: 10px !important;
         left: 10px !important;
         text-align: center !important;
+    }
+}
+
+/* ===== HIGHLIGHT CONTEXT MENU STYLES ===== */
+.highlight-context-menu {
+    position: absolute;
+    background: white;
+    border: 1px solid #ccc;
+    border-radius: 6px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+    z-index: 99999 !important;
+    min-width: 200px;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+    font-size: 13px;
+    user-select: none;
+    -webkit-user-select: none;
+    -moz-user-select: none;
+    -ms-user-select: none;
+    animation: fadeIn 0.2s ease;
+}
+
+.highlight-context-menu.hidden {
+    display: none !important;
+}
+
+.highlight-context-menu.visible {
+    display: block !important;
+}
+
+.highlight-context-menu .context-menu-section {
+    padding: 8px;
+}
+
+.highlight-context-menu .context-menu-section:not(:last-child) {
+    border-bottom: 1px solid #eee;
+}
+
+.highlight-context-menu .context-color-grid,
+.highlight-context-menu .context-controls-grid {
+    display: flex;
+    gap: 4px;
+    align-items: center;
+    margin-top: 6px;
+}
+
+.highlight-context-menu .context-color-button {
+    width: 24px;
+    height: 24px;
+    border: 2px solid #ddd;
+    border-radius: 3px;
+    cursor: pointer;
+    transition: border-color 0.2s, transform 0.1s;
+    padding: 0;
+    margin: 0;
+    outline: none;
+}
+
+.highlight-context-menu .context-color-button:hover {
+    border-color: #007cba;
+    transform: scale(1.1);
+}
+
+.highlight-context-menu .context-color-button:focus {
+    border-color: #007cba;
+    box-shadow: 0 0 0 2px rgba(0, 124, 186, 0.2);
+}
+
+.highlight-context-menu .context-delete-button {
+    width: 100%;
+    padding: 6px 8px;
+    border: 1px solid #dc3545;
+    border-radius: 3px;
+    background-color: #dc3545;
+    color: white;
+    cursor: pointer;
+    font-size: 12px;
+    transition: background-color 0.2s, transform 0.1s;
+    outline: none;
+}
+
+.highlight-context-menu .context-delete-button:hover {
+    background-color: #c82333;
+    transform: translateY(-1px);
+}
+
+.highlight-context-menu .context-delete-button:active {
+    transform: translateY(0);
+}
+
+.highlight-context-menu .context-delete-button:focus {
+    box-shadow: 0 0 0 2px rgba(220, 53, 69, 0.2);
+}
+
+/* Enhanced highlight interaction styles */
+.highlight-group.saved-highlight,
+.highlight-group.highlight-interactive {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+.highlight-group.saved-highlight:hover .highlight-element,
+.highlight-group.highlight-interactive:hover .highlight-element {
+    opacity: 0.6 !important;
+}
+
+.highlight-group.saved-highlight .highlight-element,
+.highlight-group.highlight-interactive .highlight-element {
+    transition: opacity 0.2s ease;
+    pointer-events: auto !important;
+    cursor: pointer !important;
+}
+
+/* Context menu title styling */
+.highlight-context-menu .context-menu-section > div:first-child {
+    font-weight: 500;
+    margin-bottom: 6px;
+    color: #333;
+}
+
+/* Mobile responsive context menu */
+@media (max-width: 768px) {
+    .highlight-context-menu {
+        min-width: 160px;
+        font-size: 14px;
+    }
+
+    .highlight-context-menu .context-color-button {
+        width: 28px;
+        height: 28px;
+    }
+
+    .highlight-context-menu .context-delete-button {
+        padding: 8px 10px;
+        font-size: 14px;
     }
 }

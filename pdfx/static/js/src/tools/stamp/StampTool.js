@@ -2,11 +2,38 @@
  * StampTool - Image stamp functionality for PDF.js integration
  * Integrates with pdfx-init.js PdfxViewer class
  */
-class StampTool {
+window.StampTool = class StampTool {
     constructor(viewer, annotationInterface = null) {
         this.viewer = viewer;
         this.blockId = viewer.blockId;
         this.annotationInterface = annotationInterface;
+
+        // Current state
+        this.isActive = false;
+        this.placementMode = false;
+        this.currentImageData = null;
+
+        // Event handlers and state
+        this.pageClickHandlers = [];
+        this.escKeyHandler = null;
+        this.globalClickHandler = null;
+
+        // Popup state
+        this.popupMenu = null;
+        this.confirmationModal = null;
+
+        // Instructions element
+        this.instructionsElement = null;
+
+        // Drag and resize state
+        this.isDragging = false;
+        this.isResizing = false;
+        this.dragOffset = { x: 0, y: 0 };
+        this.resizeHandle = null;
+
+        // Zoom handling
+        this.currentScale = 1;
+        this.zoomHandler = null;
 
         // Stamp configuration
         this.supportedImageTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/gif', 'image/webp'];
@@ -61,6 +88,7 @@ class StampTool {
         this.setupImageUploadButton();
         this.setupGlobalClickHandler();
         this.setupGlobalEventHandlers();
+        this.setupZoomHandler();
     }
 
     setupToolButton() {
@@ -162,59 +190,96 @@ class StampTool {
      * Recreate proper stamp containers for saved stamps (called from pdfx-init.js)
      */
     recreateSavedStamps() {
-        console.log(`[StampTool] Recreating saved stamps for proper interaction`);
+        console.log(`[StampTool] Recreating saved stamps with proper containers`);
 
-        // Find all existing stamp images that were rendered as simple img elements
-        const existingImages = document.querySelectorAll(`#pdfx-block-${this.blockId} img[src*="data:image"]`);
+        // Find all saved stamp images without containers
+        const savedStampImages = document.querySelectorAll(`#viewerContainer-${this.blockId} .page img[data-annotation-id]`);
 
-        existingImages.forEach((img, index) => {
-            // Skip if already processed (has stamp-annotation parent)
-            if (img.closest('.stamp-annotation')) {
-                return;
-            }
+        savedStampImages.forEach(img => {
+            const annotationId = img.getAttribute('data-annotation-id');
+            const page = img.closest('.page');
 
-            const pageContainer = img.closest('.page');
-            if (!pageContainer) return;
+            if (!page) return;
 
-            // Get page number
-            let pageIndex = 0;
-            const pageNum = pageContainer.getAttribute('data-page-number');
-            if (pageNum) {
-                pageIndex = parseInt(pageNum) - 1; // Convert to 0-based
-            }
+            // Get current position and size from image
+            const currentX = parseFloat(img.style.left) || 0;
+            const currentY = parseFloat(img.style.top) || 0;
+            const currentWidth = parseFloat(img.style.width) || 100;
+            const currentHeight = parseFloat(img.style.height) || 100;
 
-            // Extract position and size from existing img
-            const x = parseInt(img.style.left) || 0;
-            const y = parseInt(img.style.top) || 0;
-            const width = parseInt(img.style.width) || 100;
-            const height = parseInt(img.style.height) || 100;
+            // Convert to percentages for proper zoom scaling
+            const pageRect = page.getBoundingClientRect();
+            const percentageData = this.convertPositionToPercentages(
+                currentX, currentY, currentWidth, currentHeight, pageRect
+            );
 
-            // Try to extract original annotation ID from data attributes if available
-            let originalAnnotationId = img.getAttribute('data-annotation-id');
-            console.log(`[StampTool] Recreating stamp - found annotation ID: ${originalAnnotationId} for image at (${x}, ${y})`);
+            // Create proper stamp container with new structure
+            const container = document.createElement('div');
+            container.className = 'stamp-container';
+            container.style.position = 'absolute';
+            container.style.left = `${currentX}px`;
+            container.style.top = `${currentY}px`;
+            container.style.width = `${currentWidth}px`;
+            container.style.height = `${currentHeight}px`;
+            container.style.zIndex = '50';
+            container.style.cursor = 'pointer';
+            container.style.border = '2px solid transparent';
+            container.style.borderRadius = '4px';
+            container.style.transition = 'border-color 0.2s';
+            container.setAttribute('data-stamp-id', annotationId);
 
-            if (!originalAnnotationId) {
-                // Generate a stable ID based on image properties for saved stamps
-                originalAnnotationId = `saved_stamp_${pageIndex}_${x}_${y}_${Date.now()}`;
-                console.log(`[StampTool] No annotation ID found, generated: ${originalAnnotationId}`);
-            }
+            // Store percentage data for zoom handling
+            container.setAttribute('data-percentage-position', JSON.stringify(percentageData));
 
-            // Create imageData object for compatibility
-            const imageData = {
-                id: `saved-stamp-${this.blockId}-${++this.stampCounter}`,
-                dataUrl: img.src,
-                width: width,
-                height: height,
-                aspectRatio: width / height,
-                file: { name: 'saved_stamp.png' }, // Placeholder
-                originalAnnotationId: originalAnnotationId // Preserve original ID
-            };
+            // Update image styling for container structure
+            img.style.position = 'relative';
+            img.style.left = '0px';
+            img.style.top = '0px';
+            img.style.width = '100%';
+            img.style.height = '100%';
+            img.style.display = 'block';
+            img.style.objectFit = 'contain';
+            img.style.pointerEvents = 'none';
+            img.setAttribute('data-stamp-id', annotationId);
 
-            // Remove the old img element
+            // Remove image from page and add to container
             img.remove();
+            container.appendChild(img);
 
-            // Create proper stamp container with interaction handlers
-            this.createStampElement(pageContainer, pageIndex, x, y, imageData, true);
+            // Add resize handles
+            this.createResizeHandles(container);
+
+            // Create image data for interaction handlers
+            const imageData = {
+                id: annotationId,
+                dataUrl: img.src,
+                fileName: 'saved-stamp.png',
+                aspectRatio: currentWidth / currentHeight
+            };
+            const pageIndex = this.getPageIndex(page);
+
+            // Store stamp data
+            const stampData = {
+                id: annotationId,
+                container: container,
+                imageData: imageData,
+                pageIndex: pageIndex,
+                x: currentX,
+                y: currentY,
+                width: currentWidth,
+                height: currentHeight,
+                percentageData: percentageData,
+                annotationId: annotationId
+            };
+            this.activeStamps.set(annotationId, stampData);
+
+            // Add interaction handlers
+            this.addStampInteractionHandlers(container, imageData, pageIndex);
+
+            // Add container back to page
+            page.appendChild(container);
+
+            console.log(`[StampTool] Recreated stamp container for annotation: ${annotationId}`);
         });
     }
 
@@ -304,15 +369,25 @@ class StampTool {
                     // Draw image to canvas
                     ctx.drawImage(img, 0, 0, width, height);
 
+                    const dataUrl = canvas.toDataURL('image/png');
+
                     const imageData = {
                         id: `stamp-${this.blockId}-${++this.stampCounter}`,
                         file: file,
+                        fileName: file.name,
                         canvas: canvas,
                         width: width,
                         height: height,
-                        dataUrl: canvas.toDataURL('image/png'),
+                        dataUrl: dataUrl,
                         aspectRatio: width / height
                     };
+
+                    console.log(`[StampTool] Created image data:`, {
+                        id: imageData.id,
+                        dimensions: `${width}x${height}`,
+                        dataUrlLength: dataUrl.length,
+                        aspectRatio: imageData.aspectRatio
+                    });
 
                     resolve(imageData);
                 };
@@ -370,93 +445,125 @@ class StampTool {
     }
 
     handleStampPlacement(event, page, pageIndex, imageData) {
-        console.log(`[StampTool] Placing stamp on page ${pageIndex} at position:`, event.offsetX, event.offsetY);
+        console.log(`[StampTool] Placing stamp on page ${pageIndex} at click position:`, event.offsetX, event.offsetY);
 
         // Get click position relative to page
         const pageRect = page.getBoundingClientRect();
         const x = event.clientX - pageRect.left;
         const y = event.clientY - pageRect.top;
 
+        console.log(`[StampTool] Page rect:`, {
+            width: pageRect.width,
+            height: pageRect.height,
+            top: pageRect.top,
+            left: pageRect.left
+        });
+        console.log(`[StampTool] Calculated position:`, { x, y });
+
         // Create stamp element
-        this.createStampElement(page, pageIndex, x, y, imageData);
+        const container = this.createStampElement(page, pageIndex, x, y, imageData);
+
+        if (container) {
+            console.log(`[StampTool] Successfully created stamp container:`, {
+                id: container.getAttribute('data-stamp-id'),
+                position: {
+                    left: container.style.left,
+                    top: container.style.top,
+                    width: container.style.width,
+                    height: container.style.height
+                }
+            });
+        } else {
+            console.error(`[StampTool] Failed to create stamp container!`);
+        }
 
         // Clean up placement mode
         this.cleanupStampPlacement();
     }
 
     createStampElement(page, pageIndex, x, y, imageData, isSaved = false) {
-        console.log(`[StampTool] Creating stamp element at (${x}, ${y}) on page ${pageIndex}`);
+        const pageRect = page.getBoundingClientRect();
 
-        // Create stamp container
-        const stampContainer = document.createElement('div');
-        stampContainer.className = 'stamp-annotation';
-        stampContainer.id = imageData.id;
-        stampContainer.style.position = 'absolute';
-        stampContainer.style.left = `${x}px`;
-        stampContainer.style.top = `${y}px`;
-        stampContainer.style.zIndex = '30';
-        stampContainer.style.cursor = 'move';
-        stampContainer.style.border = '2px solid transparent';
-        stampContainer.style.borderRadius = '4px';
-        stampContainer.style.userSelect = 'none';
+        // Convert coordinates to percentages for storage
+        const defaultWidth = Math.min(imageData.width || 100, pageRect.width * 0.3);
+        const defaultHeight = Math.min(imageData.height || 100, pageRect.height * 0.3);
 
-        // Create image element
-        const imgElement = document.createElement('img');
-        imgElement.src = imageData.dataUrl;
-        imgElement.style.width = `${imageData.width}px`;
-        imgElement.style.height = `${imageData.height}px`;
-        imgElement.style.display = 'block';
-        imgElement.style.userSelect = 'none';
-        imgElement.style.pointerEvents = 'none';
-        imgElement.draggable = false;
+        const percentageData = this.convertPositionToPercentages(x, y, defaultWidth, defaultHeight, pageRect);
 
-        // Create resize handles
-        this.createResizeHandles(stampContainer);
+        // Create stamp container - positioned at the click location
+        const container = document.createElement('div');
+        container.className = 'stamp-container';
+        container.style.position = 'absolute';
+        container.style.left = `${x}px`;
+        container.style.top = `${y}px`;
+        container.style.width = `${defaultWidth}px`;
+        container.style.height = `${defaultHeight}px`;
+        container.style.zIndex = '50';
+        container.style.cursor = 'pointer';
+        container.style.border = '2px solid transparent';
+        container.style.borderRadius = '4px';
+        container.style.transition = 'border-color 0.2s';
+
+        // Store percentage data for zoom handling
+        container.setAttribute('data-percentage-position', JSON.stringify(percentageData));
+
+        // Create image element - positioned relative to container
+        const img = document.createElement('img');
+        img.src = imageData.dataUrl;
+        img.style.position = 'relative';
+        img.style.left = '0px';
+        img.style.top = '0px';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.display = 'block';
+        img.style.userSelect = 'none';
+        img.style.pointerEvents = 'none';
+        img.style.objectFit = 'contain'; // Maintain aspect ratio
+        img.style.borderRadius = '2px';
+
+        // Generate unique ID for this stamp
+        const stampId = `stamp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
+        container.setAttribute('data-stamp-id', stampId);
+        img.setAttribute('data-stamp-id', stampId);
+
+        container.appendChild(img);
+
+        // Add resize handles
+        this.createResizeHandles(container);
 
         // Add interaction handlers
-        this.addStampInteractionHandlers(stampContainer, imageData, pageIndex);
-
-        // Append image to container
-        stampContainer.appendChild(imgElement);
+        this.addStampInteractionHandlers(container, imageData, pageIndex);
 
         // Make page relative positioned if not already
         if (getComputedStyle(page).position === 'static') {
             page.style.position = 'relative';
         }
 
-        // Append to page
-        page.appendChild(stampContainer);
+        page.appendChild(container);
 
-        // Create annotation ID for this stamp
-        let annotationId;
-        if (isSaved && imageData.originalAnnotationId) {
-            // Use the original annotation ID for saved stamps to maintain consistency
-            annotationId = imageData.originalAnnotationId;
-        } else if (isSaved) {
-            // Fallback for saved stamps without original ID
-            annotationId = `saved_stamp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        } else {
-            // New stamps get new IDs
-            annotationId = `stamp_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
-        }
-
-        // Store stamp data
+        // Store stamp data for tracking
         const stampData = {
-            container: stampContainer,
+            id: stampId,
+            container: container,
             imageData: imageData,
             pageIndex: pageIndex,
             x: x,
             y: y,
-            width: imageData.width,
-            height: imageData.height,
-            annotationId: annotationId
+            width: defaultWidth,
+            height: defaultHeight,
+            percentageData: percentageData,
+            annotationId: stampId // For annotation system
         };
-        this.activeStamps.set(imageData.id, stampData);
+        this.activeStamps.set(stampId, stampData);
 
-        // Save initial annotation for new stamps (not for saved/recreated ones)
+        // Save annotation if not from saved data
         if (!isSaved) {
             this.saveStampAnnotation(stampData);
         }
+
+        console.log(`[StampTool] Created stamp element at (${x}, ${y}) with size ${defaultWidth}x${defaultHeight} on page ${pageIndex + 1}`);
+
+        return container;
     }
 
     createResizeHandles(container) {
@@ -507,13 +614,13 @@ class StampTool {
 
         // Show/hide handles on hover
         container.addEventListener('mouseenter', () => {
-            container.style.border = '2px solid #007acc';
+            container.style.borderColor = '#007acc';
             handles.forEach(handle => handle.style.opacity = '1');
         });
 
         container.addEventListener('mouseleave', () => {
             if (!this.dragState.isDragging && !this.dragState.isResizing) {
-                container.style.border = '2px solid transparent';
+                container.style.borderColor = 'transparent';
                 handles.forEach(handle => handle.style.opacity = '0');
             }
         });
@@ -564,7 +671,7 @@ class StampTool {
         });
     }
 
-        showPopupMenu(container, imageData) {
+    showPopupMenu(container, imageData) {
         console.log(`[StampTool] showPopupMenu called for stamp:`, imageData.id);
 
         // Hide any existing popup
@@ -850,14 +957,12 @@ class StampTool {
         }
     }
 
-
-
     startDrag(e, container, imageData) {
         this.dragState.isDragging = true;
         this.dragState.startX = e.clientX;
         this.dragState.startY = e.clientY;
-        this.dragState.startLeft = parseInt(container.style.left);
-        this.dragState.startTop = parseInt(container.style.top);
+        this.dragState.startLeft = parseInt(container.style.left) || 0;
+        this.dragState.startTop = parseInt(container.style.top) || 0;
         e.preventDefault();
     }
 
@@ -867,9 +972,10 @@ class StampTool {
         this.dragState.startX = e.clientX;
         this.dragState.startY = e.clientY;
 
-        const imgElement = container.querySelector('img');
-        this.dragState.startWidth = parseInt(imgElement.style.width);
-        this.dragState.startHeight = parseInt(imgElement.style.height);
+        this.dragState.startWidth = parseInt(container.style.width) || 100;
+        this.dragState.startHeight = parseInt(container.style.height) || 100;
+        this.dragState.startLeft = parseInt(container.style.left) || 0;
+        this.dragState.startTop = parseInt(container.style.top) || 0;
 
         e.preventDefault();
         e.stopPropagation();
@@ -879,8 +985,11 @@ class StampTool {
         const deltaX = e.clientX - this.dragState.startX;
         const deltaY = e.clientY - this.dragState.startY;
 
-        container.style.left = `${this.dragState.startLeft + deltaX}px`;
-        container.style.top = `${this.dragState.startTop + deltaY}px`;
+        const newLeft = this.dragState.startLeft + deltaX;
+        const newTop = this.dragState.startTop + deltaY;
+
+        container.style.left = `${newLeft}px`;
+        container.style.top = `${newTop}px`;
     }
 
     handleResize(e, container, imgElement, imageData) {
@@ -891,7 +1000,7 @@ class StampTool {
         let newHeight = this.dragState.startHeight;
 
         const direction = this.dragState.resizeHandle;
-        const aspectRatio = imageData.aspectRatio;
+        const aspectRatio = imageData.aspectRatio || 1;
 
         // Calculate new dimensions based on resize direction
         switch(direction) {
@@ -925,56 +1034,66 @@ class StampTool {
         // Apply minimum size constraints
         const minSize = 20;
         if (newWidth >= minSize && newHeight >= minSize) {
-            imgElement.style.width = `${newWidth}px`;
-            imgElement.style.height = `${newHeight}px`;
+            container.style.width = `${newWidth}px`;
+            container.style.height = `${newHeight}px`;
         }
     }
 
     endDragOrResize(container, imageData) {
-        if (this.dragState.isDragging || this.dragState.isResizing) {
-            // Update stored data
-            const stampData = this.activeStamps.get(imageData.id);
-            if (stampData) {
-                // Update position and size in stored data
-                stampData.x = parseInt(container.style.left);
-                stampData.y = parseInt(container.style.top);
+        if (!this.dragState.isDragging && !this.dragState.isResizing) return;
 
-                const imgElement = container.querySelector('img');
-                stampData.width = parseInt(imgElement.style.width);
-                stampData.height = parseInt(imgElement.style.height);
+        const wasResizing = this.dragState.isResizing;
+        this.dragState.isDragging = false;
+        this.dragState.isResizing = false;
+        this.dragState.resizeHandle = null;
 
-                // Only save if there was actual movement/resize to avoid unnecessary saves
-                if (this.dragState.hasMoved) {
-                    console.log(`[StampTool] Updating stamp position/size:`, stampData.annotationId, `to (${stampData.x}, ${stampData.y}) size ${stampData.width}x${stampData.height}`);
-                    this.saveStampAnnotation(stampData);
-                }
-            } else {
-                console.warn(`[StampTool] Could not find stamp data for imageData.id:`, imageData.id);
-            }
+        // Update cursor
+        container.style.cursor = 'pointer';
+        document.body.style.cursor = 'default';
 
-            // Hide handles
-            const handles = container.querySelectorAll('.resize-handle');
-            handles.forEach(handle => handle.style.opacity = '0');
-            container.style.border = '2px solid transparent';
+        // Get current position and size from container
+        const currentX = parseFloat(container.style.left) || 0;
+        const currentY = parseFloat(container.style.top) || 0;
+        const currentWidth = parseFloat(container.style.width) || 100;
+        const currentHeight = parseFloat(container.style.height) || 100;
+
+        // Get page for percentage calculation
+        const page = container.closest('.page');
+        let percentageData = null;
+        if (page) {
+            const pageRect = page.getBoundingClientRect();
+            percentageData = this.convertPositionToPercentages(
+                currentX, currentY, currentWidth, currentHeight, pageRect
+            );
+
+            // Update stored percentage data
+            container.setAttribute('data-percentage-position', JSON.stringify(percentageData));
         }
 
-        // Reset drag state
-        this.dragState = {
-            isDragging: false,
-            isResizing: false,
-            startX: 0,
-            startY: 0,
-            startLeft: 0,
-            startTop: 0,
-            startWidth: 0,
-            startHeight: 0,
-            resizeHandle: null,
-            hasMoved: false,
-            currentStamp: null
-        };
+        // Save updated position/size
+        const stampId = container.getAttribute('data-stamp-id');
+        const pageIndex = this.getPageIndex(container);
+
+        if (stampId) {
+            // Update stamp data in activeStamps
+            if (this.activeStamps.has(stampId)) {
+                const stampData = this.activeStamps.get(stampId);
+                stampData.x = currentX;
+                stampData.y = currentY;
+                stampData.width = currentWidth;
+                stampData.height = currentHeight;
+                stampData.percentageData = percentageData;
+                this.activeStamps.set(stampId, stampData);
+
+                this.saveStampAnnotation(stampData);
+
+                const action = wasResizing ? 'resized' : 'moved';
+                console.log(`[StampTool] Stamp ${action} to (${currentX}, ${currentY}) with size ${currentWidth}x${currentHeight}`);
+            }
+        }
     }
 
-        deleteStamp(stampId) {
+    deleteStamp(stampId) {
         console.log(`[StampTool] deleteStamp called for stampId:`, stampId);
 
         const stampData = this.activeStamps.get(stampId);
@@ -1050,40 +1169,32 @@ class StampTool {
      * Save stamp annotation with current position and size
      */
     saveStampAnnotation(stampData) {
-        const { imageData, x, y, width, height, pageIndex, annotationId } = stampData;
+        if (!this.annotationInterface) {
+            console.warn(`[StampTool] No annotation interface available - stamp will not be saved!`);
+            return;
+        }
 
-        // Create annotation object with consistent ID for updates
         const annotation = {
-            id: annotationId, // Keep the same ID for updates
+            id: stampData.id,
             type: 'shape_annotations',
-            pageNum: pageIndex + 1, // pageIndex is 0-based, pageNum is 1-based
+            pageNum: stampData.pageIndex + 1, // Convert 0-based to 1-based
             data: {
-                stampId: imageData.id,
-                imageDataUrl: imageData.dataUrl,
-                fileName: imageData.file.name,
-                x: x,
-                y: y,
-                width: width,
-                height: height,
-                _action: 'update' // Mark as update operation
-            },
-            config: {
                 type: 'stamp',
-                position: { x, y },
-                dimensions: {
-                    width: width,
-                    height: height
-                }
-            }
+                x: stampData.x,
+                y: stampData.y,
+                width: stampData.width,
+                height: stampData.height,
+                percentageData: stampData.percentageData, // Store percentage data
+                imageDataUrl: stampData.imageData.dataUrl,
+                fileName: stampData.imageData.fileName || 'stamp.png',
+                fileSize: stampData.imageData.fileSize || 0
+            },
+            config: {},
+            timestamp: Date.now()
         };
 
-        // Save annotation through interface
-        if (this.annotationInterface) {
-            this.annotationInterface.saveAnnotation(annotation);
-            console.log(`[StampTool] Saved stamp annotation update:`, annotationId, `at (${x}, ${y}) size ${width}x${height}`);
-        } else {
-            console.warn(`[StampTool] No annotation interface - stamp will not be saved!`);
-        }
+        console.log(`[StampTool] Saving stamp annotation:`, annotation.id);
+        this.annotationInterface.saveAnnotation(annotation);
     }
 
     /**
@@ -1244,16 +1355,32 @@ class StampTool {
     }
 
     cleanup() {
-        // Hide popup menu and confirmation modal
+        // Remove zoom handler
+        if (this.viewer.eventBus && this.zoomHandler) {
+            this.viewer.eventBus.off('scalechanging', this.zoomHandler);
+            this.zoomHandler = null;
+        }
+
+        this.cleanupStampPlacement();
+        this.hidePlacementInstructions();
         this.hidePopupMenu();
         this.hideConfirmationModal();
 
-        // Remove global event handlers
-        if (this.globalMouseMoveHandler) {
-            document.removeEventListener('mousemove', this.globalMouseMoveHandler);
+        // Remove all page click handlers
+        this.pageClickHandlers.forEach(({ page, handler }) => {
+            page.removeEventListener('click', handler);
+        });
+        this.pageClickHandlers = [];
+
+        // Remove global handlers
+        if (this.escKeyHandler) {
+            document.removeEventListener('keydown', this.escKeyHandler);
+            this.escKeyHandler = null;
         }
-        if (this.globalMouseUpHandler) {
-            document.removeEventListener('mouseup', this.globalMouseUpHandler);
+
+        if (this.globalClickHandler) {
+            document.removeEventListener('click', this.globalClickHandler);
+            this.globalClickHandler = null;
         }
 
         // Remove all event handlers
@@ -1268,12 +1395,99 @@ class StampTool {
         });
         this.activeStamps.clear();
 
-        // Clean up placement mode
-        this.cleanupStampPlacement();
-
         console.log(`[StampTool] Cleanup completed`);
     }
-}
 
-// Expose StampTool globally for current architecture compatibility
-window.StampTool = StampTool;
+    /**
+     * Setup zoom event handling for stamp repositioning
+     */
+    setupZoomHandler() {
+        if (this.viewer.eventBus) {
+            this.zoomHandler = (evt) => {
+                const newScale = evt.scale;
+                if (newScale !== this.currentScale) {
+                    console.log(`[StampTool] Scale changed from ${this.currentScale} to ${newScale}`);
+                    this.currentScale = newScale;
+                    this.repositionAllStamps();
+                }
+            };
+            this.viewer.eventBus.on('scalechanging', this.zoomHandler);
+        }
+    }
+
+    /**
+     * Reposition all stamps when zoom changes
+     */
+    repositionAllStamps() {
+        const stamps = document.querySelectorAll(`#viewerContainer-${this.blockId} .stamp-container`);
+        stamps.forEach(stampContainer => {
+            const storedData = stampContainer.getAttribute('data-percentage-position');
+
+            if (storedData) {
+                try {
+                    const percentageData = JSON.parse(storedData);
+                    this.updateStampPosition(stampContainer, percentageData);
+                } catch (e) {
+                    console.warn(`[StampTool] Failed to parse stored position data for stamp`);
+                }
+            }
+        });
+    }
+
+    /**
+     * Update stamp position based on percentage data
+     */
+    updateStampPosition(stampContainer, percentageData) {
+        const page = stampContainer.closest('.page');
+        if (!page) return;
+
+        const pageRect = page.getBoundingClientRect();
+
+        if (percentageData) {
+            const newX = (percentageData.xPercent / 100) * pageRect.width;
+            const newY = (percentageData.yPercent / 100) * pageRect.height;
+            const newWidth = (percentageData.widthPercent / 100) * pageRect.width;
+            const newHeight = (percentageData.heightPercent / 100) * pageRect.height;
+
+            // Update container position and size
+            stampContainer.style.left = `${newX}px`;
+            stampContainer.style.top = `${newY}px`;
+            stampContainer.style.width = `${newWidth}px`;
+            stampContainer.style.height = `${newHeight}px`;
+
+            // Update stamp data in activeStamps
+            const stampId = stampContainer.getAttribute('data-stamp-id');
+            if (stampId && this.activeStamps.has(stampId)) {
+                const stampData = this.activeStamps.get(stampId);
+                stampData.x = newX;
+                stampData.y = newY;
+                stampData.width = newWidth;
+                stampData.height = newHeight;
+                this.activeStamps.set(stampId, stampData);
+            }
+
+            console.log(`[StampTool] Updated stamp position to (${newX}, ${newY}) with size ${newWidth}x${newHeight}`);
+        }
+    }
+
+    /**
+     * Convert pixel coordinates to percentages relative to page
+     */
+    convertPositionToPercentages(x, y, width, height, pageRect) {
+        return {
+            xPercent: (x / pageRect.width) * 100,
+            yPercent: (y / pageRect.height) * 100,
+            widthPercent: (width / pageRect.width) * 100,
+            heightPercent: (height / pageRect.height) * 100
+        };
+    }
+
+    getPageIndex(container) {
+        const page = container.closest('.page');
+        if (page) {
+            const pageNum = page.getAttribute('data-page-number');
+            return parseInt(pageNum) - 1; // Convert 1-based to 0-based
+        }
+        return null;
+    }
+};

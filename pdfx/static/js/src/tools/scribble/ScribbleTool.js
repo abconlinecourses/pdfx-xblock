@@ -9,14 +9,19 @@ window.ScribbleTool = class ScribbleTool {
         this.annotationInterface = annotationInterface;
 
         // Drawing configuration
-        this.inkColor = '#FF0000'; // Default red
-        this.inkThickness = 2;
+        this.inkColor = '#FF0000';
+        this.inkThickness = 1;
         this.inkOpacity = 1;
 
-        // Canvas management
-        this.canvases = new Map();
+        // Drawing state
+        this.isDrawing = false;
+        this.currentStroke = [];
+        this.allCanvases = [];
 
-        // Initialize
+        // Zoom handling
+        this.currentScale = 1;
+        this.zoomHandler = null;
+
         this.init();
     }
 
@@ -24,6 +29,7 @@ window.ScribbleTool = class ScribbleTool {
         console.log(`[ScribbleTool] Initializing for block: ${this.blockId}`);
         this.setupToolButton();
         this.initScribbleControls();
+        this.setupZoomHandler();
     }
 
     setupToolButton() {
@@ -62,8 +68,18 @@ window.ScribbleTool = class ScribbleTool {
         // Setup drawing canvas overlays for each page
         this.setupDrawingCanvases();
 
+        // Activate all drawing canvases
+        const canvases = document.querySelectorAll(`#pdfx-block-${this.blockId} .drawing-canvas`);
+        canvases.forEach(canvas => {
+            canvas.classList.add('active');
+            canvas.style.pointerEvents = 'auto';
+            canvas.style.cursor = 'crosshair';
+        });
+
         // Get current ink settings
         this.updateInkSettings();
+
+        console.log(`[ScribbleTool] Activated ${canvases.length} drawing canvases`);
     }
 
     disableDrawingMode() {
@@ -102,52 +118,64 @@ window.ScribbleTool = class ScribbleTool {
     }
 
     setupDrawingCanvases() {
-        const viewer = document.getElementById(`viewer-${this.blockId}`);
-        if (!viewer) return;
-
-        // Find all PDF pages
-        const pages = viewer.querySelectorAll('.page');
+        // Find all page containers
+        const pages = document.querySelectorAll(`#viewerContainer-${this.blockId} .page`);
 
         pages.forEach((page, index) => {
+            // Check if canvas already exists
             let canvas = page.querySelector('.drawing-canvas');
 
-            if (canvas) {
-                // Canvas already exists, just activate it
-                canvas.classList.add('active');
-                canvas.style.pointerEvents = 'auto';
-
-                // Re-add drawing event listeners in case they were lost during tool switching
-                this.addDrawingListeners(canvas);
-
-                console.log(`[ScribbleTool] Reactivated existing drawing canvas: ${canvas.id}`);
-            } else {
-                // Create new drawing canvas
+            if (!canvas) {
+                // Create canvas for drawing
                 canvas = document.createElement('canvas');
-                canvas.className = 'drawing-canvas active';
-                canvas.id = `drawing-canvas-${this.blockId}-${index}`;
-
-                // Set canvas size to match page
-                const pageRect = page.getBoundingClientRect();
-                canvas.width = pageRect.width;
-                canvas.height = pageRect.height;
-
-                // Position canvas over page
+                canvas.className = 'drawing-canvas';
                 canvas.style.position = 'absolute';
                 canvas.style.top = '0';
                 canvas.style.left = '0';
                 canvas.style.zIndex = '25';
                 canvas.style.pointerEvents = 'auto';
+                canvas.style.cursor = 'crosshair';
 
-                // Add drawing event listeners
-                this.addDrawingListeners(canvas);
+                // Set canvas size to match page (will be updated on zoom)
+                const pageRect = page.getBoundingClientRect();
+                canvas.width = pageRect.width;
+                canvas.height = pageRect.height;
+                canvas.style.width = `${pageRect.width}px`;
+                canvas.style.height = `${pageRect.height}px`;
 
-                // Append to page
-                page.style.position = 'relative';
+                // Make page relative positioned if not already
+                if (getComputedStyle(page).position === 'static') {
+                    page.style.position = 'relative';
+                }
+
                 page.appendChild(canvas);
+                this.allCanvases.push(canvas);
 
-                console.log(`[ScribbleTool] Created new drawing canvas: ${canvas.id}`);
+                console.log(`[ScribbleTool] Created drawing canvas for page ${index + 1} with size ${canvas.width}x${canvas.height}`);
+            } else {
+                // Ensure existing canvas is in our tracking list
+                if (!this.allCanvases.includes(canvas)) {
+                    this.allCanvases.push(canvas);
+                }
+
+                // Update canvas size to current page size
+                const pageRect = page.getBoundingClientRect();
+                canvas.width = pageRect.width;
+                canvas.height = pageRect.height;
+                canvas.style.width = `${pageRect.width}px`;
+                canvas.style.height = `${pageRect.height}px`;
+
+                // Reset canvas state for reuse
+                canvas.style.pointerEvents = 'auto';
+                canvas.style.cursor = 'crosshair';
+                canvas._drawingListenersAdded = false; // Allow listeners to be re-added
             }
+
+            // Add drawing listeners
+            this.addDrawingListeners(canvas);
         });
+
+        console.log(`[ScribbleTool] Setup drawing canvases for ${pages.length} pages`);
     }
 
     addDrawingListeners(canvas) {
@@ -280,40 +308,49 @@ window.ScribbleTool = class ScribbleTool {
      * Save drawing stroke as annotation
      */
     saveDrawingStroke(canvas) {
-        // Get page number from canvas ID
+        if (!this.annotationInterface) {
+            console.warn(`[ScribbleTool] No annotation interface - drawing will not be saved!`);
+            return;
+        }
+
+        // Get page number for this canvas
         const pageNum = this.getPageNumberFromCanvas(canvas);
 
-        // Get canvas data as base64 image
-        const canvasData = canvas.toDataURL('image/png');
+        // Get canvas image data as base64
+        const imageData = canvas.toDataURL('image/png');
+
+        // Also store the current scale for reference
+        const canvasMetadata = {
+            width: canvas.width,
+            height: canvas.height,
+            scale: this.currentScale,
+            timestamp: Date.now()
+        };
 
         // Create annotation object
         const annotation = {
-            id: `scribble_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
+            id: `drawing_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`,
             type: 'drawing_strokes',
             pageNum: pageNum,
             data: {
-                canvasId: canvas.id,
-                imageData: canvasData,
-                inkColor: this.inkColor,
-                inkThickness: this.inkThickness,
-                inkOpacity: this.inkOpacity,
-                canvasWidth: canvas.width,
-                canvasHeight: canvas.height
-            },
-            config: {
+                imageData: imageData,
+                metadata: canvasMetadata,
                 color: this.inkColor,
                 thickness: this.inkThickness,
                 opacity: this.inkOpacity
-            }
+            },
+            config: {
+                inkSettings: {
+                    color: this.inkColor,
+                    thickness: this.inkThickness,
+                    opacity: this.inkOpacity
+                }
+            },
+            timestamp: Date.now()
         };
 
-        // Save annotation through interface
-        if (this.annotationInterface) {
-            console.log(`[ScribbleTool] ANNOTATION_SAVE: Saving drawing annotation:`, annotation.id);
-            this.annotationInterface.saveAnnotation(annotation);
-        } else {
-            console.warn(`[ScribbleTool] ANNOTATION_MISSING: No annotation interface - drawing will not be saved!`);
-        }
+        console.log(`[ScribbleTool] Saving drawing stroke for page ${pageNum}`);
+        this.annotationInterface.saveAnnotation(annotation);
     }
 
     /**
@@ -355,12 +392,79 @@ window.ScribbleTool = class ScribbleTool {
         }
     }
 
-    cleanup() {
-        // Remove canvases and clean up
-        const canvases = document.querySelectorAll(`#pdfx-block-${this.blockId} .drawing-canvas`);
-        canvases.forEach(canvas => {
-            canvas.remove();
+    setupZoomHandler() {
+        if (this.viewer.eventBus) {
+            this.zoomHandler = (evt) => {
+                const newScale = evt.scale;
+                if (newScale !== this.currentScale) {
+                    console.log(`[ScribbleTool] Scale changed from ${this.currentScale} to ${newScale}`);
+                    const scaleRatio = newScale / this.currentScale;
+                    this.currentScale = newScale;
+                    this.rescaleAllCanvases(scaleRatio);
+                }
+            };
+            this.viewer.eventBus.on('scalechanging', this.zoomHandler);
+        }
+    }
+
+    rescaleAllCanvases(scaleRatio) {
+        this.allCanvases.forEach(canvas => {
+            // Get the page to determine new canvas size
+            const page = canvas.closest('.page');
+            if (page) {
+                const pageRect = page.getBoundingClientRect();
+
+                // Store current image data
+                const ctx = canvas.getContext('2d');
+                const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+
+                // Update canvas size to match new page size
+                canvas.width = pageRect.width;
+                canvas.height = pageRect.height;
+                canvas.style.width = `${pageRect.width}px`;
+                canvas.style.height = `${pageRect.height}px`;
+
+                // Clear and redraw with scaling
+                ctx.clearRect(0, 0, canvas.width, canvas.height);
+
+                // Create a temporary canvas to scale the image
+                const tempCanvas = document.createElement('canvas');
+                tempCanvas.width = imageData.width;
+                tempCanvas.height = imageData.height;
+                const tempCtx = tempCanvas.getContext('2d');
+                tempCtx.putImageData(imageData, 0, 0);
+
+                // Draw the scaled image onto the main canvas
+                ctx.imageSmoothingEnabled = true;
+                ctx.drawImage(tempCanvas,
+                    0, 0, tempCanvas.width, tempCanvas.height,
+                    0, 0, canvas.width, canvas.height
+                );
+
+                console.log(`[ScribbleTool] Rescaled canvas for page to ${canvas.width}x${canvas.height}`);
+            }
         });
-        this.canvases.clear();
+    }
+
+    cleanup() {
+        // Remove zoom handler
+        if (this.viewer.eventBus && this.zoomHandler) {
+            this.viewer.eventBus.off('scalechanging', this.zoomHandler);
+            this.zoomHandler = null;
+        }
+
+        // Remove all drawing canvases
+        this.allCanvases.forEach(canvas => {
+            if (canvas.parentNode) {
+                canvas.remove();
+            }
+        });
+        this.allCanvases = [];
+
+        // Reset drawing state
+        this.isDrawing = false;
+        this.currentStroke = [];
+
+        console.log(`[ScribbleTool] Cleanup completed`);
     }
 };
