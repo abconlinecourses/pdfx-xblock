@@ -18,6 +18,8 @@ DO NOT add unnecessary console.log,  console.warn, console.debug, add only when 
   * Source: `pdfx-xblock/pdfx/static/js/src/`
   * tools : `pdfx-xblock/pdfx/static/js/src/tools/`
 
+console.log and other logs: DO NOT create unnessary logs, if issues are resolved clean the log related codes.
+
 * **CSS:** `pdf.css` (LMS), `pdf_edit.css` (Studio)
 
 **Note:** Write robust code, avoid quick silly fixes.

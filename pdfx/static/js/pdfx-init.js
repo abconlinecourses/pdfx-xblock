@@ -1300,6 +1300,9 @@ class PdfxViewer {
                 console.log('[PdfxViewer] Pages initialized event received');
                 // Don't initialize annotation tools here - wait for first page to load
                 // This event fires too early, before pages are fully ready
+
+                // Initialize download tool early since it doesn't depend on page content
+                this.initDownloadTool();
             });
 
             this.eventBus.on('pagechanging', (evt) => {
@@ -1328,15 +1331,13 @@ class PdfxViewer {
             this.eventBus.on('pagesloaded', () => {
                 console.log('[PdfxViewer] All pages loaded and ready');
                 this.initAnnotationTools();
+                this.initDownloadTool(); // Initialize download tool separately from annotation tools
             });
         }
     }
 
     initAnnotationTools() {
-        console.log(`[PdfxViewer] initAnnotationTools called - allowAnnotation: ${this.config.allowAnnotation}`);
-
         if (!this.config.allowAnnotation) {
-            console.log(`[PdfxViewer] Annotations disabled`);
             return;
         }
 
@@ -1344,8 +1345,6 @@ class PdfxViewer {
             console.error(`[PdfxViewer] TOOLS_INIT: No annotation interface available - tools cannot save annotations!`);
             return;
         }
-
-        console.log(`[PdfxViewer] TOOLS_INIT: Initializing annotation tools with storage interface`);
 
         // Check if secondary toolbar exists first
         const secondaryToolbar = document.getElementById(`secondaryToolbar-${this.blockId}`);
@@ -1361,6 +1360,7 @@ class PdfxViewer {
         this.initStampTool();
         this.initNoteTool();
         this.initClearTool();
+
         this.initManualSaveTool();
 
         // Add global click listener to close parameter toolbars
@@ -1409,10 +1409,46 @@ class PdfxViewer {
     initManualSaveTool() {
         // Initialize the ManualSaveTool with storage manager
         if (this.storageManager) {
-            this.manualSaveTool = new ManualSaveTool(this.blockId, this, this.storageManager);
-            console.log(`[PdfxViewer] ManualSaveTool initialized successfully with storage manager`);
-        } else {
-            console.warn(`[PdfxViewer] ManualSaveTool initialization skipped - no storage manager available`);
+            if (typeof ManualSaveTool === 'undefined') {
+                console.error(`[PdfxViewer] ERROR: ManualSaveTool class is not defined!`);
+                return;
+            }
+
+            try {
+                this.manualSaveTool = new ManualSaveTool(this.blockId, this, this.storageManager);
+            } catch (error) {
+                console.error(`[PdfxViewer] ERROR: Failed to initialize ManualSaveTool:`, error);
+            }
+        }
+    }
+
+    initDownloadTool() {
+        console.log(`[PdfxViewer] Initializing DownloadTool for block: ${this.blockId}`);
+
+        // Prevent duplicate initialization
+        if (this.downloadTool) {
+            console.log(`[PdfxViewer] DownloadTool already initialized`);
+            return;
+        }
+
+        if (!this.config.allowDownload) {
+            console.debug(`[PdfxViewer] allowDownload is false, but initializing DownloadTool for testing anyway`);
+            // Temporarily continue initialization for testing
+            // return;
+        }
+
+        console.log(`[PdfxViewer] About to check if DownloadTool class is available...`);
+
+        if (typeof DownloadTool === 'undefined') {
+            console.error(`[PdfxViewer] ERROR: DownloadTool class is not defined!`);
+            return;
+        }
+
+        try {
+            this.downloadTool = new DownloadTool(this, this.annotationInterface);
+            console.log(`[PdfxViewer] DownloadTool initialized successfully`);
+        } catch (error) {
+            console.error(`[PdfxViewer] ERROR: Failed to initialize DownloadTool:`, error);
         }
     }
 
@@ -1784,36 +1820,58 @@ class PdfxViewer {
     positionParameterToolbar(button, toolbar) {
         if (!button || !toolbar) return;
 
-        // Get button position relative to viewport
+        // Get button position relative to its closest positioned parent
         const buttonRect = button.getBoundingClientRect();
 
-        // Position toolbar to the right of the secondary toolbar with some offset
-        const leftPosition = buttonRect.right; // 20px gap from secondary toolbar
-        const topPosition = buttonRect.top + (buttonRect.height / 2); // Center vertically with button
+        // Find the toolbar's positioned parent (usually the main toolbar container)
+        let positionedParent = toolbar.offsetParent;
+        if (!positionedParent) {
+            positionedParent = document.body;
+        }
 
-        console.log(`[PdfxViewer] Positioning toolbar at: left=${leftPosition}px, top=${topPosition}px`);
+        const parentRect = positionedParent.getBoundingClientRect();
+
+        // Calculate position relative to the positioned parent
+        const leftPosition = buttonRect.right - parentRect.left + 10; // 10px gap from button
+        const topPosition = buttonRect.top - parentRect.top; // Align with button top
+
+        console.log(`[PdfxViewer] Positioning toolbar relative to parent:`, {
+            buttonRect: { left: buttonRect.left, right: buttonRect.right, top: buttonRect.top },
+            parentRect: { left: parentRect.left, top: parentRect.top },
+            calculatedLeft: leftPosition,
+            calculatedTop: topPosition
+        });
 
         toolbar.style.left = `${leftPosition}px`;
         toolbar.style.top = `${topPosition}px`;
 
         // Ensure toolbar doesn't go off screen
-        const toolbarRect = toolbar.getBoundingClientRect();
-        const viewportWidth = window.innerWidth;
-        const viewportHeight = window.innerHeight;
+        setTimeout(() => {
+            const toolbarRect = toolbar.getBoundingClientRect();
+            const viewportWidth = window.innerWidth;
+            const viewportHeight = window.innerHeight;
 
-        // Adjust if toolbar goes off right edge
-        if (leftPosition + toolbarRect.width > viewportWidth) {
-            const adjustedLeft = viewportWidth - toolbarRect.width - 20;
-            toolbar.style.left = `${adjustedLeft}px`;
-            console.log(`[PdfxViewer] Adjusted left position to: ${adjustedLeft}px (prevented overflow)`);
-        }
+            let adjustedLeft = leftPosition;
+            let adjustedTop = topPosition;
 
-        // Adjust if toolbar goes off bottom edge
-        if (topPosition + (toolbarRect.height / 2) > viewportHeight) {
-            const adjustedTop = viewportHeight - toolbarRect.height - 20;
-            toolbar.style.top = `${adjustedTop}px`;
-            console.log(`[PdfxViewer] Adjusted top position to: ${adjustedTop}px (prevented overflow)`);
-        }
+            // Adjust if toolbar goes off right edge
+            if (toolbarRect.right > viewportWidth - 20) {
+                adjustedLeft = buttonRect.left - parentRect.left - toolbarRect.width - 10; // Position to the left of button
+                console.log(`[PdfxViewer] Adjusted left position to: ${adjustedLeft}px (prevented overflow)`);
+            }
+
+            // Adjust if toolbar goes off bottom edge
+            if (toolbarRect.bottom > viewportHeight - 20) {
+                adjustedTop = buttonRect.bottom - parentRect.top - toolbarRect.height; // Position above button
+                console.log(`[PdfxViewer] Adjusted top position to: ${adjustedTop}px (prevented overflow)`);
+            }
+
+            // Apply adjustments if needed
+            if (adjustedLeft !== leftPosition || adjustedTop !== topPosition) {
+                toolbar.style.left = `${adjustedLeft}px`;
+                toolbar.style.top = `${adjustedTop}px`;
+            }
+        }, 0);
     }
 
     closeAllParameterToolbars() {
@@ -1930,12 +1988,8 @@ class PdfxViewer {
     }
 
     setupDownloadListener() {
-        if (this.config.allowDownload) {
-            const downloadBtn = document.getElementById(`download-${this.blockId}`);
-            if (downloadBtn) {
-                downloadBtn.addEventListener('click', () => this.downloadPdf());
-            }
-        }
+        // Download functionality moved to DownloadTool.js
+        // The DownloadTool will be initialized in initAnnotationTools()
     }
 
     setupToolbarToggle() {
@@ -2173,7 +2227,7 @@ class PdfxViewer {
             if (strokeData.points.length === 1) {
                 const point = strokeData.points[0];
                 const radius = point.thickness / 2;
-                pathData = `M ${point.x - radius} ${point.y} A ${radius} ${radius} 0 1 1 ${point.x + radius} ${point.y} A ${radius} ${radius} 0 1 1 ${point.x - radius} ${point.y}`;
+                pathData = `DownloadTool ${point.x - radius} ${point.y} A ${radius} ${radius} 0 1 1 ${point.x + radius} ${point.y} A ${radius} ${radius} 0 1 1 ${point.x - radius} ${point.y}`;
             } else {
                 pathData = `M ${strokeData.points[0].x} ${strokeData.points[0].y}`;
                 for (let i = 1; i < strokeData.points.length; i++) {
@@ -2674,17 +2728,7 @@ class PdfxViewer {
         }
     }
 
-    downloadPdf() {
-        if (this.config.allowDownload && this.config.pdfUrl) {
-            console.log(`[PdfxViewer] Downloading PDF`);
-            const link = document.createElement('a');
-            link.href = this.config.pdfUrl;
-            link.download = 'document.pdf';
-            document.body.appendChild(link);
-            link.click();
-            document.body.removeChild(link);
-        }
-    }
+    // Download functionality moved to DownloadTool.js - remove this old method
 
     // Utility methods
     updateLoadingProgress(percent) {
@@ -2756,6 +2800,9 @@ class PdfxViewer {
         }
         if (this.manualSaveTool) {
             this.manualSaveTool.destroy();
+        }
+        if (this.downloadTool) {
+            this.downloadTool.cleanup();
         }
     }
 
@@ -2830,6 +2877,7 @@ window.PdfxXBlockInit = function(runtime, element) {
     const config = {
         blockId: blockId,
         pdfUrl: pdfxElement.dataset.pdfUrl || '',
+        pdfFileName: pdfxElement.dataset.pdfFileName || pdfxElement.dataset.pdfFilename || '', // Add original filename
         allowDownload: pdfxElement.dataset.allowDownload === 'true',
         // TEMPORARY FIX: Force annotations to be enabled for frontend testing
         allowAnnotation: true, // pdfxElement.dataset.allowAnnotation === 'true',

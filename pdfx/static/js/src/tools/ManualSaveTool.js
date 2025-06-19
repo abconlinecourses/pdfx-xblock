@@ -11,16 +11,17 @@ class ManualSaveTool {
 
         this.saveButton = null;
         this.saveStatusIndicator = null;
+        this.saveTextSpan = null;
         this.isAutoSaveEnabled = true;
         this.lastSaveTime = null;
 
         this.init();
     }
 
-        init() {
-        console.log(`[ManualSaveTool] 🚀 INIT START - Block: ${this.blockId}`);
-        console.log(`[ManualSaveTool] 🔧 Storage manager available:`, !!this.storageManager);
-        console.log(`[ManualSaveTool] 👁️ Viewer available:`, !!this.viewer);
+    init() {
+        console.log(`[ManualSaveTool] DEBUG: Init started for block: ${this.blockId}`);
+        console.log(`[ManualSaveTool] DEBUG: Storage manager available:`, !!this.storageManager);
+        console.log(`[ManualSaveTool] DEBUG: Viewer available:`, !!this.viewer);
 
         this.createSaveButton();
         this.setupEventListeners();
@@ -31,15 +32,15 @@ class ManualSaveTool {
             this.storageManager.on('annotationCached', () => this.updateSaveStatus());
             this.storageManager.on('saveSuccess', () => this.onSaveSuccess());
             this.storageManager.on('saveError', () => this.onSaveError());
-            console.log(`[ManualSaveTool] 📡 Event listeners attached to storage manager`);
+            console.log(`[ManualSaveTool] DEBUG: Event listeners attached to storage manager`);
         } else {
-            console.warn(`[ManualSaveTool] ⚠️ No storage manager - event listeners not attached`);
+            console.warn(`[ManualSaveTool] WARNING: No storage manager available`);
         }
 
-        console.log(`[ManualSaveTool] ✅ Initialized for block: ${this.blockId}`);
+        console.log(`[ManualSaveTool] DEBUG: Initialization completed for block: ${this.blockId}`);
     }
 
-        createSaveButton() {
+    createSaveButton() {
         // Get existing button from HTML template
         this.saveButton = document.getElementById(`manualSave-${this.blockId}`);
         this.saveStatusIndicator = document.getElementById(`saveStatus-${this.blockId}`);
@@ -54,12 +55,15 @@ class ManualSaveTool {
             return;
         }
 
+        // Get the save text span
+        this.saveTextSpan = this.saveButton.querySelector('.saveText');
+        if (!this.saveTextSpan) {
+            console.error(`[ManualSaveTool] Save text span not found for block: ${this.blockId}`);
+            return;
+        }
+
         // Add CSS styles
         this.addStyles();
-
-                console.log(`[ManualSaveTool] Found existing save button and status indicator for block: ${this.blockId}`);
-        console.log(`[ManualSaveTool] 🔍 Button element:`, this.saveButton);
-        console.log(`[ManualSaveTool] 🔍 Status indicator element:`, this.saveStatusIndicator);
     }
 
     addStyles() {
@@ -70,37 +74,37 @@ class ManualSaveTool {
 
         const style = document.createElement('style');
         style.id = 'manualSaveToolStyles';
-                 style.textContent = `
-             /* Tooltip styles only */
-             .manualSaveButton {
-                 position: relative !important;
-             }
+        style.textContent = `
+            /* Tooltip styles only */
+            .manualSaveButton {
+                position: relative !important;
+            }
 
-             .manualSaveButton::after {
-                 content: attr(data-tooltip) !important;
-                 position: absolute !important;
-                 bottom: 100% !important;
-                 left: 50% !important;
-                 transform: translateX(-50%) !important;
-                 background: rgba(0, 0, 0, 0.9) !important;
-                 color: white !important;
-                 padding: 6px 10px !important;
-                 border-radius: 4px !important;
-                 font-size: 11px !important;
-                 white-space: nowrap !important;
-                 opacity: 0 !important;
-                 visibility: hidden !important;
-                 transition: opacity 0.1s ease, visibility 0.1s ease !important;
-                 pointer-events: none !important;
-                 z-index: 1000 !important;
-                 margin-bottom: 5px !important;
-             }
+            .manualSaveButton::after {
+                content: attr(data-tooltip) !important;
+                position: absolute !important;
+                bottom: 100% !important;
+                left: 50% !important;
+                transform: translateX(-50%) !important;
+                background: rgba(0, 0, 0, 0.9) !important;
+                color: white !important;
+                padding: 6px 10px !important;
+                border-radius: 4px !important;
+                font-size: 11px !important;
+                white-space: nowrap !important;
+                opacity: 0 !important;
+                visibility: hidden !important;
+                transition: opacity 0.1s ease, visibility 0.1s ease !important;
+                pointer-events: none !important;
+                z-index: 1000 !important;
+                margin-bottom: 5px !important;
+            }
 
-             .manualSaveButton:hover::after {
-                 opacity: 1 !important;
-                 visibility: visible !important;
-             }
-         `;
+            .manualSaveButton:hover::after {
+                opacity: 1 !important;
+                visibility: visible !important;
+            }
+        `;
 
         document.head.appendChild(style);
     }
@@ -111,10 +115,8 @@ class ManualSaveTool {
             return;
         }
 
-        console.log(`[ManualSaveTool] 🎯 Setting up click event listener on button:`, this.saveButton.id);
-
         this.saveButton.addEventListener('click', (e) => {
-            console.log(`[ManualSaveTool] 🖱️ BUTTON CLICKED!`);
+            console.log(`[ManualSaveTool] DEBUG: Save button clicked!`);
             e.preventDefault();
             this.triggerManualSave();
         });
@@ -123,14 +125,9 @@ class ManualSaveTool {
         setInterval(() => {
             this.updateSaveStatus();
         }, 1000);
-
-        console.log(`[ManualSaveTool] ✅ Event listeners setup complete`);
     }
 
-        async triggerManualSave() {
-        console.log('[ManualSaveTool] 🚀 MANUAL SAVE TRIGGERED');
-        console.log('[ManualSaveTool] Storage manager available:', !!this.storageManager);
-
+    async triggerManualSave() {
         if (!this.storageManager) {
             console.error('[ManualSaveTool] ❌ No storage manager available');
             alert('Error: No storage manager available for saving annotations.');
@@ -139,18 +136,12 @@ class ManualSaveTool {
 
         // Prevent multiple simultaneous saves
         if (this.saveButton.classList.contains('saving')) {
-            console.log('[ManualSaveTool] ⚠️ Save already in progress, skipping');
             return;
         }
-
-        console.log('[ManualSaveTool] 📋 Save queue length:', this.storageManager.saveQueue?.length || 0);
-        console.log('[ManualSaveTool] 🗑️ Delete queue length:', this.storageManager.deleteQueue?.length || 0);
-        console.log('[ManualSaveTool] 🔧 Storage manager config:', this.storageManager.config);
 
         // If no items in queue, create a test save to demonstrate functionality
         if ((!this.storageManager.saveQueue || this.storageManager.saveQueue.length === 0) &&
             (!this.storageManager.deleteQueue || this.storageManager.deleteQueue.length === 0)) {
-            console.log('[ManualSaveTool] 📝 No items in queue - creating test annotation save');
 
             // Create a test annotation save (current page state)
             const testSaveData = {
@@ -163,8 +154,6 @@ class ManualSaveTool {
                 currentPage: this.storageManager.currentPage || 1,
                 timestamp: Date.now()
             };
-
-            console.log('[ManualSaveTool] 🧪 Test save data:', testSaveData);
         }
 
         // Update button state
@@ -172,15 +161,11 @@ class ManualSaveTool {
 
         try {
             // Force process the save queue
-            console.log('[ManualSaveTool] 💾 Calling _processSaveQueue...');
             await this.storageManager._processSaveQueue();
-            console.log('[ManualSaveTool] ✅ _processSaveQueue completed');
 
             // Check if there are still items in queue after save attempt
             const hasUnsavedItems = (this.storageManager.saveQueue && this.storageManager.saveQueue.length > 0) ||
                                    (this.storageManager.deleteQueue && this.storageManager.deleteQueue.length > 0);
-
-            console.log('[ManualSaveTool] 📊 After save - remaining unsaved items:', hasUnsavedItems);
 
             if (hasUnsavedItems) {
                 throw new Error('Some items could not be saved');
@@ -194,7 +179,7 @@ class ManualSaveTool {
         }
     }
 
-        onSaveSuccess() {
+    onSaveSuccess() {
         this.lastSaveTime = new Date();
         this.updateButtonState('success');
 
@@ -203,8 +188,6 @@ class ManualSaveTool {
             this.updateButtonState('normal');
             this.updateSaveStatus();
         }, 2000);
-
-        console.log('[ManualSaveTool] Manual save completed successfully');
     }
 
     onSaveError() {
@@ -215,12 +198,10 @@ class ManualSaveTool {
             this.updateButtonState('normal');
             this.updateSaveStatus();
         }, 3000);
-
-        console.error('[ManualSaveTool] Manual save failed');
     }
 
     updateButtonState(state) {
-        if (!this.saveButton) return;
+        if (!this.saveButton || !this.saveTextSpan) return;
 
         // Remove all state classes
         this.saveButton.classList.remove('saving', 'success', 'error', 'auto-save-off', 'pending');
@@ -230,7 +211,7 @@ class ManualSaveTool {
             this.saveButton.classList.add(state);
         }
 
-        // Update button content based on state
+        // Update button content based on state - only update the text span, preserve the save status indicator
         let iconClass, text;
         switch (state) {
             case 'saving':
@@ -255,13 +236,11 @@ class ManualSaveTool {
                 break;
         }
 
-        this.saveButton.innerHTML = `
-            <i class="${iconClass} saveIcon"></i>
-            <span class="saveText">${text}</span>
-        `;
+        // Update only the text content, preserving the save status indicator
+        this.saveTextSpan.innerHTML = `<i class="${iconClass} saveIcon"></i> ${text}`;
     }
 
-            updateSaveStatus() {
+    updateSaveStatus() {
         if (!this.saveStatusIndicator || !this.storageManager) return;
 
         const hasUnsavedItems = (this.storageManager.saveQueue && this.storageManager.saveQueue.length > 0) ||
@@ -309,18 +288,14 @@ class ManualSaveTool {
         }
     }
 
-            updateButtonTooltip(tooltipText) {
+    updateButtonTooltip(tooltipText) {
         if (!this.saveButton) return;
 
         // Use data-tooltip for instant CSS tooltip instead of title
         this.saveButton.setAttribute('data-tooltip', tooltipText);
         // Remove title to prevent browser tooltip
         this.saveButton.removeAttribute('title');
-
-        console.log('PDFx ManualSaveTool: Button tooltip updated:', tooltipText);
     }
-
-
 
     getTimeAgoText(date) {
         const now = new Date();
@@ -339,15 +314,13 @@ class ManualSaveTool {
         }
     }
 
-        destroy() {
+    destroy() {
         // Clean up event listeners (DOM elements stay in template)
         if (this.saveButton) {
             // Remove click listener by cloning and replacing the element
             const newButton = this.saveButton.cloneNode(true);
             this.saveButton.parentNode.replaceChild(newButton, this.saveButton);
         }
-
-        console.log(`[ManualSaveTool] Destroyed for block: ${this.blockId}`);
     }
 }
 

@@ -3,6 +3,7 @@
      data-block-type="pdfx"
      data-block-id="${block_id}"
      data-pdf-url="${pdf_url}"
+     data-pdf-file-name="${pdf_file_name}"
      data-allow-download="${allow_download}"
      data-allow-annotation="${allow_annotation}"
      data-current-page="${current_page}"
@@ -254,10 +255,22 @@
 
               % if allow_download:
               <div class="toolbarGroup download-group">
-                <button id="download-${block_id}" class="toolbarButton actionButton" title="Download PDF" tabindex="0">
-                  <span class="buttonIcon">⬇</span>
-                  <span class="buttonLabel">Download</span>
-              </button>
+                <div id="editorDownload-${block_id}" class="toolbarButtonWithContainer">
+                  <button id="download-${block_id}" class="toolbarButton actionButton" title="Download PDF" aria-expanded="false" aria-haspopup="true" aria-controls="editorDownloadParamsToolbar-${block_id}" tabindex="0">
+                    <span class="buttonIcon">⬇</span>
+                    <span class="buttonLabel">Download</span>
+                  </button>
+                  <div class="editorParamsToolbar editorParamsToolbar-${block_id} hidden doorHangerRight menu" id="editorDownloadParamsToolbar-${block_id}">
+                    <div id="downloadMenuContainer-${block_id}" class="menuContainer">
+                      <button id="downloadWithAnnotations-${block_id}" class="toolbarButton labeled" type="button" tabindex="0">
+                        <span class="editorParamsLabel">Download with Annotations</span>
+                      </button>
+                      <button id="downloadWithoutAnnotations-${block_id}" class="toolbarButton labeled" type="button" tabindex="0">
+                        <span class="editorParamsLabel">Download Original PDF</span>
+                      </button>
+                    </div>
+                  </div>
+                </div>
               </div>
               % endif
             </div>

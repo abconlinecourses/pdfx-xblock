@@ -3999,6 +3999,89 @@ div[id^="viewer-"] div.textLayer span[role="presentation"],
     }
 }
 
+/* ===== DOWNLOAD TOOL STYLES ===== */
+/* Download Toolbar Popup - positioned above the download button */
+.pdfx-block.pdfjs-viewer .editorParamsToolbar[id*="DownloadParamsToolbar"] {
+    min-width: 200px !important;
+    width: auto !important;
+    padding: 8px !important;
+    background: #ffffff !important;
+    border: 1px solid #d0d0d0 !important;
+    border-radius: 6px !important;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15) !important;
+    /* Position above the download button container */
+    position: absolute !important;
+    bottom: 100% !important;
+    right: 0 !important;
+    left: auto !important;
+    margin-bottom: 5px !important;
+    z-index: 30000 !important;
+}
+
+.pdfx-block.pdfjs-viewer .menuContainer[id*="downloadMenuContainer"] {
+    display: flex !important;
+    flex-direction: column !important;
+    gap: 4px !important;
+    padding: 0 !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="download"] {
+    width: 100% !important;
+    padding: 8px 12px !important;
+    margin: 0 !important;
+    border: 1px solid #e0e0e0 !important;
+    border-radius: 4px !important;
+    background: #f8f9fa !important;
+    color: #333 !important;
+    font-size: 13px !important;
+    font-weight: 500 !important;
+    text-align: left !important;
+    transition: all 0.2s ease !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: flex-start !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="downloadWithAnnotations"]:hover {
+    background: #28a745 !important;
+    color: white !important;
+    border-color: #28a745 !important;
+    transform: translateY(-1px) !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="downloadWithoutAnnotations"]:hover {
+    background: #007acc !important;
+    color: white !important;
+    border-color: #007acc !important;
+    transform: translateY(-1px) !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="download"] .editorParamsLabel {
+    font-size: 13px !important;
+    line-height: 1.2 !important;
+    margin: 0 !important;
+    padding: 0 !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="downloadWithAnnotations"]:hover .editorParamsLabel,
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="downloadWithoutAnnotations"]:hover .editorParamsLabel {
+    color: white !important;
+}
+
+/* Add icons to download buttons */
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="downloadWithAnnotations"]::before {
+    content: "📝" !important;
+    font-size: 14px !important;
+    margin-right: 8px !important;
+}
+
+.pdfx-block.pdfjs-viewer .toolbarButton.labeled[id*="downloadWithoutAnnotations"]::before {
+    content: "📄" !important;
+    font-size: 14px !important;
+    margin-right: 8px !important;
+}
+
 /* ===== CLEAR TOOL STYLES ===== */
 /* Compact Clear Toolbar Popup */
 .pdfx-block.pdfjs-viewer .editorParamsToolbar[id*="ClearParamsToolbar"] {

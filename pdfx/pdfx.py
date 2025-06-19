@@ -647,6 +647,7 @@ class PdfxXBlock(XBlock):
         frag.add_javascript(self.resource_string("static/js/pdf-loader-es6.js"))
 
         # Add the PDF.js XBlock initializer
+        frag.add_javascript(self.resource_string("static/js/src/tools/DownloadTool.js"))
         frag.add_javascript(self.resource_string("static/js/src/tools/highlight/HighlightTool.js"))
         frag.add_javascript(self.resource_string("static/js/src/tools/scribble/ScribbleTool.js"))
         frag.add_javascript(self.resource_string("static/js/src/tools/text/TextTool.js"))
@@ -654,6 +655,7 @@ class PdfxXBlock(XBlock):
         frag.add_javascript(self.resource_string("static/js/src/tools/ManualSaveTool.js"))
         frag.add_javascript(self.resource_string("static/js/pdfx-init.js"))
         frag.add_javascript(self.resource_string("static/js/src/tools/base/ClearTool.js"))
+
 
         # Initialize the XBlock with PDF.js
         frag.initialize_js('PdfxXBlockInit')
