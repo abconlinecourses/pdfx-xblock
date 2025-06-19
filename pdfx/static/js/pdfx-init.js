@@ -2050,6 +2050,11 @@ class PdfxViewer {
     renderScribbleAnnotations(drawingStrokes) {
         console.log(`[PdfxViewer] Rendering scribble annotations for ${Object.keys(drawingStrokes).length} pages`);
 
+        // Load saved annotations into ScribbleTool's internal data structure first
+        if (this.scribbleTool && this.scribbleTool.loadSavedAnnotations) {
+            this.scribbleTool.loadSavedAnnotations(drawingStrokes);
+        }
+
         Object.entries(drawingStrokes).forEach(([pageNum, pageStrokes]) => {
             const page = parseInt(pageNum);
             if (!Array.isArray(pageStrokes)) return;

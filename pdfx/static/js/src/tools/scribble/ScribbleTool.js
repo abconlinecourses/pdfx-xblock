@@ -252,7 +252,6 @@ window.ScribbleTool = class ScribbleTool {
 
         const startDrawing = (e) => {
             isDrawing = true;
-            console.log(`[ScribbleTool] DEBUG: Starting drawing on page ${pageNumber}`);
 
             const rect = container.getBoundingClientRect();
             const startX = e.clientX - rect.left;
@@ -317,7 +316,6 @@ window.ScribbleTool = class ScribbleTool {
             // Store stroke data
             if (!this.drawingData.has(pageNumber)) {
                 this.drawingData.set(pageNumber, []);
-                console.log(`[ScribbleTool] DEBUG: Created new page entry in drawingData for page ${pageNumber}`);
             }
 
             // Create annotation ID for this stroke
@@ -334,21 +332,13 @@ window.ScribbleTool = class ScribbleTool {
 
             this.drawingData.get(pageNumber).push(strokeData);
 
-            console.log(`[ScribbleTool] DEBUG: Added stroke data:`, strokeData);
             console.log(`[ScribbleTool] Completed stroke with ${this.currentStroke.length} points on page: ${pageNumber}`);
-            console.log(`[ScribbleTool] DEBUG: Stroke stored with ID: ${strokeId}`);
-            console.log(`[ScribbleTool] DEBUG: drawingData now has ${this.drawingData.size} pages`);
-            console.log(`[ScribbleTool] DEBUG: Page ${pageNumber} now has ${this.drawingData.get(pageNumber).length} strokes`);
-            console.log(`[ScribbleTool] DEBUG: Stroke created at scale: ${this.currentScale}`);
 
             // Remove the temporary full-page SVG
             this.currentSvgElement.remove();
 
             // Create optimized SVG with proper dimensions
             const optimizedSvg = this.createOptimizedSvgElement(container, strokeData);
-            if (optimizedSvg) {
-                console.log(`[ScribbleTool] DEBUG: Replaced temporary SVG with optimized version`);
-            }
 
             // Save annotation when drawing stroke is completed
             this.saveDrawingStroke(pageNumber, strokeId, this.currentStroke, annotationId);
@@ -447,7 +437,7 @@ window.ScribbleTool = class ScribbleTool {
     /**
      * Create optimized SVG with proper dimensions and percentage-based positioning
      */
-    createOptimizedSvgElement(container, strokeData) {
+    createOptimizedSvgElement(container, strokeData, isRecreation = false) {
         const bbox = this.calculateStrokeBoundingBox(strokeData.points);
         if (!bbox) return null;
 
@@ -455,13 +445,38 @@ window.ScribbleTool = class ScribbleTool {
         const page = container.closest('.page');
         if (!page) return null;
 
-        const pageRect = page.getBoundingClientRect();
+        let leftPercent, topPercent, widthPercent, heightPercent;
 
-        // Convert pixel coordinates to percentages
-        const leftPercent = (bbox.x / pageRect.width) * 100;
-        const topPercent = (bbox.y / pageRect.height) * 100;
-        const widthPercent = (bbox.width / pageRect.width) * 100;
-        const heightPercent = (bbox.height / pageRect.height) * 100;
+        // If this is a recreation (during zoom) and we have stored original percentages, use those
+        if (isRecreation && strokeData.originalPercentages) {
+            leftPercent = strokeData.originalPercentages.leftPercent;
+            topPercent = strokeData.originalPercentages.topPercent;
+            widthPercent = strokeData.originalPercentages.widthPercent;
+            heightPercent = strokeData.originalPercentages.heightPercent;
+            console.log(`[ScribbleTool] Using stored original percentages for stroke ${strokeData.id}:`, strokeData.originalPercentages);
+        } else {
+            // Calculate percentages relative to original scale
+            const pageRect = page.getBoundingClientRect();
+
+            // If this is not the original scale, we need to adjust the calculations
+            const scaleAdjustment = (strokeData.originalScale || 1) / this.currentScale;
+
+            leftPercent = (bbox.x / pageRect.width) * 100 * scaleAdjustment;
+            topPercent = (bbox.y / pageRect.height) * 100 * scaleAdjustment;
+            widthPercent = (bbox.width / pageRect.width) * 100 * scaleAdjustment;
+            heightPercent = (bbox.height / pageRect.height) * 100 * scaleAdjustment;
+
+            // Store original percentages in strokeData for future recreations
+            if (!strokeData.originalPercentages) {
+                strokeData.originalPercentages = {
+                    leftPercent,
+                    topPercent,
+                    widthPercent,
+                    heightPercent
+                };
+                console.log(`[ScribbleTool] Stored original percentages for stroke ${strokeData.id}:`, strokeData.originalPercentages);
+            }
+        }
 
         // Create SVG element with percentage-based dimensions
         const svgElement = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
@@ -477,14 +492,20 @@ window.ScribbleTool = class ScribbleTool {
         svgElement.style.setProperty('cursor', 'pointer', 'important');
         svgElement.style.setProperty('overflow', 'visible', 'important');
 
-        // Set viewBox to match the bounding box dimensions
+        // Set viewBox to match the bounding box dimensions in actual pixels
         svgElement.setAttribute('viewBox', `0 0 ${bbox.width} ${bbox.height}`);
 
         // Create path element
         const pathElement = document.createElementNS('http://www.w3.org/2000/svg', 'path');
         pathElement.setAttribute('fill', 'none');
         pathElement.setAttribute('stroke', strokeData.points[0].color);
-        pathElement.setAttribute('stroke-width', strokeData.points[0].thickness);
+
+        // Apply scale factor for stroke thickness if original scale is different from current scale
+        const originalScale = strokeData.originalScale || 1;
+        const scaleFactor = this.currentScale / originalScale;
+        const scaledThickness = strokeData.points[0].thickness * scaleFactor;
+
+        pathElement.setAttribute('stroke-width', scaledThickness);
         pathElement.setAttribute('stroke-opacity', strokeData.points[0].opacity);
         pathElement.setAttribute('stroke-linecap', 'round');
         pathElement.setAttribute('stroke-linejoin', 'round');
@@ -509,25 +530,28 @@ window.ScribbleTool = class ScribbleTool {
         pathElement.setAttribute('d', pathData);
         svgElement.appendChild(pathElement);
 
-        // Store percentage data for zoom handling
+        // Store percentage data for zoom handling (similar to HighlightTool)
         const percentageData = {
             leftPercent,
             topPercent,
             widthPercent,
-            heightPercent
+            heightPercent,
+            originalScale: strokeData.originalScale || 1,
+            strokeThickness: strokeData.points[0].thickness
         };
         svgElement.setAttribute('data-percentage-position', JSON.stringify(percentageData));
 
-        // Store original position for drag calculations
+        // Store stroke data attributes for zoom repositioning
         svgElement.setAttribute('data-original-left', bbox.x.toString());
         svgElement.setAttribute('data-original-top', bbox.y.toString());
+        svgElement.setAttribute('data-original-scale', (strokeData.originalScale || 1).toString());
 
         // Add click handler for delete functionality
         this.addStrokeClickHandler(svgElement, strokeData);
 
         container.appendChild(svgElement);
 
-        console.log(`[ScribbleTool] Successfully created optimized SVG for stroke: ${strokeData.id}`);
+        console.log(`[ScribbleTool] Successfully created optimized SVG for stroke: ${strokeData.id} with scale factor: ${scaleFactor}`);
         return svgElement;
     }
 
@@ -984,34 +1008,20 @@ window.ScribbleTool = class ScribbleTool {
     }
 
     recreateSvgStroke(container, strokeData) {
-        console.log(`[ScribbleTool] DEBUG: recreateSvgStroke called with:`, strokeData);
-        console.log(`[ScribbleTool] DEBUG: Container:`, container);
+        console.log(`[ScribbleTool] Recreating SVG stroke:`, strokeData.id);
 
-        // Use optimized SVG creation instead of full-page SVG
-        const svgElement = this.createOptimizedSvgElement(container, strokeData);
+        // Use optimized SVG creation with recreation flag to preserve original percentages
+        const svgElement = this.createOptimizedSvgElement(container, strokeData, true);
 
         if (svgElement) {
-            // Mark as saved stroke
+            // Mark as saved stroke to distinguish from fresh strokes
             svgElement.classList.add('saved-stroke');
-
-            // Calculate scale factor for stroke width if needed
-            const originalScale = strokeData.originalScale || 1;
-            const scaleFactor = this.currentScale / originalScale;
-
-            if (Math.abs(scaleFactor - 1) > 0.001) {
-                const pathElement = svgElement.querySelector('path');
-                if (pathElement) {
-                    const currentThickness = parseFloat(pathElement.getAttribute('stroke-width'));
-                    const scaledThickness = currentThickness * scaleFactor;
-                    pathElement.setAttribute('stroke-width', scaledThickness);
-                }
-                console.log(`[ScribbleTool] DEBUG: Applied scale factor: ${scaleFactor}`);
-            }
-
-            console.log(`[ScribbleTool] DEBUG: Created optimized SVG for stroke: ${strokeData.id}`);
+            console.log(`[ScribbleTool] Successfully recreated SVG for saved stroke: ${strokeData.id}`);
         } else {
-            console.error(`[ScribbleTool] DEBUG: Failed to create optimized SVG for stroke: ${strokeData.id}`);
+            console.error(`[ScribbleTool] Failed to recreate SVG for stroke: ${strokeData.id}`);
         }
+
+        return svgElement;
     }
 
     initScribbleControls() {
@@ -1050,19 +1060,10 @@ window.ScribbleTool = class ScribbleTool {
                 const newScale = evt.scale;
                 if (newScale !== this.currentScale) {
                     console.log(`[ScribbleTool] Scale changed from ${this.currentScale} to ${newScale}`);
-                    console.log(`[ScribbleTool] DEBUG: ScribbleTool instance ID: ${this.blockId}`);
-                    console.log(`[ScribbleTool] DEBUG: Before zoom - drawingData has ${this.drawingData.size} pages with data`);
-                    console.log(`[ScribbleTool] DEBUG: drawingData Map reference:`, this.drawingData);
-                    this.drawingData.forEach((strokes, pageNum) => {
-                        console.log(`[ScribbleTool] DEBUG: Page ${pageNum} has ${strokes.length} strokes before zoom`);
-                    });
-
                     this.currentScale = newScale;
 
                     // Use setTimeout to ensure PDF.js has finished rendering at new scale
                     setTimeout(() => {
-                        console.log(`[ScribbleTool] DEBUG: About to preserve drawings after zoom`);
-                        console.log(`[ScribbleTool] DEBUG: After zoom - drawingData still has ${this.drawingData.size} pages`);
                         // Update current scale again to be sure
                         this.updateCurrentScale();
                         this.preserveDrawingsAfterZoom();
@@ -1136,11 +1137,15 @@ window.ScribbleTool = class ScribbleTool {
             const expectedSvgs = this.drawingData.get(pageNumber)?.length || 0;
 
             if (existingSvgs.length < expectedSvgs) {
-                console.log(`[ScribbleTool] Page ${pageNumber} lost ${expectedSvgs - existingSvgs.length} SVG strokes during zoom, restoring...`);
+                console.log(`[ScribbleTool] Page ${pageNumber} lost ${expectedSvgs - existingSvgs.length} SVG strokes during zoom, restoring missing strokes...`);
 
-                // Clear container and restore all drawings
-                container.innerHTML = '';
+                // Don't clear container - just restore missing strokes
                 this.restorePageDrawings(container, pageNumber);
+            } else if (existingSvgs.length > 0) {
+                console.log(`[ScribbleTool] Page ${pageNumber} has ${existingSvgs.length} existing SVG strokes, updating stroke thickness only`);
+
+                // Update stroke thickness for existing SVGs instead of recreating them
+                this.updateExistingStrokeThickness(existingSvgs);
             }
 
             // Ensure event listeners are properly set up if tool is active
@@ -1241,15 +1246,9 @@ window.ScribbleTool = class ScribbleTool {
                 const existingSvgs = container.querySelectorAll('.stroke-svg');
                 const expectedSvgs = this.drawingData.get(pageNumber)?.length || 0;
 
-                console.log(`[ScribbleTool] DEBUG: Page ${pageNumber} - existing SVGs: ${existingSvgs.length}, expected: ${expectedSvgs}`);
-
                 if (existingSvgs.length < expectedSvgs) {
                     console.log(`[ScribbleTool] Page ${pageNumber} lost ${expectedSvgs - existingSvgs.length} SVG strokes during page reload, restoring...`);
                     this.restorePageDrawings(container, pageNumber);
-                } else if (expectedSvgs > 0) {
-                    console.log(`[ScribbleTool] DEBUG: Page ${pageNumber} already has all ${expectedSvgs} expected SVGs`);
-                } else {
-                    console.log(`[ScribbleTool] DEBUG: Page ${pageNumber} has no stored drawings to restore`);
                 }
 
                 // Ensure event listeners are set up if tool is active
@@ -1350,21 +1349,63 @@ window.ScribbleTool = class ScribbleTool {
     }
 
     /**
-     * Update stroke SVG positions after zoom changes
+     * Update stroke thickness for existing SVG elements during zoom
+     */
+    updateExistingStrokeThickness(svgElements) {
+        svgElements.forEach(svgElement => {
+            const storedData = svgElement.getAttribute('data-percentage-position');
+            if (storedData) {
+                try {
+                    const percentageData = JSON.parse(storedData);
+
+                    // Update stroke thickness based on scale change
+                    if (percentageData.originalScale && percentageData.strokeThickness) {
+                        const scaleFactor = this.currentScale / percentageData.originalScale;
+                        const pathElement = svgElement.querySelector('path');
+                        if (pathElement) {
+                            const scaledThickness = percentageData.strokeThickness * scaleFactor;
+                            pathElement.setAttribute('stroke-width', scaledThickness);
+                            console.log(`[ScribbleTool] Updated existing stroke ${svgElement.getAttribute('data-stroke-id')} thickness: ${percentageData.strokeThickness} -> ${scaledThickness} (scale: ${scaleFactor})`);
+                        }
+                    }
+                } catch (e) {
+                    console.warn(`[ScribbleTool] Failed to parse stroke position data for thickness update:`, e);
+                }
+            }
+        });
+    }
+
+    /**
+     * Update stroke SVG positions and thickness after zoom changes
      */
     updateStrokePositionsAfterZoom() {
         const strokeSvgs = document.querySelectorAll(`#pdfx-block-${this.blockId} .stroke-svg:not(.drawing-temp)`);
+        console.log(`[ScribbleTool] Updating stroke positions for ${strokeSvgs.length} strokes after zoom`);
+
         strokeSvgs.forEach(svgElement => {
             const storedData = svgElement.getAttribute('data-percentage-position');
             if (storedData) {
                 try {
                     const percentageData = JSON.parse(storedData);
-                    // Percentages remain the same after zoom, so no update needed
-                    // But we can verify the positioning is still correct
+
+                    // Update stroke thickness based on scale change
+                    if (percentageData.originalScale && percentageData.strokeThickness) {
+                        const scaleFactor = this.currentScale / percentageData.originalScale;
+                        const pathElement = svgElement.querySelector('path');
+                        if (pathElement) {
+                            const scaledThickness = percentageData.strokeThickness * scaleFactor;
+                            pathElement.setAttribute('stroke-width', scaledThickness);
+                            console.log(`[ScribbleTool] Updated stroke ${svgElement.getAttribute('data-stroke-id')} thickness: ${percentageData.strokeThickness} -> ${scaledThickness} (scale: ${scaleFactor})`);
+                        }
+                    }
+
+                    // Percentage positions remain the same but verify they're still correct
                     console.log(`[ScribbleTool] Stroke ${svgElement.getAttribute('data-stroke-id')} maintains percentage position after zoom`);
                 } catch (e) {
-                    console.warn(`[ScribbleTool] Failed to parse stroke position data`);
+                    console.warn(`[ScribbleTool] Failed to parse stroke position data for zoom update:`, e);
                 }
+            } else {
+                console.warn(`[ScribbleTool] No percentage data found for stroke ${svgElement.getAttribute('data-stroke-id')}`);
             }
         });
     }
@@ -1749,28 +1790,20 @@ window.ScribbleTool = class ScribbleTool {
 
     restorePageDrawings(container, pageNumber) {
         // Restore drawings from stored data
-        console.log(`[ScribbleTool] DEBUG: Attempting to restore drawings for page ${pageNumber}`);
-        console.log(`[ScribbleTool] DEBUG: drawingData Map has ${this.drawingData.size} pages`);
-        console.log(`[ScribbleTool] DEBUG: drawingData Map keys:`, Array.from(this.drawingData.keys()));
-
         const pageDrawings = this.drawingData.get(pageNumber);
-        console.log(`[ScribbleTool] DEBUG: pageDrawings for page ${pageNumber}:`, pageDrawings);
 
         if (!pageDrawings) {
-            console.log(`[ScribbleTool] DEBUG: No drawings found for page ${pageNumber}`);
+            console.log(`[ScribbleTool] No drawings found for page ${pageNumber}`);
             return;
         }
 
-        console.log(`[ScribbleTool] DEBUG: Found ${pageDrawings.length} strokes to restore for page ${pageNumber}`);
+        console.log(`[ScribbleTool] Restoring ${pageDrawings.length} strokes for page ${pageNumber}`);
 
-        pageDrawings.forEach((strokeData, index) => {
-            console.log(`[ScribbleTool] DEBUG: Processing stroke ${index}:`, strokeData);
-
+        pageDrawings.forEach((strokeData) => {
             // Check if this stroke already exists in the container
             const existingStroke = container.querySelector(`[data-stroke-id="${strokeData.id}"]`);
             if (existingStroke) {
-                console.log(`[ScribbleTool] Stroke ${strokeData.id} already exists in container, skipping recreation`);
-                return;
+                return; // Skip if already exists
             }
 
             // Ensure annotation ID is available for deletion tracking
@@ -1778,7 +1811,6 @@ window.ScribbleTool = class ScribbleTool {
                 console.warn(`[ScribbleTool] Stroke ${strokeData.id} missing annotation ID - deletion may not work`);
             }
 
-            console.log(`[ScribbleTool] DEBUG: Recreating stroke ${strokeData.id} with annotation ID: ${strokeData.annotationId}`);
             this.recreateSvgStroke(container, strokeData);
         });
 
@@ -1794,13 +1826,20 @@ window.ScribbleTool = class ScribbleTool {
             return;
         }
 
+        // Get the stroke data from drawingData to include original percentages
+        const pageDrawings = this.drawingData.get(pageNumber);
+        const fullStrokeData = pageDrawings?.find(s => s.id === strokeId);
+
         // Convert stroke data to annotation format
         const strokeData = {
             id: strokeId,
             points: strokePoints,
             pathData: this.currentPathElement ? this.currentPathElement.getAttribute('d') : null,
             pageNumber: pageNumber,
-            timestamp: Date.now()
+            timestamp: Date.now(),
+            originalScale: this.currentScale,
+            // Include original percentages if available
+            originalPercentages: fullStrokeData?.originalPercentages || null
         };
 
         // Create annotation object using the provided annotation ID
@@ -1826,6 +1865,53 @@ window.ScribbleTool = class ScribbleTool {
 
         console.log(`[ScribbleTool] Saving drawing stroke for page ${pageNumber} with annotation ID: ${annotationId}`);
         this.annotationInterface.saveAnnotation(annotation);
+    }
+
+    /**
+     * Load saved annotations into internal drawingData structure
+     * This is called by PdfxViewer when rendering saved scribble annotations
+     */
+    loadSavedAnnotations(drawingStrokes) {
+        console.log(`[ScribbleTool] Loading saved annotations into drawingData for ${Object.keys(drawingStrokes).length} pages`);
+
+        Object.entries(drawingStrokes).forEach(([pageNum, pageStrokes]) => {
+            const page = parseInt(pageNum);
+            if (!Array.isArray(pageStrokes)) return;
+
+            // Initialize page data if not exists
+            if (!this.drawingData.has(page)) {
+                this.drawingData.set(page, []);
+            }
+
+            // Process each stroke and add to internal data structure
+            pageStrokes.forEach(stroke => {
+                if (stroke.data && stroke.data.strokeData) {
+                    // Extract stroke data and ensure annotation ID is preserved
+                    const strokeData = {
+                        ...stroke.data.strokeData,
+                        annotationId: stroke.id, // Use the annotation ID from server
+                        originalScale: stroke.data.strokeData.originalScale || 1,
+                        timestamp: stroke.timestamp || Date.now(),
+                        // Preserve original percentages if they exist from server
+                        originalPercentages: stroke.data.strokeData.originalPercentages || null
+                    };
+
+                    // Check if stroke already exists in drawingData to prevent duplicates
+                    const existingStroke = this.drawingData.get(page).find(s => s.id === strokeData.id || s.annotationId === stroke.id);
+                    if (!existingStroke) {
+                        this.drawingData.get(page).push(strokeData);
+                        console.log(`[ScribbleTool] Added saved stroke to drawingData: ${strokeData.id} (annotation: ${stroke.id}) on page ${page}`);
+                    } else {
+                        console.log(`[ScribbleTool] Stroke already exists in drawingData, skipping: ${strokeData.id}`);
+                    }
+                }
+            });
+
+            console.log(`[ScribbleTool] Page ${page} now has ${this.drawingData.get(page).length} strokes in drawingData`);
+        });
+
+        console.log(`[ScribbleTool] Total pages with stroke data: ${this.drawingData.size}`);
+        console.log(`[ScribbleTool] drawingData keys:`, Array.from(this.drawingData.keys()));
     }
 };
 

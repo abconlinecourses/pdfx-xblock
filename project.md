@@ -16,9 +16,7 @@ DO NOT add unnecessary console.log,  console.warn, console.debug, add only when 
 
 * **JavaScript:**
   * Source: `pdfx-xblock/pdfx/static/js/src/`
-  * Build output: `pdfx-xblock/pdfx/static/js/build/`
-  * Configs: `vite.config.js` (LMS), `vite.edit.config.js` (Studio)
-  * Auto-build active - don't run build commands manually
+  * tools : `pdfx-xblock/pdfx/static/js/src/tools/`
 
 * **CSS:** `pdf.css` (LMS), `pdf_edit.css` (Studio)
 
