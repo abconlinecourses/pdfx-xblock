@@ -89,6 +89,7 @@ window.StampTool = class StampTool {
         this.setupGlobalClickHandler();
         this.setupGlobalEventHandlers();
         this.setupZoomHandler();
+        this.setupPagesLoadedHandler();
     }
 
     setupToolButton() {
@@ -632,8 +633,9 @@ window.StampTool = class StampTool {
 
             console.log(`[StampTool] Mouse down on stamp:`, imageData.id, `at time:`, this.clickStartTime);
 
-            // Find the stamp data
-            const stampData = this.activeStamps.get(imageData.id);
+            // Find the stamp data using the container's stamp ID
+            const stampId = container.getAttribute('data-stamp-id');
+            const stampData = this.activeStamps.get(stampId);
             this.dragState.currentStamp = stampData;
 
             if (e.target.classList.contains('resize-handle')) {
@@ -1361,6 +1363,12 @@ window.StampTool = class StampTool {
             this.zoomHandler = null;
         }
 
+        // Remove pages loaded handler
+        if (this.viewer.eventBus && this.pagesLoadedHandler) {
+            this.viewer.eventBus.off('pagesloaded', this.pagesLoadedHandler);
+            this.pagesLoadedHandler = null;
+        }
+
         this.cleanupStampPlacement();
         this.hidePlacementInstructions();
         this.hidePopupMenu();
@@ -1408,11 +1416,191 @@ window.StampTool = class StampTool {
                 if (newScale !== this.currentScale) {
                     console.log(`[StampTool] Scale changed from ${this.currentScale} to ${newScale}`);
                     this.currentScale = newScale;
-                    this.repositionAllStamps();
+
+                    // Use timeout to ensure PDF.js has finished rendering at new scale
+                    setTimeout(() => {
+                        this.preserveStampsAfterZoom();
+                        this.repositionAllStamps();
+                    }, 100);
                 }
             };
             this.viewer.eventBus.on('scalechanging', this.zoomHandler);
         }
+    }
+
+    /**
+     * Setup pages loaded handler to recreate stamps after PDF.js events
+     */
+    setupPagesLoadedHandler() {
+        if (this.viewer.eventBus) {
+            this.pagesLoadedHandler = () => {
+                console.log(`[StampTool] Pages loaded - ensuring stamps exist`);
+                setTimeout(() => {
+                    this.ensureStampsAfterPageReload();
+                }, 100);
+            };
+            this.viewer.eventBus.on('pagesloaded', this.pagesLoadedHandler);
+        }
+    }
+
+    /**
+     * Preserve and restore stamps after zoom events
+     * This handles cases where PDF.js recreates page containers during zoom
+     */
+    preserveStampsAfterZoom() {
+        console.log(`[StampTool] Preserving stamps after zoom change`);
+
+        // Find all pages and ensure stamp containers are preserved
+        const pages = document.querySelectorAll(`#viewerContainer-${this.blockId} .page`);
+
+        pages.forEach((page, index) => {
+            const pageNumber = index + 1;
+
+            // Check if stamps exist on this page in our data
+            const pageStamps = [];
+            this.activeStamps.forEach((stampData, stampId) => {
+                if (stampData.pageIndex === index) {
+                    pageStamps.push(stampData);
+                }
+            });
+
+            if (pageStamps.length === 0) {
+                console.log(`[StampTool] No stamps to preserve on page ${pageNumber}`);
+                return;
+            }
+
+            // Check if stamp containers exist in DOM
+            const existingContainers = page.querySelectorAll('.stamp-container');
+            console.log(`[StampTool] Page ${pageNumber} has ${existingContainers.length} existing containers, expected ${pageStamps.length}`);
+
+            if (existingContainers.length < pageStamps.length) {
+                console.log(`[StampTool] Page ${pageNumber} lost ${pageStamps.length - existingContainers.length} stamp containers during zoom, recreating...`);
+
+                // Find missing stamps and recreate them
+                pageStamps.forEach(stampData => {
+                    const existingContainer = page.querySelector(`[data-stamp-id="${stampData.id}"]`);
+                    if (!existingContainer) {
+                        console.log(`[StampTool] Recreating missing stamp container: ${stampData.id}`);
+                        this.recreateStampContainer(page, stampData);
+                    }
+                });
+            }
+        });
+
+        console.log(`[StampTool] Completed stamp preservation after zoom for ${pages.length} pages`);
+    }
+
+    /**
+     * Ensure stamps exist after page reload events
+     */
+    ensureStampsAfterPageReload() {
+        console.log(`[StampTool] Ensuring stamps after page reload`);
+
+        const pages = document.querySelectorAll(`#viewerContainer-${this.blockId} .page`);
+        if (pages.length === 0) {
+            console.warn(`[StampTool] No pages found after page reload`);
+            return;
+        }
+
+        pages.forEach((page, index) => {
+            const pageNumber = index + 1;
+
+            // Check if stamps should exist on this page
+            const pageStamps = [];
+            this.activeStamps.forEach((stampData, stampId) => {
+                if (stampData.pageIndex === index) {
+                    pageStamps.push(stampData);
+                }
+            });
+
+            if (pageStamps.length === 0) {
+                return; // No stamps expected on this page
+            }
+
+            // Check if stamp containers exist
+            const existingContainers = page.querySelectorAll('.stamp-container');
+            console.log(`[StampTool] Page ${pageNumber} after reload: ${existingContainers.length} existing, ${pageStamps.length} expected`);
+
+            if (existingContainers.length < pageStamps.length) {
+                console.log(`[StampTool] Page ${pageNumber} missing ${pageStamps.length - existingContainers.length} stamps after reload, recreating...`);
+
+                // Recreate missing stamps
+                pageStamps.forEach(stampData => {
+                    const existingContainer = page.querySelector(`[data-stamp-id="${stampData.id}"]`);
+                    if (!existingContainer) {
+                        console.log(`[StampTool] Recreating missing stamp: ${stampData.id}`);
+                        this.recreateStampContainer(page, stampData);
+                    }
+                });
+            }
+        });
+
+        console.log(`[StampTool] Completed stamp check after page reload for ${pages.length} pages`);
+    }
+
+    /**
+     * Recreate a stamp container from stored stamp data
+     */
+    recreateStampContainer(page, stampData) {
+        const { id, imageData, x, y, width, height, percentageData } = stampData;
+
+        // Create stamp container
+        const container = document.createElement('div');
+        container.className = 'stamp-container';
+        container.style.position = 'absolute';
+        container.style.left = `${x}px`;
+        container.style.top = `${y}px`;
+        container.style.width = `${width}px`;
+        container.style.height = `${height}px`;
+        container.style.zIndex = '50';
+        container.style.cursor = 'pointer';
+        container.style.border = '2px solid transparent';
+        container.style.borderRadius = '4px';
+        container.style.transition = 'border-color 0.2s';
+        container.setAttribute('data-stamp-id', id);
+
+        // Store percentage data for zoom handling
+        if (percentageData) {
+            container.setAttribute('data-percentage-position', JSON.stringify(percentageData));
+        }
+
+        // Create image element
+        const img = document.createElement('img');
+        img.src = imageData.dataUrl;
+        img.style.position = 'relative';
+        img.style.left = '0px';
+        img.style.top = '0px';
+        img.style.width = '100%';
+        img.style.height = '100%';
+        img.style.display = 'block';
+        img.style.userSelect = 'none';
+        img.style.pointerEvents = 'none';
+        img.style.objectFit = 'contain';
+        img.style.borderRadius = '2px';
+        img.setAttribute('data-stamp-id', id);
+
+        container.appendChild(img);
+
+        // Add resize handles
+        this.createResizeHandles(container);
+
+        // Add interaction handlers
+        this.addStampInteractionHandlers(container, imageData, stampData.pageIndex);
+
+        // Make page relative positioned if not already
+        if (getComputedStyle(page).position === 'static') {
+            page.style.position = 'relative';
+        }
+
+        page.appendChild(container);
+
+        // Update stamp data container reference
+        stampData.container = container;
+        this.activeStamps.set(id, stampData);
+
+        console.log(`[StampTool] Successfully recreated stamp container: ${id}`);
+
+        return container;
     }
 
     /**
